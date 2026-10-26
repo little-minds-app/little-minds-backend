@@ -1,0 +1,34 @@
+
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  ci-smoke-test:
+    name: CI Infrastructure Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify CI infrastructure
+        run: |
+          echo "Little Minds Backend CI"
+          echo "GitHub Actions is running successfully."
+
+      - name: Verify repository files
+        run: |
+          test -f README.md
+          test -f .github/pull_request_template.md
+          echo "Repository structure verified."
