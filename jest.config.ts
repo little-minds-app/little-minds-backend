@@ -4,6 +4,11 @@ const config: Config = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: '.',
   testRegex: '.*\\.spec\\.ts$',
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '<rootDir>/test/prisma-integrity\\.spec\\.ts$',
+  ],
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',
   },

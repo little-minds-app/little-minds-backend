@@ -12,7 +12,7 @@ Local supporting services for Little Minds backend development (Blueprint §27.2
 
 Compose file: [`docker-compose.yml`](./docker-compose.yml).
 
-NestJS still runs on the host (`npm run start:dev`). Prisma/migrations/seeds are **LMP-22**. Optional observability profile is **out of scope** here (ADR-013 / later).
+NestJS still runs on the host (`npm run start:dev`). After Postgres is healthy, run Prisma from the repo root: `make db-migrate` / `make db-seed` (LMP-22). Optional observability profile is **out of scope** here (ADR-013 / later).
 
 ### Why `bitnamilegacy/minio`?
 
