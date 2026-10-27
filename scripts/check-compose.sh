@@ -95,28 +95,25 @@ if missing:
 print(".env.example contract OK")
 PY
 
-if command -v docker >/dev/null 2>&1; then
-  echo "==> Running docker compose config (when Docker CLI is present)"
-  TMP_ENV="$(mktemp)"
-  cp "${ENV_EXAMPLE}" "${TMP_ENV}"
-  if docker compose version >/dev/null 2>&1; then
-    if docker info >/dev/null 2>&1; then
-      docker compose -f "${COMPOSE_FILE}" --env-file "${TMP_ENV}" config --quiet
-      echo "docker compose config OK"
-    else
-      # Config parsing usually works without a daemon; try anyway and soft-report.
-      if docker compose -f "${COMPOSE_FILE}" --env-file "${TMP_ENV}" config --quiet; then
-        echo "docker compose config OK (daemon unavailable for runtime)"
-      else
-        echo "WARN: docker compose config failed; YAML contract checks already passed"
-      fi
-    fi
-  else
-    echo "WARN: docker compose plugin not available; skipped compose config"
-  fi
-  rm -f "${TMP_ENV}"
-else
-  echo "WARN: docker CLI not available; skipped compose config (YAML contract checks passed)"
+if ! command -v docker >/dev/null 2>&1; then
+  echo "SKIP: Docker is not installed; skipped docker compose config (YAML/.env.example contracts passed)"
+  echo "PASSED: compose local-dev contract checks"
+  exit 0
 fi
+
+if ! docker compose version >/dev/null 2>&1; then
+  echo "SKIP: Docker Compose CLI is not available; skipped docker compose config (YAML/.env.example contracts passed)"
+  echo "PASSED: compose local-dev contract checks"
+  exit 0
+fi
+
+echo "==> Running docker compose config"
+TMP_ENV="$(mktemp)"
+trap 'rm -f "${TMP_ENV}"' EXIT
+cp "${ENV_EXAMPLE}" "${TMP_ENV}"
+if ! docker compose -f "${COMPOSE_FILE}" --env-file "${TMP_ENV}" config --quiet; then
+  fail "docker compose config failed (Compose CLI present; invalid or unresolvable compose file)"
+fi
+echo "docker compose config OK"
 
 echo "PASSED: compose local-dev contract checks"
