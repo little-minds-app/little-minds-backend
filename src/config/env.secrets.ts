@@ -47,8 +47,66 @@ const LOCAL_DB_HOSTS = new Set([
   'postgres', // compose service name — local-only
 ]);
 
+/** Hosts that are only valid for local development API bases. */
+const LOCAL_API_HOSTS = new Set([
+  'localhost',
+  '127.0.0.1',
+  '::1',
+  '0.0.0.0',
+  '10.0.2.2', // Android emulator → host loopback
+  'host.docker.internal',
+]);
+
 export function isSecretEnvKey(key: string): boolean {
   return (SECRET_ENV_KEYS as readonly string[]).includes(key);
+}
+
+function isPrivateOrLoopbackIpv4(host: string): boolean {
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!match) {
+    return false;
+  }
+  const octets = match.slice(1).map((part) => Number(part));
+  if (octets.some((n) => n > 255)) {
+    return false;
+  }
+  const [a, b] = octets;
+  if (a === 10 || a === 127) {
+    return true;
+  }
+  if (a === 192 && b === 168) {
+    return true;
+  }
+  if (a === 172 && b >= 16 && b <= 31) {
+    return true;
+  }
+  return false;
+}
+
+function isLocalDevelopmentHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (LOCAL_API_HOSTS.has(host) || LOCAL_DB_HOSTS.has(host)) {
+    return true;
+  }
+  if (host.endsWith('.local')) {
+    return true;
+  }
+  if (isPrivateOrLoopbackIpv4(host)) {
+    return true;
+  }
+  // IPv6 loopback / link-local / unique-local
+  if (host === '::' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * True when a PUBLIC_API_BASE_URL host is local-development-only.
+ * Used to reject staging/production API bases that point at loopback/emulator/LAN.
+ */
+export function isLocalApiBaseHost(hostname: string): boolean {
+  return isLocalDevelopmentHost(hostname);
 }
 
 /**

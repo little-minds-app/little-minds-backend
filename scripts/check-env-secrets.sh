@@ -110,7 +110,7 @@ for name, app_env in (
             bad(f"{name} must not use postgres:postgres DATABASE_URL")
 
 docs = (root / "docs/environments-config.md").read_text(encoding="utf-8")
-for token in ("API_BASE_URL", "development", "staging", "production", "PUBLIC_API_BASE_URL"):
+for token in ("LM_API_BASE_URL", "development", "staging", "production", "PUBLIC_API_BASE_URL"):
     if token not in docs:
         bad(f"docs/environments-config.md missing {token}")
 
@@ -127,7 +127,7 @@ for path in [
         bad(f"possible real secret material in {path.relative_to(root)}")
 
 if fail == 0:
-    ok("example files use safe placeholders and document APP_ENV + API_BASE_URL")
+    ok("example files use safe placeholders and document APP_ENV + LM_API_BASE_URL")
 sys.exit(fail)
 PY
 

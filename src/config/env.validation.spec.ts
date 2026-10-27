@@ -109,7 +109,7 @@ describe('validateEnv', () => {
     ).toThrow(/local placeholder credentials/);
   });
 
-  it('rejects staging cleartext PUBLIC_API_BASE_URL', () => {
+  it('rejects staging PUBLIC_API_BASE_URL with http: protocol', () => {
     expect(() =>
       validateEnv({
         APP_ENV: 'staging',
@@ -118,10 +118,22 @@ describe('validateEnv', () => {
         DATABASE_URL:
           'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds',
       }),
-    ).toThrow(/must not use cleartext http/);
+    ).toThrow(/must use https:.*rejected protocol http:/);
   });
 
-  it('rejects production PUBLIC_API_BASE_URL without https', () => {
+  it('rejects staging PUBLIC_API_BASE_URL with ftp: protocol', () => {
+    expect(() =>
+      validateEnv({
+        APP_ENV: 'staging',
+        NODE_ENV: 'production',
+        PUBLIC_API_BASE_URL: 'ftp://api.staging.example.invalid',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds',
+      }),
+    ).toThrow(/must use https:.*rejected protocol ftp:/);
+  });
+
+  it('rejects production PUBLIC_API_BASE_URL without https:', () => {
     expect(() =>
       validateEnv({
         APP_ENV: 'production',
@@ -130,7 +142,69 @@ describe('validateEnv', () => {
         DATABASE_URL:
           'postgresql://app_user:s3curePass@db.example.invalid:5432/little_minds',
       }),
-    ).toThrow(/must use https/);
+    ).toThrow(/must use https:/);
+  });
+
+  it.each([
+    'https://localhost:3000',
+    'https://127.0.0.1:3000',
+    'https://[::1]:3000',
+    'https://10.0.2.2:3000',
+    'https://host.docker.internal:3000',
+    'https://192.168.1.10:3000',
+  ])(
+    'rejects staging PUBLIC_API_BASE_URL on local/dev host %s',
+    (publicUrl) => {
+      expect(() =>
+        validateEnv({
+          APP_ENV: 'staging',
+          NODE_ENV: 'production',
+          PUBLIC_API_BASE_URL: publicUrl,
+          DATABASE_URL:
+            'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds',
+        }),
+      ).toThrow(/must not use a local\/development host/);
+    },
+  );
+
+  it('accepts development PUBLIC_API_BASE_URL on localhost and Android emulator hosts', () => {
+    expect(
+      validateEnv({
+        APP_ENV: 'development',
+        PUBLIC_API_BASE_URL: 'http://localhost:3000',
+      }).PUBLIC_API_BASE_URL,
+    ).toBe('http://localhost:3000');
+    expect(
+      validateEnv({
+        APP_ENV: 'development',
+        PUBLIC_API_BASE_URL: 'http://10.0.2.2:3000',
+      }).PUBLIC_API_BASE_URL,
+    ).toBe('http://10.0.2.2:3000');
+  });
+
+  it('does not echo raw invalid PUBLIC_API_BASE_URL values in errors', () => {
+    expect(() =>
+      validateEnv({
+        APP_ENV: 'production',
+        NODE_ENV: 'production',
+        PUBLIC_API_BASE_URL: 'not a url with user:sekrit@host',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.example.invalid:5432/little_minds',
+      }),
+    ).toThrow(/PUBLIC_API_BASE_URL is not a valid URL$/);
+    try {
+      validateEnv({
+        APP_ENV: 'production',
+        NODE_ENV: 'production',
+        PUBLIC_API_BASE_URL: 'not a url with user:sekrit@host',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.example.invalid:5432/little_minds',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).not.toContain('sekrit');
+      expect(message).not.toContain('not a url');
+    }
   });
 
   it('rejects production when POSTGRES_PASSWORD is a local placeholder', () => {

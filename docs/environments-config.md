@@ -42,15 +42,15 @@ Example files:
 - Root local template: [`.env.example`](../.env.example)
 - Per-env templates: [`infrastructure/environments/`](../infrastructure/environments/)
 
-## Client `API_BASE_URL` mapping (contract)
+## Client `LM_API_BASE_URL` mapping (contract)
 
-Clients do **not** read backend `.env` files. Each client flavor sets `API_BASE_URL` (or equivalent) to the API base for that environment. It must match the backend deployment’s `PUBLIC_API_BASE_URL`.
+Clients do **not** read backend `.env` files. Each Flutter flavor sets the dart-define **`LM_API_BASE_URL`** to the API base for that environment. It must match the backend deployment’s **`PUBLIC_API_BASE_URL`**.
 
-| Client flavor | Client variable | Expected API base |
+| Client flavor | Client dart-define | Expected API base |
 |---|---|---|
-| `development` | `API_BASE_URL` | iOS Simulator: `http://localhost:3000`; Android Emulator: `http://10.0.2.2:3000` (same Nest `PORT`; physical devices need a reachable LAN URL — development-only) |
-| `staging` | `API_BASE_URL` | Same value as staging `PUBLIC_API_BASE_URL` (hostname is a **TECHNICAL ASSUMPTION** until staging is provisioned) |
-| `production` | `API_BASE_URL` | Same value as production `PUBLIC_API_BASE_URL` (hostname **TECHNICAL ASSUMPTION** until production is provisioned) |
+| `development` | `LM_API_BASE_URL` | iOS Simulator: `http://localhost:3000`; Android Emulator: `http://10.0.2.2:3000` (same Nest `PORT`; physical devices need a reachable LAN URL — development-only) |
+| `staging` | `LM_API_BASE_URL` | Same value as staging `PUBLIC_API_BASE_URL` (hostname is a **TECHNICAL ASSUMPTION** until staging is provisioned; backend requires `https:` and rejects local/dev hosts) |
+| `production` | `LM_API_BASE_URL` | Same value as production `PUBLIC_API_BASE_URL` (hostname **TECHNICAL ASSUMPTION** until production is provisioned; backend requires `https:` and rejects local/dev hosts) |
 
 OpenAPI contract version remains **`0.1.0`** with `GET /health` only (LMP-23 pin). Do not invent `/v1/...` routes here. Local OpenAPI `servers` URL stays `http://localhost:3000`.
 

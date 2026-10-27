@@ -165,7 +165,7 @@ Validated at Nest startup with **Zod** (`src/config/env.validation.ts`). Canonic
 | `APP_ENV` | public | yes (defaulted) | `development` | Product env; exact names shared with client flavors |
 | `NODE_ENV` | public | yes (defaulted) | `development` | Node runtime: `development` \| `test` \| `production` |
 | `PORT` | public | yes (defaulted) | `3000` | Positive int ≤ 65535 |
-| `PUBLIC_API_BASE_URL` | public | staging/prod | `http://localhost:3000` | Clients set `API_BASE_URL` to match; `https` required for staging/prod |
+| `PUBLIC_API_BASE_URL` | public | staging/prod | `http://localhost:3000` | Clients set Flutter dart-define `LM_API_BASE_URL` to match; staging/prod require `https:` and reject local/dev hosts |
 | `DATABASE_URL` | secret | staging/prod Nest boot; Prisma CLI | (see `.env.example`) | Dev Nest liveness optional; staging/prod reject localhost + local placeholders |
 
 Per-env templates: `infrastructure/environments/*.env.example`. Matrix + client mapping: [`docs/environments-config.md`](./docs/environments-config.md).

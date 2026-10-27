@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   databaseUrlUsesForbiddenLocalSecrets,
   isForbiddenStandaloneSecret,
+  isLocalApiBaseHost,
   isLocalDatabaseUrl,
 } from './env.secrets';
 
@@ -82,16 +83,20 @@ function assertPublicApiBaseUrl(
   try {
     parsed = new URL(url);
   } catch {
-    fail(`PUBLIC_API_BASE_URL is not a valid URL: ${url}`);
+    // Do not echo the raw value — it may contain credentials or sensitive paths.
+    fail('PUBLIC_API_BASE_URL is not a valid URL');
   }
 
-  if (appEnv === 'production' && parsed.protocol !== 'https:') {
-    fail('PUBLIC_API_BASE_URL must use https: when APP_ENV=production');
-  }
-
-  if (appEnv === 'staging' && parsed.protocol === 'http:') {
+  // Staging and production: protocol must be exactly https: (reject http:, ftp:, etc.).
+  if (parsed.protocol !== 'https:') {
     fail(
-      'PUBLIC_API_BASE_URL must not use cleartext http: when APP_ENV=staging (use https:)',
+      `PUBLIC_API_BASE_URL must use https: when APP_ENV=${appEnv} (rejected protocol ${parsed.protocol})`,
+    );
+  }
+
+  if (isLocalApiBaseHost(parsed.hostname)) {
+    fail(
+      `PUBLIC_API_BASE_URL must not use a local/development host when APP_ENV=${appEnv}`,
     );
   }
 

@@ -1,6 +1,7 @@
 import {
   databaseUrlUsesForbiddenLocalSecrets,
   isForbiddenStandaloneSecret,
+  isLocalApiBaseHost,
   isLocalDatabaseUrl,
   isSecretEnvKey,
 } from './env.secrets';
@@ -27,6 +28,15 @@ describe('env.secrets helpers', () => {
         'postgresql://app:pass@db.staging.example.invalid:5432/little_minds',
       ),
     ).toBe(false);
+  });
+
+  it('detects local/dev API base hosts without treating public hosts as local', () => {
+    expect(isLocalApiBaseHost('localhost')).toBe(true);
+    expect(isLocalApiBaseHost('127.0.0.1')).toBe(true);
+    expect(isLocalApiBaseHost('::1')).toBe(true);
+    expect(isLocalApiBaseHost('10.0.2.2')).toBe(true);
+    expect(isLocalApiBaseHost('192.168.0.5')).toBe(true);
+    expect(isLocalApiBaseHost('api.staging.example.invalid')).toBe(false);
   });
 
   it('detects local placeholder credentials in DATABASE_URL', () => {

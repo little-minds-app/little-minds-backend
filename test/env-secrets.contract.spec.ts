@@ -41,9 +41,10 @@ describe('Environment & secrets contract (LMP-28)', () => {
     expect(gi).toContain('!infrastructure/environments/*.example');
   });
 
-  it('documents client API_BASE_URL mapping for all three APP_ENV names', () => {
+  it('documents client LM_API_BASE_URL mapping for all three APP_ENV names', () => {
     const docs = read('docs/environments-config.md');
-    expect(docs).toContain('API_BASE_URL');
+    expect(docs).toContain('LM_API_BASE_URL');
+    expect(docs).toContain('PUBLIC_API_BASE_URL');
     for (const name of ['development', 'staging', 'production']) {
       expect(docs).toContain(name);
     }
