@@ -75,15 +75,17 @@ Tests must be implemented as part of the same Jira task and Pull Request.
 
 ## 8. Cursor Cloud specific instructions
 
-This repository currently contains product documentation, agent instructions, and a GitHub Actions smoke check. It does not yet contain a NestJS application, `package.json`, Prisma schema, or Docker Compose files. Section 27 of `docs/LITTLE_MINDS_PRODUCT_BLUEPRINT_v2.6.md` describes the future local stack (NestJS API, PostgreSQL, MinIO, Mailpit). Do not invent that stack while working in Cloud Agents, and do not treat a missing dev server as an environment failure.
+This repository currently contains product documentation, agent instructions, and a GitHub Actions smoke check (the backend documentation and CI baseline). It does not yet contain a NestJS application, `package.json`, Prisma schema, Docker Compose, or a dev server. Sections 12 and 27 of `docs/LITTLE_MINDS_PRODUCT_BLUEPRINT_v2.6.md` describe the intended API and local stack (NestJS API, PostgreSQL, MinIO, Mailpit); those files arrive with later implementation tasks. Do not invent that stack while working in Cloud Agents, and do not treat a missing dev server as an environment failure.
 
-- Node.js 22 and npm are already on the default image `PATH`, including non-interactive login shells (`bash -lc`). No package install is required.
-- The canonical automated check is `.github/workflows/ci.yml`. From the repository root:
+- Node.js 22 and npm are already on the Cloud Agent image `PATH`, including non-interactive login shells (`bash -lc`). There is no lockfile, so do not run `npm ci` or `npm install`.
+- The canonical automated checks are in `.github/workflows/ci.yml`. From the repository root:
 
 ```bash
 test -f README.md
 test -f .github/pull_request_template.md
+chmod +x scripts/check-lmp19-docs.sh
+./scripts/check-lmp19-docs.sh
 ```
 
-- There is no dev server to start and no database to migrate. `npm install`, `docker compose`, and port `3000` do not apply until those files exist in the repository.
+- There is no dev server to start and no database to migrate. `npm install`, `docker compose`, and port `3000` do not apply until those files exist in the repository. No process needs to stay running. Start Docker, PostgreSQL, or an API only after this repository contains those services.
 - When the NestJS API and Compose stack are added, replace this section with the real install, boot, and smoke commands from the repository.
