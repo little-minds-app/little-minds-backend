@@ -9,7 +9,7 @@ LMP-20 wires **Health** + thin **Identity** Nest modules. Remaining §12.3 names
 | `child-profile/` | Placeholder | Child profiles |
 | `content-catalog/` | Placeholder | Content catalog |
 | `learning-recommendation/` | Placeholder | Recommendations |
-| `mentor/` | Placeholder | Mentor flows |
+| `mentor/` | Content validators (LMP-47); Nest routes deferred | Mentor serving APIs / recommendations |
 | `real-world-mission/` | Placeholder | Missions |
 | `screen-time-policy/` | Placeholder | Screen-time policy |
 | `activity-ingestion/` | Placeholder | Event ingestion |

@@ -30,6 +30,7 @@
     "contracts:compat": "node scripts/contracts/check-compatibility.mjs",
     "contracts:generate": "node scripts/contracts/generate.mjs",
     "contracts:check": "bash scripts/check-contracts.sh",
+    "content:validate-mentor-cards": "node scripts/content/validate-mentor-cards.mjs",
     "config:check": "bash scripts/check-env-secrets.sh"
   },
   "prisma": {

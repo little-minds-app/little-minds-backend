@@ -1,0 +1,110 @@
+{
+  "schema_version": "1.0.0",
+  "mentor_card_id": "mentor_near_far_32m_adjacency_v1",
+  "version": 1,
+  "locale": "tr-TR",
+  "title": "Çorap ve yumuşak oyuncakla yakın-uzak",
+  "age_min_months": 30,
+  "age_max_months": 35,
+  "domains": ["cognitive_reasoning", "language"],
+  "goals": ["explore_near_far_spatial_relationships"],
+  "interaction_style": "observe_wait_respond_extend",
+  "estimated_prep_minutes": 2,
+  "estimated_screen_minutes": 2,
+  "estimated_offscreen_minutes": 8,
+  "materials": [
+    {
+      "id": "sock",
+      "label": "bir temiz çorap",
+      "optional": false,
+      "household_common": true
+    },
+    {
+      "id": "soft_toy",
+      "label": "bir yumuşak oyuncak",
+      "optional": false,
+      "household_common": true
+    }
+  ],
+  "why": {
+    "summary": "Bu davet, tanıdık ev eşyalarını hareket ettirerek çocuğunuzun yakın ve uzağı fark etmesine yardımcı olur.",
+    "learning_intention": "Nesneleri birlikte hareket ettirerek yakın/uzak mekânsal ilişkileri keşfetmek."
+  },
+  "how": {
+    "prep_summary": "Açık bir yerde bir çorap ve bir yumuşak oyuncak hazırlayın. Cam yerine yumuşak eşyaları tercih edin.",
+    "steps": [
+      "Çocuğunuzu çorap ve yumuşak oyuncakla yanınıza davet edin.",
+      "Eşyaları önce yakına, sonra uzağa koyun ve bir süre bekleyin.",
+      "Çocuğunuzu bir eşyayı yaklaştırmaya, uzaklaştırmaya veya işaret etmeye davet edin."
+    ]
+  },
+  "what_to_say": {
+    "before": [
+      "Şunu deneyebilirsiniz: Çorap ve yumuşak oyuncakla yakın-uzak oyunu oynayalım."
+    ],
+    "during": [
+      "Hangisi daha yakın?",
+      "Taşıyınca ne değişti?",
+      "Oyuncağı biraz daha uzağa koyabilir misin?"
+    ],
+    "after": [
+      "Çocuğunuzu davet edin: Şimdi hangisi daha yakın geliyor, söylemek ister misin?",
+      "Tek bir doğru cevap yok — işaret ettiğine veya söylediğine dikkat edin."
+    ]
+  },
+  "safety": {
+    "constraints": [
+      "Tüm etkinlik boyunca yetişkin gözetimi gerekir.",
+      "Cam, boğulma riski oluşturacak küçük parçalar, kablo, kesici veya sıcak eşya kullanmayın."
+    ],
+    "requires_adult_supervision": true,
+    "prohibits_proof_or_photo": true
+  },
+  "adaptations": [
+    {
+      "id": "seated",
+      "kind": "seated",
+      "summary": "Oturarak kalın; eşyaları yalnızca kol mesafesinde hareket ettirin."
+    },
+    {
+      "id": "point_instead",
+      "kind": "point_instead_of_move",
+      "summary": "Taşımak yerine bakmayı veya işaret etmeyi davet edin."
+    },
+    {
+      "id": "tactile",
+      "kind": "tactile",
+      "summary": "Yalnızca yumuşak eşyalarla, yavaş dokunsal rehberlik kullanın."
+    }
+  ],
+  "parent_script_before": [
+    "Şunu deneyebilirsiniz: Çorap ve yumuşak oyuncakla yakın-uzak oyunu oynayalım."
+  ],
+  "parent_prompts_during": [
+    "Hangisi daha yakın?",
+    "Taşıyınca ne değişti?",
+    "Oyuncağı biraz daha uzağa koyabilir misin?"
+  ],
+  "parent_prompts_after": [
+    "Çocuğunuzu davet edin: Şimdi hangisi daha yakın geliyor, söylemek ister misin?",
+    "Tek bir doğru cevap yok — işaret ettiğine veya söylediğine dikkat edin."
+  ],
+  "scaffold_down": [
+    "Eşyaları siz yerleştirin; çocuğunuzu yalnızca bakmaya veya işaret etmeye davet edin."
+  ],
+  "extend_up": [
+    "Şunu deneyebilirsiniz: Oturağın yerinden kalkmadan oyuncağı daha uzağa taşıyabilir misin?"
+  ],
+  "evidence_refs": ["blueprint_near_far_canonical_example"],
+  "review_status": "draft",
+  "reviewer_id": null,
+  "reviewed_at": null,
+  "observed_vs_suggested": "Çocuk uygulamada yakın-uzak etkinliğini yeni oynadıysa, bu kart ilgili bir ekran dışı davet önerir. İsterseniz deneyebilirsiniz; atlamak da uygundur.",
+  "not_a_developmental_assessment": "Bu birlikte eğlenceli bir pratiktir — gelişimsel değerlendirme, tanı veya kilometre taşı kontrolü değildir.",
+  "linked_activity_ids": ["near_far_32m_v1"],
+  "linked_mission_ids": ["near_far_sock_soft_toy_v1"],
+  "extensions": {
+    "demo_slice": "near_far_v1",
+    "id_alignment": "NearFarConstants_main_c939ae3"
+  }
+}
