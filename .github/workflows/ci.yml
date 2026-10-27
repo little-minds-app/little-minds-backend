@@ -65,3 +65,17 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  compose-checks:
+    name: Docker Compose contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Compose file and .env.example
+        run: |
+          chmod +x scripts/check-compose.sh
+          ./scripts/check-compose.sh

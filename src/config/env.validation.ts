@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
 /**
- * Startup env schema for LMP-20 bootstrap.
- * Fail-fast on invalid values. No secrets required yet (DB keys arrive with LMP-21/22).
+ * Startup env schema for Nest bootstrap.
+ * Fail-fast on invalid values. Compose service URLs live in `.env.example` (LMP-21)
+ * but are not required here until Prisma/adapters wire them (LMP-22+).
  */
 export const envSchema = z.object({
   NODE_ENV: z
