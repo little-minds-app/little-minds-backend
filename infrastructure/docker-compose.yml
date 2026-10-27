@@ -1,5 +1,5 @@
 # Little Minds local supporting services (Blueprint §27.2 / DEVX-001).
-# Nest API runs on the host (LMP-20); Prisma/migrations arrive in LMP-22.
+# Nest API runs on the host (LMP-20); Prisma migrate/seed use DATABASE_URL (LMP-22).
 #
 # From repo root:
 #   docker compose -f infrastructure/docker-compose.yml --env-file .env up -d

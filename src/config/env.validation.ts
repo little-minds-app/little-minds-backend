@@ -2,8 +2,9 @@ import { z } from 'zod';
 
 /**
  * Startup env schema for Nest bootstrap.
- * Fail-fast on invalid values. Compose service URLs live in `.env.example` (LMP-21)
- * but are not required here until Prisma/adapters wire them (LMP-22+).
+ * Fail-fast on invalid values. `DATABASE_URL` and Compose service URLs live in
+ * `.env.example` for Prisma CLI / local infra; Nest process liveness still does
+ * not require them (PrismaModule / DB readiness land in later tasks).
  */
 export const envSchema = z.object({
   NODE_ENV: z

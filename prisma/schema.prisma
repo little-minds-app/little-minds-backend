@@ -1,0 +1,956 @@
+// Little Minds — PostgreSQL canonical persistence (LMP-22)
+// Source of truth: Blueprint §13 catalog + §38 refinements (§38 wins on conflict).
+// Mapping / open questions: prisma/MAPPING.md
+// UUIDv4 via Prisma uuid() for Day 1; UUIDv7 preference (§38.1) is an open question.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums — only values stated clearly in Blueprint §38 / §33. Invented product
+// enums are deferred (see prisma/MAPPING.md unresolved decisions).
+// ---------------------------------------------------------------------------
+
+enum ParentAccountLifecycle {
+  active
+  pending_deletion
+  deleted
+}
+
+enum ConsentStatus {
+  granted
+  withdrawn
+  not_asked
+}
+
+enum ReviewStatus {
+  draft
+  in_review
+  rejected
+  approved
+  published
+  archived
+}
+
+enum SubscriptionLifecycle {
+  ACTIVE
+  GRACE_PERIOD
+  BILLING_RETRY
+  CANCELLED_RENEWAL
+  EXPIRED
+  REVOKED
+}
+
+enum DeletionRequestStatus {
+  requested
+  in_progress
+  completed
+  failed
+  cancelled
+}
+
+enum SyncStatus {
+  pending
+  acknowledged
+  rejected
+  conflict
+}
+
+enum ProfileDraftStatus {
+  pending
+  accepted
+  skipped
+  expired
+  deleted
+}
+
+// ===========================================================================
+// 13.1 / 38.2 — Identity, consent, profile
+// ===========================================================================
+
+model ParentAccount {
+  id          String                 @id @default(uuid()) @db.Uuid
+  authSubject String?                @map("auth_subject")
+  locale      String                 @default("tr-TR")
+  timezone    String                 @default("Europe/Istanbul")
+  lifecycle   ParentAccountLifecycle @default(active)
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?              @map("deleted_at") @db.Timestamptz(6)
+
+  identities                     ParentIdentity[]
+  profile                        ParentProfile?
+  profileDrafts                  ProfileDraft[]
+  privacyNoticeAcknowledgments   PrivacyNoticeAcknowledgment[]
+  processingPreferences          ProcessingPreference[]
+  children                       ChildProfile[]
+  devices                        Device[]
+  consentRecords                 ConsentRecord[]
+  subscriptions                  Subscription[]
+  entitlements                   Entitlement[]
+  offlineEntitlementGrants       OfflineEntitlementGrant[]
+  deletionRequests               DeletionRequest[]
+  parentPreferences              ParentPreference[]
+
+  @@map("parent_accounts")
+}
+
+/// Provider-linked identity. Unique active (provider, provider_subject).
+model ParentIdentity {
+  id              String    @id @default(uuid()) @db.Uuid
+  parentId        String    @map("parent_id") @db.Uuid
+  provider        String
+  providerSubject String    @map("provider_subject")
+  /// Minimized verified contact when needed; never use as merge key alone.
+  verifiedContact String?   @map("verified_contact")
+  verifiedAt      DateTime? @map("verified_at") @db.Timestamptz(6)
+  linkedAt        DateTime  @default(now()) @map("linked_at") @db.Timestamptz(6)
+  unlinkedAt      DateTime? @map("unlinked_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerSubject], map: "parent_identities_provider_subject_key")
+  @@index([parentId])
+  @@map("parent_identities")
+}
+
+/// Canonical optional parent profile (§38). Replaces §13 parent_demographics as a table.
+model ParentProfile {
+  parentId                 String   @id @map("parent_id") @db.Uuid
+  firstName                String?  @map("first_name")
+  lastName                 String?  @map("last_name")
+  ageBandOptional          String?  @map("age_band_optional")
+  genderOptional           String?  @map("gender_optional")
+  numberOfChildrenOptional Int?     @map("number_of_children_optional")
+  occupationOptional       String?  @map("occupation_optional")
+  collectionNoticeVersion  String?  @map("collection_notice_version")
+  updatedAt                DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@map("parent_profiles")
+}
+
+model ProfileDraft {
+  id               String             @id @default(uuid()) @db.Uuid
+  parentId         String             @map("parent_id") @db.Uuid
+  /// Encrypted temporary provider-supplied name blob; never log plaintext.
+  encryptedPayload String             @map("encrypted_payload")
+  expiresAt        DateTime           @map("expires_at") @db.Timestamptz(6)
+  status           ProfileDraftStatus @default(pending)
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId, status])
+  @@map("profile_drafts")
+}
+
+model PrivacyNoticeAcknowledgment {
+  id             String   @id @default(uuid()) @db.Uuid
+  parentId       String   @map("parent_id") @db.Uuid
+  noticeVersion  String   @map("notice_version")
+  locale         String
+  presentedAt    DateTime @map("presented_at") @db.Timestamptz(6)
+  acknowledgedAt DateTime @map("acknowledged_at") @db.Timestamptz(6)
+  surface        String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId])
+  @@map("privacy_notice_acknowledgments")
+}
+
+model ProcessingPreference {
+  id            String        @id @default(uuid()) @db.Uuid
+  parentId      String        @map("parent_id") @db.Uuid
+  purpose       String
+  status        ConsentStatus
+  legalBasis    String        @map("legal_basis")
+  policyVersion String        @map("policy_version")
+  changedAt     DateTime      @map("changed_at") @db.Timestamptz(6)
+  source        String
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId, purpose])
+  @@map("processing_preferences")
+}
+
+model ChildProfile {
+  id                           String    @id @default(uuid()) @db.Uuid
+  parentId                     String    @map("parent_id") @db.Uuid
+  nicknameOptional             String?   @map("nickname_optional")
+  ageMonthsAtReference         Int       @map("age_months_at_reference")
+  ageReferenceDate             DateTime  @map("age_reference_date") @db.Date
+  preferredLocale              String    @default("tr-TR") @map("preferred_locale")
+  timezone                     String?   @default("Europe/Istanbul")
+  accessibilityPreferencesJson Json?     @map("accessibility_preferences_json")
+  createdAt                    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                    DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  parent                  ParentAccount           @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  preferences             ParentPreference?
+  devices                 Device[]
+  kidsModeAuthorizations  KidsModeAuthorization[]
+  consentRecords          ConsentRecord[]
+  mentorRecommendations   MentorRecommendation[]
+  missionFeedback         MissionFeedback[]
+  parentReflections       ParentReflection[]
+  activitySessions        ActivitySession[]
+  skillObservations       SkillObservation[]
+  skillStates             SkillState[]
+  dailyUsageAggregates    DailyUsageAggregate[]
+  activityAggregates      ActivityAggregate[]
+  insights                Insight[]
+  screenTimePolicies      ScreenTimePolicy[]
+  screenTimeIntervals     ScreenTimeInterval[]
+  screenTimeResetHistory  ScreenTimeResetHistory[]
+  syncCursors             SyncCursor[]
+
+  @@index([parentId, deletedAt], map: "child_profiles_parent_id_deleted_at_idx")
+  @@map("child_profiles")
+}
+
+model ConsentRecord {
+  id            String         @id @default(uuid()) @db.Uuid
+  parentId      String         @map("parent_id") @db.Uuid
+  childId       String?        @map("child_id") @db.Uuid
+  purpose       String
+  policyVersion String         @map("policy_version")
+  status        ConsentStatus
+  recordedAt    DateTime       @map("recorded_at") @db.Timestamptz(6)
+  revokedAt     DateTime?      @map("revoked_at") @db.Timestamptz(6)
+  source        String
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  child  ChildProfile? @relation(fields: [childId], references: [id], onDelete: SetNull)
+
+  @@index([parentId])
+  @@index([childId])
+  @@map("consent_records")
+}
+
+model ParentPreference {
+  id                 String   @id @default(uuid()) @db.Uuid
+  parentId           String   @map("parent_id") @db.Uuid
+  childId            String   @unique @map("child_id") @db.Uuid
+  availableMaterials Json?    @map("available_materials")
+  timeBudget         Json?    @map("time_budget")
+  sensoryPreferences Json?    @map("sensory_preferences")
+  coPlayPreference   String?  @map("co_play_preference")
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  child  ChildProfile  @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([parentId])
+  @@map("parent_preferences")
+}
+
+model Device {
+  id                String    @id @default(uuid()) @db.Uuid
+  parentId          String    @map("parent_id") @db.Uuid
+  childId           String?   @map("child_id") @db.Uuid
+  platform          String
+  lastSeenAt        DateTime? @map("last_seen_at") @db.Timestamptz(6)
+  lastPolicyVersion String?   @map("last_policy_version")
+  lastSyncedAt      DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(6)
+  /// Installation / key reference (opaque); no hardware fingerprint.
+  installKeyRef     String?   @map("install_key_ref")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent                 ParentAccount            @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  child                  ChildProfile?            @relation(fields: [childId], references: [id], onDelete: SetNull)
+  kidsModeAuthorizations KidsModeAuthorization[]
+  activitySessions       ActivitySession[]
+  activityEvents         ActivityEvent[]
+  screenTimeIntervals    ScreenTimeInterval[]
+  syncCursors            SyncCursor[]
+  offlineEntitlementGrants OfflineEntitlementGrant[]
+
+  @@index([parentId])
+  @@index([childId])
+  @@map("devices")
+}
+
+/// §38.2 new — at most one active server-authorized row per child (partial unique in SQL).
+model KidsModeAuthorization {
+  id                String    @id @default(uuid()) @db.Uuid
+  childId           String    @map("child_id") @db.Uuid
+  deviceId          String    @map("device_id") @db.Uuid
+  generation        Int
+  activatedAt       DateTime  @map("activated_at") @db.Timestamptz(6)
+  supersededAt      DateTime? @map("superseded_at") @db.Timestamptz(6)
+  expiresAt         DateTime? @map("expires_at") @db.Timestamptz(6)
+  credentialRef     String    @map("credential_ref")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  child  ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  device Device       @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  @@index([childId])
+  @@index([deviceId])
+  @@map("kids_mode_authorizations")
+}
+
+// ===========================================================================
+// 13.2 — Curriculum / content
+// ===========================================================================
+
+model LearningDomain {
+  id       String @id @default(uuid()) @db.Uuid
+  code     String @unique
+  labelKey String @map("label_key")
+
+  learningGoals LearningGoal[]
+  skillTags     SkillTag[]
+
+  @@map("learning_domains")
+}
+
+model LearningGoal {
+  id           String @id @default(uuid()) @db.Uuid
+  domainId     String @map("domain_id") @db.Uuid
+  objectiveKey String @map("objective_key")
+  evidenceRefs Json?  @map("evidence_refs")
+  reviewStatus ReviewStatus @default(draft) @map("review_status")
+
+  domain              LearningDomain       @relation(fields: [domainId], references: [id], onDelete: Restrict)
+  activityDefinitions ActivityDefinition[]
+
+  @@index([domainId])
+  @@map("learning_goals")
+}
+
+model SkillTag {
+  id             String @id @default(uuid()) @db.Uuid
+  code           String @unique
+  domainId       String @map("domain_id") @db.Uuid
+  descriptionKey String @map("description_key")
+
+  domain            LearningDomain     @relation(fields: [domainId], references: [id], onDelete: Restrict)
+  skillObservations SkillObservation[]
+  skillStates       SkillState[]
+
+  @@index([domainId])
+  @@map("skill_tags")
+}
+
+model Theme {
+  id              String       @id @default(uuid()) @db.Uuid
+  code            String       @unique
+  paletteTokenRef String?      @map("palette_token_ref")
+  narrativeKey    String?      @map("narrative_key")
+  status          ReviewStatus @default(draft)
+
+  activityVariants ActivityVariant[]
+  monthlyPacks     MonthlyPack[]
+
+  @@map("themes")
+}
+
+model GameMechanic {
+  id                String @id @default(uuid()) @db.Uuid
+  code              String @unique
+  engineVersion     String @map("engine_version")
+  inputCapabilities Json?  @map("input_capabilities")
+
+  activityDefinitions ActivityDefinition[]
+
+  @@map("game_mechanics")
+}
+
+model ActivityDefinition {
+  id             String       @id @default(uuid()) @db.Uuid
+  mechanicId     String       @map("mechanic_id") @db.Uuid
+  learningGoalId String       @map("learning_goal_id") @db.Uuid
+  /// Skill tag IDs as JSON array until join-table normalization is decided.
+  skillTags      Json?        @map("skill_tags")
+  minAgeMonths   Int          @map("min_age_months")
+  maxAgeMonths   Int          @map("max_age_months")
+  safetyClass    String       @map("safety_class")
+  status         ReviewStatus @default(draft)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  mechanic GameMechanic      @relation(fields: [mechanicId], references: [id], onDelete: Restrict)
+  goal     LearningGoal      @relation(fields: [learningGoalId], references: [id], onDelete: Restrict)
+  variants ActivityVariant[]
+
+  @@index([mechanicId])
+  @@index([learningGoalId])
+  @@map("activity_definitions")
+}
+
+/// Immutable published activity variant. Day-1 stand-in for content_version_id (§38 open: separate content_versions table).
+model ActivityVariant {
+  id               String       @id @default(uuid()) @db.Uuid
+  activityId       String       @map("activity_id") @db.Uuid
+  version          Int
+  difficulty       String?
+  scaffoldLevel    String?      @map("scaffold_level")
+  themeId          String?      @map("theme_id") @db.Uuid
+  locale           String       @default("tr-TR")
+  configurationJson Json?       @map("configuration_json")
+  assetManifestId  String?      @map("asset_manifest_id") @db.Uuid
+  reviewStatus     ReviewStatus @default(draft) @map("review_status")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  activity           ActivityDefinition  @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  theme              Theme?              @relation(fields: [themeId], references: [id], onDelete: SetNull)
+  assetManifest      AssetManifest?      @relation(fields: [assetManifestId], references: [id], onDelete: SetNull)
+  activitySessions   ActivitySession[]
+  activityEvents     ActivityEvent[]
+  skillObservations  SkillObservation[]
+  activityAggregates ActivityAggregate[]
+
+  @@unique([activityId, version])
+  @@index([themeId])
+  @@map("activity_variants")
+}
+
+model MonthlyPack {
+  id             String       @id @default(uuid()) @db.Uuid
+  ageMonth       Int          @map("age_month")
+  locale         String
+  themeId        String?      @map("theme_id") @db.Uuid
+  version        Int
+  releaseChannel String       @default("default") @map("release_channel")
+  publishedAt    DateTime?    @map("published_at") @db.Timestamptz(6)
+  status         ReviewStatus @default(draft)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  theme Theme?            @relation(fields: [themeId], references: [id], onDelete: SetNull)
+  items MonthlyPackItem[]
+
+  @@index([ageMonth, locale, releaseChannel, status], map: "monthly_packs_age_locale_channel_status_idx")
+  @@map("monthly_packs")
+}
+
+model MonthlyPackItem {
+  id         String  @id @default(uuid()) @db.Uuid
+  packId     String  @map("pack_id") @db.Uuid
+  itemType   String  @map("item_type")
+  itemId     String  @map("item_id") @db.Uuid
+  priority   Int     @default(0)
+  sequence   Int     @default(0)
+  isOptional Boolean @default(false) @map("is_optional")
+
+  pack MonthlyPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@index([packId])
+  @@map("monthly_pack_items")
+}
+
+model AssetManifest {
+  id                String       @id @default(uuid()) @db.Uuid
+  version           String
+  checksum          String
+  storageKey        String       @map("storage_key")
+  sizeBytes         BigInt       @map("size_bytes")
+  licenseProvenance String?      @map("license_provenance")
+  /// Per-asset SHA-256 entries as JSON until physical asset_entries table is decided.
+  entriesJson       Json?        @map("entries_json")
+  status            ReviewStatus @default(draft)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  activityVariants ActivityVariant[]
+
+  @@map("asset_manifests")
+}
+
+model Localization {
+  id           String       @id @default(uuid()) @db.Uuid
+  entityType   String       @map("entity_type")
+  entityId     String       @map("entity_id") @db.Uuid
+  locale       String
+  key          String
+  text         String
+  reviewStatus ReviewStatus @default(draft) @map("review_status")
+
+  @@unique([entityType, entityId, locale, key])
+  @@map("localizations")
+}
+
+model ContentReview {
+  id         String   @id @default(uuid()) @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  version    String
+  reviewType String   @map("review_type")
+  reviewerId String   @map("reviewer_id")
+  decision   String
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([entityType, entityId, version], map: "content_reviews_entity_version_idx")
+  @@map("content_reviews")
+}
+
+model GenerationProvenance {
+  id            String   @id @default(uuid()) @db.Uuid
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id") @db.Uuid
+  provider      String
+  modelVersion  String   @map("model_version")
+  promptVersion String   @map("prompt_version")
+  generatedAt   DateTime @map("generated_at") @db.Timestamptz(6)
+  contentHash   String   @map("content_hash")
+
+  @@index([entityType, entityId])
+  @@map("generation_provenance")
+}
+
+// ===========================================================================
+// 13.3 — Mentor and real-world play
+// ===========================================================================
+
+model MentorCard {
+  id           String       @id @default(uuid()) @db.Uuid
+  version      Int
+  locale       String
+  ageMinMonths Int          @map("age_min_months")
+  ageMaxMonths Int          @map("age_max_months")
+  goalIds      Json?        @map("goal_ids")
+  materials    Json?
+  scripts      Json?
+  adaptations  Json?
+  safetyNotes  Json?        @map("safety_notes")
+  reviewStatus ReviewStatus @default(draft) @map("review_status")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  recommendations MentorRecommendation[]
+  insights        Insight[]
+
+  @@map("mentor_cards")
+}
+
+model RealWorldMission {
+  id                String       @id @default(uuid()) @db.Uuid
+  version           Int
+  linkedActivityIds Json?        @map("linked_activity_ids")
+  ageMinMonths      Int          @map("age_min_months")
+  ageMaxMonths      Int          @map("age_max_months")
+  goalIds           Json?        @map("goal_ids")
+  materials         Json?
+  steps             Json?
+  safetyNotes       Json?        @map("safety_notes")
+  adaptations       Json?
+  reviewStatus      ReviewStatus @default(draft) @map("review_status")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  missionFeedback   MissionFeedback[]
+  parentReflections ParentReflection[]
+
+  @@map("real_world_missions")
+}
+
+model MentorRecommendation {
+  id              String    @id @default(uuid()) @db.Uuid
+  childId         String    @map("child_id") @db.Uuid
+  mentorCardId    String    @map("mentor_card_id") @db.Uuid
+  reasonCode      String    @map("reason_code")
+  evidenceSummary String?   @map("evidence_summary")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt       DateTime? @map("expires_at") @db.Timestamptz(6)
+
+  child      ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  mentorCard MentorCard   @relation(fields: [mentorCardId], references: [id], onDelete: Restrict)
+
+  @@index([childId])
+  @@map("mentor_recommendations")
+}
+
+model MissionFeedback {
+  id                 String   @id @default(uuid()) @db.Uuid
+  childId            String   @map("child_id") @db.Uuid
+  missionId          String   @map("mission_id") @db.Uuid
+  status             String
+  reportedByParentId String   @map("reported_by_parent_id") @db.Uuid
+  reportedAt         DateTime @map("reported_at") @db.Timestamptz(6)
+  optionalNoteRef    String?  @map("optional_note_ref")
+
+  child   ChildProfile    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  mission RealWorldMission @relation(fields: [missionId], references: [id], onDelete: Restrict)
+
+  @@index([childId])
+  @@map("mission_feedback")
+}
+
+model ParentReflection {
+  id               String    @id @default(uuid()) @db.Uuid
+  childId          String    @map("child_id") @db.Uuid
+  missionId        String?   @map("mission_id") @db.Uuid
+  encryptedText    String    @map("encrypted_text")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  child   ChildProfile     @relation(fields: [childId], references: [id], onDelete: Cascade)
+  mission RealWorldMission? @relation(fields: [missionId], references: [id], onDelete: SetNull)
+
+  @@index([childId])
+  @@map("parent_reflections")
+}
+
+// ===========================================================================
+// 13.4 / 38.2 — Play telemetry, skills, analytics
+// ===========================================================================
+
+/// id is the canonical play_session_id (§38 naming).
+model ActivitySession {
+  id                       String    @id @default(uuid()) @db.Uuid
+  childId                  String    @map("child_id") @db.Uuid
+  /// Day-1: FK to activity_variants.id (content_version_id).
+  contentVersionId         String    @map("content_version_id") @db.Uuid
+  startedAt                DateTime  @map("started_at") @db.Timestamptz(6)
+  endedAt                  DateTime? @map("ended_at") @db.Timestamptz(6)
+  durationSeconds          Int?      @map("duration_seconds")
+  monotonicDurationSeconds Int?      @map("monotonic_duration_seconds")
+  completionStatus         String?   @map("completion_status")
+  deviceId                 String?   @map("device_id") @db.Uuid
+  schemaVersion            String    @map("schema_version")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  child          ChildProfile    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  contentVersion ActivityVariant @relation(fields: [contentVersionId], references: [id], onDelete: Restrict)
+  device         Device?         @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  events         ActivityEvent[]
+  screenTimeIntervals ScreenTimeInterval[]
+
+  @@index([childId, startedAt], map: "activity_sessions_child_id_started_at_idx")
+  @@map("activity_sessions")
+}
+
+model ActivityEvent {
+  eventId                  String   @id @map("event_id") @db.Uuid
+  playSessionId            String   @map("play_session_id") @db.Uuid
+  childId                  String   @map("child_id") @db.Uuid
+  deviceId                 String?  @map("device_id") @db.Uuid
+  contentVersionId         String   @map("content_version_id") @db.Uuid
+  eventType                String   @map("event_type")
+  occurredAt               DateTime @map("occurred_at") @db.Timestamptz(6)
+  receivedAt               DateTime @map("received_at") @db.Timestamptz(6)
+  monotonicDurationSeconds Int?     @map("monotonic_duration_seconds")
+  payloadJson              Json?    @map("payload_json")
+  schemaVersion            String   @map("schema_version")
+  consentScope             String   @map("consent_scope")
+
+  playSession    ActivitySession @relation(fields: [playSessionId], references: [id], onDelete: Cascade)
+  contentVersion ActivityVariant @relation(fields: [contentVersionId], references: [id], onDelete: Restrict)
+  device         Device?         @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([childId, receivedAt], map: "activity_events_child_id_received_at_idx")
+  @@map("activity_events")
+}
+
+model SkillObservation {
+  id                String   @id @default(uuid()) @db.Uuid
+  childId           String   @map("child_id") @db.Uuid
+  skillTagId        String   @map("skill_tag_id") @db.Uuid
+  activityVariantId String?  @map("activity_variant_id") @db.Uuid
+  difficulty        String?
+  observationType   String   @map("observation_type")
+  value             Json?
+  observedAt        DateTime @map("observed_at") @db.Timestamptz(6)
+  source            String
+
+  child           ChildProfile     @relation(fields: [childId], references: [id], onDelete: Cascade)
+  skillTag        SkillTag         @relation(fields: [skillTagId], references: [id], onDelete: Restrict)
+  activityVariant ActivityVariant? @relation(fields: [activityVariantId], references: [id], onDelete: SetNull)
+
+  @@index([childId])
+  @@map("skill_observations")
+}
+
+model SkillState {
+  childId       String   @map("child_id") @db.Uuid
+  skillTagId    String   @map("skill_tag_id") @db.Uuid
+  scaffoldLevel String?  @map("scaffold_level")
+  evidenceCount Int      @default(0) @map("evidence_count")
+  ruleVersion   String   @map("rule_version")
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  child    ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  skillTag SkillTag     @relation(fields: [skillTagId], references: [id], onDelete: Restrict)
+
+  @@id([childId, skillTagId])
+  @@map("skill_state")
+}
+
+model DailyUsageAggregate {
+  id                     String   @id @default(uuid()) @db.Uuid
+  childId                String   @map("child_id") @db.Uuid
+  localDate              DateTime @map("local_date") @db.Date
+  timezone               String
+  /// Per-device duration sum (seconds) — JSON map until normalized.
+  perDeviceDurationSum   Json?    @map("per_device_duration_sum")
+  crossDeviceIntervalUnion Int?   @map("cross_device_interval_union")
+  overlapDelta           Int?     @map("overlap_delta")
+  activeSeconds          Int      @map("active_seconds")
+  dataComplete           Boolean  @map("data_complete")
+  trustStatus            String?  @map("trust_status")
+  computedAt             DateTime @map("computed_at") @db.Timestamptz(6)
+  definitionVersion      String   @map("definition_version")
+  policyVersion          String?  @map("policy_version")
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, localDate, timezone, definitionVersion])
+  @@map("daily_usage_aggregates")
+}
+
+model ActivityAggregate {
+  id                     String   @id @default(uuid()) @db.Uuid
+  childId                String   @map("child_id") @db.Uuid
+  contentVersionId       String   @map("content_version_id") @db.Uuid
+  windowStart            DateTime @map("window_start") @db.Timestamptz(6)
+  windowEnd              DateTime @map("window_end") @db.Timestamptz(6)
+  attempts               Int      @default(0)
+  completed              Int      @default(0)
+  firstAttemptEligible   Int?     @map("first_attempt_eligible")
+  firstAttemptCorrect    Int?     @map("first_attempt_correct")
+  hints                  Int?     
+  definitionVersion      String   @map("definition_version")
+  sampleThresholdMeta    Json?    @map("sample_threshold_meta")
+
+  child          ChildProfile    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  contentVersion ActivityVariant @relation(fields: [contentVersionId], references: [id], onDelete: Restrict)
+
+  @@index([childId, contentVersionId])
+  @@map("activity_aggregates")
+}
+
+model Insight {
+  id            String    @id @default(uuid()) @db.Uuid
+  childId       String    @map("child_id") @db.Uuid
+  templateId    String    @map("template_id")
+  ruleVersion   String    @map("rule_version")
+  evidenceWindow Json?    @map("evidence_window")
+  sampleSize    Int?      @map("sample_size")
+  metricRefs    Json?     @map("metric_refs")
+  mentorCardId  String?   @map("mentor_card_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt     DateTime? @map("expires_at") @db.Timestamptz(6)
+
+  child      ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  mentorCard MentorCard?  @relation(fields: [mentorCardId], references: [id], onDelete: SetNull)
+
+  @@index([childId])
+  @@map("insights")
+}
+
+// ===========================================================================
+// 13.5 / 38.2 — Screen time, subscription, operations
+// ===========================================================================
+
+model ScreenTimePolicy {
+  id                      String   @id @default(uuid()) @db.Uuid
+  childId                 String   @map("child_id") @db.Uuid
+  dailyCapSeconds         Int      @map("daily_cap_seconds")
+  sessionCapSeconds       Int?     @map("session_cap_seconds_optional")
+  breakIntervalSeconds    Int      @map("break_interval_seconds")
+  timezone                String
+  version                 Int
+  updatedByParentId       String   @map("updated_by_parent_id") @db.Uuid
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, version])
+  @@index([childId])
+  @@map("screen_time_policies")
+}
+
+model ScreenTimeInterval {
+  id            String     @id @default(uuid()) @db.Uuid
+  childId       String     @map("child_id") @db.Uuid
+  deviceId      String     @map("device_id") @db.Uuid
+  playSessionId String?    @map("play_session_id") @db.Uuid
+  startedAt     DateTime   @map("started_at") @db.Timestamptz(6)
+  endedAt       DateTime?  @map("ended_at") @db.Timestamptz(6)
+  activeSeconds Int        @map("active_seconds")
+  syncStatus    SyncStatus @default(pending) @map("sync_status")
+  trustMetadata Json?      @map("trust_metadata")
+  receivedAt    DateTime?  @map("received_at") @db.Timestamptz(6)
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  child       ChildProfile     @relation(fields: [childId], references: [id], onDelete: Cascade)
+  device      Device           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  playSession ActivitySession? @relation(fields: [playSessionId], references: [id], onDelete: SetNull)
+
+  @@index([childId, deviceId, startedAt], map: "screen_time_intervals_child_device_started_idx")
+  @@map("screen_time_intervals")
+}
+
+model ScreenTimeResetHistory {
+  id              String   @id @default(uuid()) @db.Uuid
+  childId         String   @map("child_id") @db.Uuid
+  localDay        DateTime @map("local_day") @db.Date
+  timezone        String
+  policyVersion   Int      @map("policy_version")
+  trustedAnchor   DateTime @map("trusted_anchor") @db.Timestamptz(6)
+  resetAt         DateTime @map("reset_at") @db.Timestamptz(6)
+  reason          String
+  qualityFlag     String?  @map("quality_flag")
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, localDay, timezone, policyVersion], map: "screen_time_reset_history_unique_day")
+  @@map("screen_time_reset_history")
+}
+
+model Subscription {
+  id                     String                 @id @default(uuid()) @db.Uuid
+  parentId               String                 @map("parent_id") @db.Uuid
+  store                  String
+  productId              String                 @map("product_id")
+  status                 SubscriptionLifecycle
+  currentPeriodEnd       DateTime?              @map("current_period_end") @db.Timestamptz(6)
+  storeValidUntil        DateTime?              @map("store_valid_until") @db.Timestamptz(6)
+  lastVerifiedAt         DateTime?              @map("last_verified_at") @db.Timestamptz(6)
+  revokedAt              DateTime?              @map("revoked_at") @db.Timestamptz(6)
+  autoRenewStatus        String?                @map("auto_renew_status")
+  originalTransactionRef String?                @map("original_transaction_ref")
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent       ParentAccount          @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  transactions PurchaseTransaction[]
+  entitlements Entitlement[]
+
+  @@index([parentId, status], map: "subscriptions_parent_id_status_idx")
+  @@map("subscriptions")
+}
+
+model PurchaseTransaction {
+  id                    String   @id @default(uuid()) @db.Uuid
+  subscriptionId        String   @map("subscription_id") @db.Uuid
+  store                 String
+  storeEventId          String?  @map("store_event_id")
+  originalTransactionRef String? @map("original_transaction_ref")
+  eventType             String   @map("event_type")
+  verifiedAt            DateTime @map("verified_at") @db.Timestamptz(6)
+  payloadHash           String   @map("payload_hash")
+  statusTransition      String?  @map("status_transition")
+  /// Encrypted/restricted external refs — never log plaintext tokens.
+  encryptedExternalRefs String?  @map("encrypted_external_refs")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@unique([store, storeEventId], map: "purchase_transactions_store_event_key")
+  @@index([subscriptionId])
+  @@map("purchase_transactions")
+}
+
+model Entitlement {
+  id                   String    @id @default(uuid()) @db.Uuid
+  parentId             String    @map("parent_id") @db.Uuid
+  featureKey           String    @map("feature_key")
+  validFrom            DateTime  @map("valid_from") @db.Timestamptz(6)
+  validUntil           DateTime? @map("valid_until") @db.Timestamptz(6)
+  offlineAccessUntil   DateTime? @map("offline_access_until") @db.Timestamptz(6)
+  sourceSubscriptionId String?   @map("source_subscription_id") @db.Uuid
+  status               String
+  revokedAt            DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent             ParentAccount  @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  sourceSubscription Subscription?  @relation(fields: [sourceSubscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([parentId, featureKey])
+  @@map("entitlements")
+}
+
+model OfflineEntitlementGrant {
+  id                   String    @id @default(uuid()) @db.Uuid
+  parentId             String    @map("parent_id") @db.Uuid
+  deviceId             String    @map("device_id") @db.Uuid
+  issuedAt             DateTime  @map("issued_at") @db.Timestamptz(6)
+  storeValidUntil      DateTime  @map("store_valid_until") @db.Timestamptz(6)
+  offlineAccessUntil   DateTime  @map("offline_access_until") @db.Timestamptz(6)
+  signatureKeyId       String    @map("signature_key_id")
+  revocationGeneration Int       @default(0) @map("revocation_generation")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  device Device        @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([parentId, deviceId])
+  @@map("offline_entitlement_grants")
+}
+
+model SyncCursor {
+  id                         String   @id @default(uuid()) @db.Uuid
+  deviceId                   String   @map("device_id") @db.Uuid
+  childId                    String   @map("child_id") @db.Uuid
+  lastUploadedEventId        String?  @map("last_uploaded_event_id") @db.Uuid
+  lastDownloadedPolicyVersion String? @map("last_downloaded_policy_version")
+  lastSyncAt                 DateTime? @map("last_sync_at") @db.Timestamptz(6)
+  updatedAt                  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  device Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  child  ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, childId])
+  @@map("sync_cursors")
+}
+
+model AuditLog {
+  id               String   @id @default(uuid()) @db.Uuid
+  actorId          String   @map("actor_id")
+  actorRole        String   @map("actor_role")
+  action           String
+  resourceType     String   @map("resource_type")
+  resourceId       String   @map("resource_id")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  metadataRedacted Json?    @map("metadata_redacted")
+
+  @@index([actorId, createdAt], map: "audit_logs_actor_id_created_at_idx")
+  @@map("audit_logs")
+}
+
+model DeletionRequest {
+  id          String                @id @default(uuid()) @db.Uuid
+  parentId    String                @map("parent_id") @db.Uuid
+  scope       String
+  requestedAt DateTime              @map("requested_at") @db.Timestamptz(6)
+  status      DeletionRequestStatus @default(requested)
+  completedAt DateTime?             @map("completed_at") @db.Timestamptz(6)
+  /// Retention exceptions / legal hold references (opaque).
+  retentionNotes String?            @map("retention_notes")
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Restrict)
+
+  @@index([parentId, status])
+  @@map("deletion_requests")
+}

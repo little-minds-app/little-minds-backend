@@ -79,3 +79,54 @@ jobs:
         run: |
           chmod +x scripts/check-compose.sh
           ./scripts/check-compose.sh
+
+  prisma-checks:
+    name: Prisma migrate, seed, integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: little_minds
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d little_minds"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/little_minds?schema=public
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - name: Seed synthetic fixtures
+        run: npm run db:seed
+
+      - name: Integrity tests
+        run: npm run test:db -- --ci
+
+      - name: Clean remigrate and re-seed
+        run: npm run db:reset
+
+      - name: Re-seed idempotency + integrity after reset
+        run: npm run test:db -- --ci

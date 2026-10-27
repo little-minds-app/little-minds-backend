@@ -8,7 +8,7 @@ Little Minds NestJS modular monolith API and infrastructure (ADR-014).
 - **npm** (package manager for this repo)
 - **Docker Compose v2** for local PostgreSQL / MinIO / Mailpit (LMP-21)
 
-NestJS boots without Docker (LMP-20). Supporting services are required for database/object-storage/email work starting with LMP-22+.
+NestJS boots without Docker (LMP-20). PostgreSQL is required for Prisma migrate/seed (LMP-22). Object storage / email remain Compose-backed for later adapters.
 
 ## Quick start — Nest API
 
@@ -56,6 +56,9 @@ Equivalent Make targets (same Compose file):
 | `make dev-down` | Stop containers; **keep** named volumes |
 | `make reset-local` | Stop containers and **delete** volumes (data wipe) |
 | `make compose-config` | Validate Compose file only |
+| `make db-migrate` | Apply Prisma migrations (`npm run db:migrate`) |
+| `make db-seed` | Upsert synthetic 24/32/47/59/71-month profiles |
+| `make db-reset` | Drop schema, remigrate, re-seed (destructive local) |
 
 ### Status and health
 
@@ -98,6 +101,23 @@ docker compose -f infrastructure/docker-compose.yml --env-file .env down -v
 # or: make reset-local
 ```
 
+## Quick start — database migrations & seeds (LMP-22)
+
+With Postgres up (`make dev-up` or any PG matching `DATABASE_URL`):
+
+```bash
+npm run db:migrate   # prisma migrate deploy
+npm run db:seed      # fictional profiles at 24, 32, 47, 59, 71 months
+```
+
+Clean remigrate + re-seed (local/synthetic only):
+
+```bash
+npm run db:reset
+```
+
+Rollback / recovery strategy, mapping table, and open questions: [`prisma/README.md`](./prisma/README.md), [`prisma/MAPPING.md`](./prisma/MAPPING.md).
+
 ## Scripts
 
 | Command | Purpose |
@@ -107,8 +127,13 @@ docker compose -f infrastructure/docker-compose.yml --env-file .env down -v
 | `npm run start:prod` | Run compiled `dist/main.js` |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript `--noEmit` |
-| `npm test` | Jest unit tests |
+| `npm test` | Jest unit tests (includes Prisma schema/seed contract) |
 | `npm run test:e2e` | HTTP e2e (supertest) |
+| `npm run test:db` | Live Postgres migrate/seed integrity (needs `DATABASE_URL`) |
+| `npm run db:migrate` | Apply versioned Prisma migrations |
+| `npm run db:seed` | Deterministic synthetic seed |
+| `npm run db:reset` | Drop, remigrate, seed |
+| `npm run prisma:generate` | Generate Prisma Client |
 | `bash scripts/check-lmp19-docs.sh` | LMP-19 pointer doc checks |
 | `bash scripts/check-compose.sh` | LMP-21 Compose / `.env.example` contract |
 
@@ -120,16 +145,17 @@ Validated at Nest startup with **Zod** (`src/config/env.validation.ts`):
 |---|---|---|---|
 | `NODE_ENV` | yes (defaulted) | `development` | `development` \| `test` \| `production` |
 | `PORT` | yes (defaulted) | `3000` | Positive int ≤ 65535 |
+| `DATABASE_URL` | Prisma CLI / `test:db` | (see `.env.example`) | Nest liveness does **not** require it yet |
 
-Compose-related variables in `.env.example` (`DATABASE_URL`, MinIO, SMTP, host ports) configure local containers and document future Nest/Prisma wiring. Nest does **not** require them yet (Prisma lands in LMP-22).
+Compose-related variables in `.env.example` (`DATABASE_URL`, MinIO, SMTP, host ports) configure local containers and Prisma. Nest process boot remains DB-optional until a later readiness task.
 
-Commit `.env.example` only. Never commit `.env` / secrets. Local Compose credentials are intentionally weak **dev-only** defaults.
+Commit `.env.example` only. Never commit `.env` / secrets. Local Compose credentials are intentionally weak **dev-only** defaults. Seeds use **synthetic** fixtures only — never real child PII.
 
 ## Layout (Blueprint §12.2)
 
 ```text
 src/modules/          Nest modular monolith (Health + Identity stub; other §12.3 dirs are placeholders)
-prisma/               LMP-22
+prisma/               Schema, migrations, synthetic seeds (LMP-22)
 infrastructure/       Docker Compose local services (LMP-21)
 contracts/            LMP-23
 docs/adr/             LMP-19 backend ADR pointers (canonical ADRs live in client)
