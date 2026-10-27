@@ -1,0 +1,26 @@
+{
+  "$comment": "Minimum non-breaking contract surface for LMP-23. Removing listed paths/fields without a major VERSION bump fails CI. Paths outside allowlist fail (scope lock — no invented product APIs).",
+  "contractVersionFile": "contracts/VERSION",
+  "allowBreakingRemovalsFromMajor": 1,
+  "allowedPaths": ["/health"],
+  "requiredOperations": [
+    {
+      "path": "/health",
+      "method": "get",
+      "operationId": "getHealth",
+      "responseStatus": "200",
+      "schemaRef": "#/components/schemas/HealthStatus",
+      "requiredProperties": ["status", "service", "timestamp"]
+    }
+  ],
+  "requiredSchemas": {
+    "HealthStatus": {
+      "required": ["status", "service", "timestamp"],
+      "properties": {
+        "status": { "enum": ["ok"] },
+        "service": { "enum": ["little-minds-backend"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

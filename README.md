@@ -38,6 +38,18 @@ Expected JSON shape:
 
 `GET /health` is unauthenticated process liveness only. Product routes will use `/v1/...` later. Database readiness probes arrive with later tasks.
 
+## OpenAPI contract (LMP-23)
+
+Backend owns the authoritative OpenAPI artifact at [`contracts/openapi.yaml`](./contracts/openapi.yaml) (version in [`contracts/VERSION`](./contracts/VERSION)).
+
+Clients **must pin a specific backend commit SHA** (or future tag) and that file path — never import floating `main`. Pinning instructions: [`contracts/README.md`](./contracts/README.md).
+
+```bash
+npm run contracts:check   # validate + compatibility + generate TS/Dart + drift
+```
+
+Current LMP-23 surface: `GET /health` only. Blueprint §15 product routes are added with their implementing Jira tasks.
+
 ## Quick start — local supporting services (LMP-21)
 
 Blueprint §27.2 stack: **PostgreSQL**, **MinIO**, **Mailpit**. One command from the repo root:
@@ -138,6 +150,10 @@ Rollback / recovery strategy, mapping table, and open questions: [`prisma/README
 | `npm run prisma:generate` | Generate Prisma Client |
 | `bash scripts/check-lmp19-docs.sh` | LMP-19 pointer doc checks |
 | `bash scripts/check-compose.sh` | LMP-21 Compose / `.env.example` contract |
+| `npm run contracts:validate` | Parse/validate `contracts/openapi.yaml` |
+| `npm run contracts:compat` | Allowlist + breaking-change gate |
+| `npm run contracts:generate` | Regen checked-in TS + Dart clients |
+| `npm run contracts:check` | Full contract CI entrypoint (incl. drift) |
 
 ## Configuration
 
