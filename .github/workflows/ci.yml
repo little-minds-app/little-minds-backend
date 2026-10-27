@@ -33,6 +33,11 @@ jobs:
           chmod +x scripts/check-lmp19-docs.sh
           ./scripts/check-lmp19-docs.sh
 
+      - name: LMP-28 env and secrets contract checks
+        run: |
+          chmod +x scripts/check-env-secrets.sh
+          ./scripts/check-env-secrets.sh
+
   nest-ci:
     name: Nest lint, typecheck, test, build
     runs-on: ubuntu-latest

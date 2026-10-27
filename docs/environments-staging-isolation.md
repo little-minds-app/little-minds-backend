@@ -7,7 +7,7 @@
 **Status of rules below:** **LOCKED** (Blueprint §26.1 / F-028)  
 Provisioning is **out of scope** for LMP-19 (see LMP-29 and related infrastructure tasks).
 
-**Related pointers:** [Device support matrix](./device-support-matrix.md) · [ADR index](./adr/README.md)
+**Related pointers:** [Device support matrix](./device-support-matrix.md) · [ADR index](./adr/README.md) · [Environment & secrets config (LMP-28)](./environments-config.md)
 
 ---
 

@@ -65,10 +65,17 @@ web_modules/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variable files
+# dotenv environment variable files (LMP-28: commit examples only)
 .env
 .env.*
 !.env.example
+!.env.*.example
+
+# Real env dumps under infrastructure/environments (examples stay tracked)
+infrastructure/environments/*
+!infrastructure/environments/*.example
+!infrastructure/environments/README.md
+!infrastructure/environments/.gitkeep
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

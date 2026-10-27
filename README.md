@@ -150,6 +150,7 @@ Rollback / recovery strategy, mapping table, and open questions: [`prisma/README
 | `npm run prisma:generate` | Generate Prisma Client |
 | `bash scripts/check-lmp19-docs.sh` | LMP-19 pointer doc checks |
 | `bash scripts/check-compose.sh` | LMP-21 Compose / `.env.example` contract |
+| `bash scripts/check-env-secrets.sh` | LMP-28 env/secrets leakage + example contract |
 | `npm run contracts:validate` | Parse/validate `contracts/openapi.yaml` |
 | `npm run contracts:compat` | Allowlist + breaking-change gate |
 | `npm run contracts:generate` | Regen checked-in TS + Dart clients |
@@ -157,17 +158,19 @@ Rollback / recovery strategy, mapping table, and open questions: [`prisma/README
 
 ## Configuration
 
-Validated at Nest startup with **Zod** (`src/config/env.validation.ts`):
+Validated at Nest startup with **Zod** (`src/config/env.validation.ts`). Canonical product env names (cross-repo): `development` \| `staging` \| `production` via **`APP_ENV`**.
 
-| Variable | Required | Default | Notes |
-|---|---|---|---|
-| `NODE_ENV` | yes (defaulted) | `development` | `development` \| `test` \| `production` |
-| `PORT` | yes (defaulted) | `3000` | Positive int ≤ 65535 |
-| `DATABASE_URL` | Prisma CLI / `test:db` | (see `.env.example`) | Nest liveness does **not** require it yet |
+| Variable | Class | Required | Default | Notes |
+|---|---|---|---|---|
+| `APP_ENV` | public | yes (defaulted) | `development` | Product env; exact names shared with client flavors |
+| `NODE_ENV` | public | yes (defaulted) | `development` | Node runtime: `development` \| `test` \| `production` |
+| `PORT` | public | yes (defaulted) | `3000` | Positive int ≤ 65535 |
+| `PUBLIC_API_BASE_URL` | public | staging/prod | `http://localhost:3000` | Clients set `API_BASE_URL` to match; `https` required for staging/prod |
+| `DATABASE_URL` | secret | staging/prod Nest boot; Prisma CLI | (see `.env.example`) | Dev Nest liveness optional; staging/prod reject localhost + local placeholders |
 
-Compose-related variables in `.env.example` (`DATABASE_URL`, MinIO, SMTP, host ports) configure local containers and Prisma. Nest process boot remains DB-optional until a later readiness task.
+Per-env templates: `infrastructure/environments/*.env.example`. Matrix + client mapping: [`docs/environments-config.md`](./docs/environments-config.md).
 
-Commit `.env.example` only. Never commit `.env` / secrets. Local Compose credentials are intentionally weak **dev-only** defaults. Seeds use **synthetic** fixtures only — never real child PII.
+Compose-related variables in `.env.example` (MinIO, SMTP, host ports) configure local containers and Prisma. Commit **example** files only. Never commit `.env` / real secrets. Local Compose credentials are intentionally weak **dev-only** defaults. Seeds use **synthetic** fixtures only — never real child PII.
 
 ## Layout (Blueprint §12.2)
 
@@ -185,4 +188,5 @@ docs/adr/             LMP-19 backend ADR pointers (canonical ADRs live in client
 - ADR index pointer: `docs/adr/README.md`
 - Device matrix pointer: `docs/device-support-matrix.md`
 - Staging isolation pointer: `docs/environments-staging-isolation.md`
+- Environment & secrets (LMP-28): `docs/environments-config.md`
 - Agent instructions: `AGENTS.md`
