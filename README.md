@@ -6,10 +6,11 @@ Little Minds NestJS modular monolith API and infrastructure (ADR-014).
 
 - **Node.js 20 LTS** (see `.nvmrc`)
 - **npm** (package manager for this repo)
+- **Docker Compose v2** for local PostgreSQL / MinIO / Mailpit (LMP-21)
 
-No PostgreSQL or Docker Compose is required to boot the Nest process (Compose lands in **LMP-21**).
+NestJS boots without Docker (LMP-20). Supporting services are required for database/object-storage/email work starting with LMP-22+.
 
-## Quick start
+## Quick start — Nest API
 
 ```bash
 cp .env.example .env
@@ -35,7 +36,67 @@ Expected JSON shape:
 }
 ```
 
-`GET /health` is unauthenticated process liveness only. Product routes will use `/v1/...` later. Database readiness is deferred.
+`GET /health` is unauthenticated process liveness only. Product routes will use `/v1/...` later. Database readiness probes arrive with later tasks.
+
+## Quick start — local supporting services (LMP-21)
+
+Blueprint §27.2 stack: **PostgreSQL**, **MinIO**, **Mailpit**. One command from the repo root:
+
+```bash
+cp .env.example .env
+docker compose -f infrastructure/docker-compose.yml --env-file .env up -d
+```
+
+Equivalent Make targets (same Compose file):
+
+| Command | Purpose |
+|---|---|
+| `make dev-up` | Start services detached (`up -d`) |
+| `make dev-ps` | Show container status / health |
+| `make dev-down` | Stop containers; **keep** named volumes |
+| `make reset-local` | Stop containers and **delete** volumes (data wipe) |
+| `make compose-config` | Validate Compose file only |
+
+### Status and health
+
+```bash
+docker compose -f infrastructure/docker-compose.yml --env-file .env ps
+```
+
+All three services should report `healthy` after a short start period.
+
+Optional smoke checks against default ports:
+
+```bash
+# PostgreSQL
+docker compose -f infrastructure/docker-compose.yml --env-file .env exec postgres \
+  pg_isready -U postgres -d little_minds
+
+# MinIO live probe
+curl -sf http://localhost:9000/minio/health/live
+
+# Mailpit UI/API
+curl -sf http://localhost:8025/api/v1/info
+```
+
+| Service | Defaults |
+|---|---|
+| PostgreSQL | `localhost:5432` · user/password/db from `.env.example` |
+| MinIO API / console | `localhost:9000` / `localhost:9001` (Bitnami legacy MinIO image; see `infrastructure/README.md`) |
+| Mailpit SMTP / UI | `localhost:1025` / `localhost:8025` |
+
+Override host ports via `.env` when defaults collide (`POSTGRES_PORT`, `MINIO_API_PORT`, `MINIO_CONSOLE_PORT`, `MAILPIT_SMTP_PORT`, `MAILPIT_UI_PORT`). Images are multi-arch (including Apple Silicon).
+
+### Volume cleanup
+
+```bash
+# Stop only (retain data)
+docker compose -f infrastructure/docker-compose.yml --env-file .env down
+
+# Full local data reset
+docker compose -f infrastructure/docker-compose.yml --env-file .env down -v
+# or: make reset-local
+```
 
 ## Scripts
 
@@ -49,24 +110,27 @@ Expected JSON shape:
 | `npm test` | Jest unit tests |
 | `npm run test:e2e` | HTTP e2e (supertest) |
 | `bash scripts/check-lmp19-docs.sh` | LMP-19 pointer doc checks |
+| `bash scripts/check-compose.sh` | LMP-21 Compose / `.env.example` contract |
 
 ## Configuration
 
-Validated at startup with **Zod** (`src/config/env.validation.ts`):
+Validated at Nest startup with **Zod** (`src/config/env.validation.ts`):
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
 | `NODE_ENV` | yes (defaulted) | `development` | `development` \| `test` \| `production` |
 | `PORT` | yes (defaulted) | `3000` | Positive int ≤ 65535 |
 
-Commit `.env.example` only. Never commit `.env` / secrets.
+Compose-related variables in `.env.example` (`DATABASE_URL`, MinIO, SMTP, host ports) configure local containers and document future Nest/Prisma wiring. Nest does **not** require them yet (Prisma lands in LMP-22).
+
+Commit `.env.example` only. Never commit `.env` / secrets. Local Compose credentials are intentionally weak **dev-only** defaults.
 
 ## Layout (Blueprint §12.2)
 
 ```text
 src/modules/          Nest modular monolith (Health + Identity stub; other §12.3 dirs are placeholders)
 prisma/               LMP-22
-infrastructure/       LMP-21
+infrastructure/       Docker Compose local services (LMP-21)
 contracts/            LMP-23
 docs/adr/             LMP-19 backend ADR pointers (canonical ADRs live in client)
 ```
