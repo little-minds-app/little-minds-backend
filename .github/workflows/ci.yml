@@ -1,4 +1,3 @@
-
 name: Backend CI
 
 on:
@@ -13,8 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  ci-smoke-test:
-    name: CI Infrastructure Check
+  docs-checks:
+    name: Docs and pointer checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -22,18 +21,47 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify CI infrastructure
-        run: |
-          echo "Little Minds Backend CI"
-          echo "GitHub Actions is running successfully."
-
       - name: Verify repository files
         run: |
           test -f README.md
           test -f .github/pull_request_template.md
+          test -f package.json
           echo "Repository structure verified."
 
       - name: LMP-19 documentation structure checks
         run: |
           chmod +x scripts/check-lmp19-docs.sh
           ./scripts/check-lmp19-docs.sh
+
+  nest-ci:
+    name: Nest lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test -- --ci --coverage=false
+
+      - name: E2E tests
+        run: npm run test:e2e -- --ci
+
+      - name: Build
+        run: npm run build
