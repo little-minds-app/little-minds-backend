@@ -100,8 +100,11 @@ jobs:
           chmod +x scripts/check-contracts.sh
           npm run contracts:check
 
-      - name: OpenAPI Jest contract tests
-        run: npm test -- --ci --coverage=false test/openapi.contract.spec.ts
+      - name: OpenAPI Jest contract tests (positive + negative)
+        run: |
+          npm test -- --ci --coverage=false \
+            test/openapi.contract.spec.ts \
+            test/openapi.negative.contract.spec.ts
 
   compose-checks:
     name: Docker Compose contract
