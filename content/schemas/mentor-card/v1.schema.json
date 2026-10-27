@@ -46,7 +46,7 @@
       "minLength": 1,
       "maxLength": 128,
       "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
-      "description": "Stable editorial id (not a DB UUID). Example: near_far_play_mentor."
+      "description": "Stable editorial id (not a DB UUID). Near/Far demo: mentor_near_far_32m_adjacency_v1 (matches client NearFarConstants.mentorCardId)."
     },
     "version": {
       "type": "integer",
@@ -381,7 +381,7 @@
         "minLength": 1,
         "maxLength": 128
       },
-      "description": "Optional links to digital activities (e.g. near_far)."
+      "description": "Optional links to digital activities. Near/Far: near_far_32m_v1 (NearFarConstants.activityId)."
     },
     "linked_mission_ids": {
       "type": "array",
@@ -389,7 +389,8 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 128
-      }
+      },
+      "description": "Optional links to real-world missions. Near/Far: near_far_sock_soft_toy_v1 (NearFarConstants.missionId / §14 event mission_id)."
     },
     "extensions": {
       "type": "object",

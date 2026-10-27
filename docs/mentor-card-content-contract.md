@@ -35,11 +35,20 @@ Documented in [`content/policies/mentor-card-safe-copy.md`](../content/policies/
 - Schema: `locale` pattern `^[a-z]{2}-[A-Z]{2}$` (extensible)
 - V1 example fixtures: `en-US` and `tr-TR` for the same `mentor_card_id`
 
-## Version compatibility
+## Version compatibility + client pin strategy
 
-- `schema_version` must equal `1.0.0` for this schema file
+- Schema file: `content/schemas/mentor-card/v1.schema.json`
+- Schema semver file: `content/schemas/mentor-card/VERSION` → **`1.0.0`**
+- Payload field `schema_version` must equal that VERSION (`const: "1.0.0"`)
 - Unknown major versions fail with `schema.version_incompatible`
 - Additive optional keys go under `extensions` within 1.x; new required fields need a schema bump
+
+**How clients pin (do not import floating `main`):**
+
+1. Choose a backend **git commit SHA** where this schema/VERSION/fixtures are the revision you need (prefer a reviewed merge commit; during parallel work, pin the LMP-47 PR head SHA).
+2. Fetch that revision of `content/schemas/mentor-card/` + desired fixtures.
+3. Record `BACKEND_MENTOR_CARD_SCHEMA_COMMIT=<sha>` and `BACKEND_MENTOR_CARD_SCHEMA_VERSION=1.0.0` (or equivalent pin file).
+4. Bump the pin deliberately when adopting a new backend content-schema revision; regenerate/re-copy mirrors in the client repo.
 
 ## Near/Far example
 
@@ -49,6 +58,19 @@ Documented in [`content/policies/mentor-card-safe-copy.md`](../content/policies/
 | tr-TR | `content/fixtures/mentor-cards/near-far.tr-TR.v1.json` |
 
 Canonical product example: Blueprint §5.2 near/far sock + soft toy mission; no proof/photo.
+
+### Near/Far ID alignment (LMP-45/46 events)
+
+Fixtures use the same strings as client `NearFarConstants` on `main`:
+
+| Field | Canonical value |
+|---|---|
+| `mentor_card_id` | `mentor_near_far_32m_adjacency_v1` |
+| `linked_activity_ids[]` | `near_far_32m_v1` |
+| `linked_mission_ids[]` | `near_far_sock_soft_toy_v1` |
+| age band | 30–35 months |
+
+`review_status` on these example fixtures is **`draft`** — draft is **not** production-catalog eligible (`published` only).
 
 ## Non-goals
 

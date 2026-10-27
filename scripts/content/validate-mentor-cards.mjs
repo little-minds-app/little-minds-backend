@@ -17,6 +17,7 @@ const result = spawnSync(
     '--coverage=false',
     'src/modules/mentor/mentor-card.validator.spec.ts',
     'src/modules/mentor/mentor-card.safe-copy.spec.ts',
+    'src/modules/mentor/mentor-card.review.spec.ts',
   ],
   {
     cwd: root,

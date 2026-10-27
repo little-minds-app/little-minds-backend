@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
-  "mentor_card_id": "near_far_play_mentor",
+  "mentor_card_id": "mentor_near_far_32m_adjacency_v1",
   "version": 1,
   "locale": "tr-TR",
   "title": "Çorap ve yumuşak oyuncakla yakın-uzak",
   "age_min_months": 30,
-  "age_max_months": 47,
+  "age_max_months": 35,
   "domains": ["cognitive_reasoning", "language"],
   "goals": ["explore_near_far_spatial_relationships"],
   "interaction_style": "observe_wait_respond_extend",
@@ -101,9 +101,10 @@
   "reviewed_at": null,
   "observed_vs_suggested": "Çocuk uygulamada yakın-uzak etkinliğini yeni oynadıysa, bu kart ilgili bir ekran dışı davet önerir. İsterseniz deneyebilirsiniz; atlamak da uygundur.",
   "not_a_developmental_assessment": "Bu birlikte eğlenceli bir pratiktir — gelişimsel değerlendirme, tanı veya kilometre taşı kontrolü değildir.",
-  "linked_activity_ids": ["near_far"],
-  "linked_mission_ids": ["near_far_sock_soft_toy"],
+  "linked_activity_ids": ["near_far_32m_v1"],
+  "linked_mission_ids": ["near_far_sock_soft_toy_v1"],
   "extensions": {
-    "demo_slice": "near_far_v1"
+    "demo_slice": "near_far_v1",
+    "id_alignment": "NearFarConstants_main_c939ae3"
   }
 }

@@ -4,6 +4,11 @@ import {
   mentorCardFixturesDir,
   resolveContentRoot,
 } from './mentor-card.paths';
+import { isMentorCardEligibleForProductionCatalog } from './mentor-card.review';
+import {
+  NEAR_FAR_CANONICAL_IDS,
+  NEAR_FAR_DEPRECATED_IDS,
+} from './near-far.ids';
 import {
   isMentorCardAgeApplicable,
   validateMentorCard,
@@ -171,5 +176,53 @@ describe('Mentor card schema validation (LMP-47)', () => {
     };
     const result = validateMentorCard(card, { contentRoot: CONTENT_ROOT });
     expect(result.ok).toBe(true);
+  });
+
+  it('keeps Near/Far fixtures as draft (not production catalog)', () => {
+    for (const file of [
+      'near-far.en-US.v1.json',
+      'near-far.tr-TR.v1.json',
+    ]) {
+      const card = loadFixture(file) as MentorCardV1;
+      expect(card.review_status).toBe('draft');
+      expect(isMentorCardEligibleForProductionCatalog(card)).toBe(false);
+    }
+  });
+
+  it('aligns Near/Far fixture IDs with client NearFarConstants / events', () => {
+    for (const file of [
+      'near-far.en-US.v1.json',
+      'near-far.tr-TR.v1.json',
+    ]) {
+      const card = loadFixture(file) as MentorCardV1;
+      expect(card.mentor_card_id).toBe(NEAR_FAR_CANONICAL_IDS.mentorCardId);
+      expect(card.linked_activity_ids).toEqual([
+        NEAR_FAR_CANONICAL_IDS.activityId,
+      ]);
+      expect(card.linked_mission_ids).toEqual([
+        NEAR_FAR_CANONICAL_IDS.missionId,
+      ]);
+      expect(card.age_min_months).toBe(NEAR_FAR_CANONICAL_IDS.ageMinMonths);
+      expect(card.age_max_months).toBe(NEAR_FAR_CANONICAL_IDS.ageMaxMonths);
+
+      expect(card.mentor_card_id).not.toBe(
+        NEAR_FAR_DEPRECATED_IDS.mentorCardId,
+      );
+      expect(card.linked_mission_ids).not.toContain(
+        NEAR_FAR_DEPRECATED_IDS.missionId,
+      );
+      expect(card.linked_activity_ids).not.toContain(
+        NEAR_FAR_DEPRECATED_IDS.activityId,
+      );
+    }
+  });
+
+  it('documents schema VERSION 1.0.0 for client pin strategy', () => {
+    const version = readFileSync(
+      join(CONTENT_ROOT, 'schemas', 'mentor-card', 'VERSION'),
+      'utf8',
+    ).trim();
+    expect(version).toBe('1.0.0');
+    expect(baseCard().schema_version).toBe(version);
   });
 });
