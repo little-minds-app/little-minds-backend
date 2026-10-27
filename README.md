@@ -58,7 +58,7 @@ Equivalent Make targets (same Compose file):
 | `make compose-config` | Validate Compose file only |
 | `make db-migrate` | Apply Prisma migrations (`npm run db:migrate`) |
 | `make db-seed` | Upsert synthetic 24/32/47/59/71-month profiles |
-| `make db-reset` | Drop schema, remigrate, re-seed (destructive local) |
+| `make db-reset` | Drop schema, remigrate, re-seed (`LM_CONFIRM_DB_RESET=1` required) |
 
 ### Status and health
 
@@ -110,11 +110,13 @@ npm run db:migrate   # prisma migrate deploy
 npm run db:seed      # fictional profiles at 24, 32, 47, 59, 71 months
 ```
 
-Clean remigrate + re-seed (local/synthetic only):
+Clean remigrate + re-seed (isolated synthetic DB only; explicit approval required):
 
 ```bash
-npm run db:reset
+LM_CONFIRM_DB_RESET=1 npm run db:reset
 ```
+
+Safety gate (`scripts/db-reset-guard.ts`): allowlisted loopback/compose hosts only, synthetic DB name (`little_minds` / `_test|_dev|_ci|_local`), remote hosts default-denied. Do not tunnel production/staging onto loopback and reset.
 
 Rollback / recovery strategy, mapping table, and open questions: [`prisma/README.md`](./prisma/README.md), [`prisma/MAPPING.md`](./prisma/MAPPING.md).
 

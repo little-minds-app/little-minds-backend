@@ -102,6 +102,8 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/little_minds?schema=public
+      # Required by scripts/db-reset-dev.sh safety gate (explicit approval; loopback-only).
+      LM_CONFIRM_DB_RESET: "1"
 
     steps:
       - name: Checkout repository

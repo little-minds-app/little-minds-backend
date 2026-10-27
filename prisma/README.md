@@ -38,14 +38,17 @@ Expected seed ages (months): **24, 32, 47, 59, 71** under one synthetic parent. 
 ## Clean remigrate + re-seed
 
 ```bash
-npm run db:reset
-# scripts/db-reset-dev.sh — DROP SCHEMA public CASCADE → migrate deploy → seed
-# Refuses non-local DATABASE_URL unless ALLOW_NONLOCAL_DB_RESET=1
+# Explicit approval required. Host must be loopback/compose DNS; DB name little_minds[_test|_dev|_ci|_local].
+# Mere presence of "localhost" anywhere in the URL is NOT enough (parsed host must match allowlist).
+LM_CONFIRM_DB_RESET=1 npm run db:reset
+# scripts/db-reset-dev.sh — guard → DROP SCHEMA public CASCADE → migrate deploy → seed
+# Remote hosts are always denied. Do not SSH-tunnel production/staging onto loopback and reset.
+# Guard-only: LM_DB_RESET_CHECK_ONLY=1 LM_CONFIRM_DB_RESET=1 npm run db:reset
 ```
 
 Destructive Compose volume wipe: `make reset-local` then `make dev-up` → `npm run db:migrate` → `npm run db:seed`.
 
-Human operators may also use `npx prisma migrate reset` interactively; CI/agents use `db-reset-dev.sh` for a non-interactive local rebuild.
+Human operators may also use `npx prisma migrate reset` interactively; CI uses `db-reset-dev.sh` with `LM_CONFIRM_DB_RESET=1`.
 
 ## Rollback strategy (documented)
 

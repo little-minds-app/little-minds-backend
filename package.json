@@ -12,7 +12,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
-    "lint": "eslint \"{src,test,prisma}/**/*.ts\"",
+    "lint": "eslint \"{src,test,prisma,scripts}/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
     "test": "jest",
     "test:watch": "jest --watch",

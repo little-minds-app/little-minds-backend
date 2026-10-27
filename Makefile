@@ -39,7 +39,8 @@ db-seed:
 	@test -f .env || cp .env.example .env
 	npm run db:seed
 
-## Drop+reapply migrations and re-seed (destructive; local/synthetic only)
+## Drop+reapply migrations and re-seed (destructive; requires LM_CONFIRM_DB_RESET=1)
 db-reset:
 	@test -f .env || cp .env.example .env
+	@test "$${LM_CONFIRM_DB_RESET}" = "1" || (echo "Set LM_CONFIRM_DB_RESET=1 to approve destructive reset" >&2; exit 1)
 	npm run db:reset
