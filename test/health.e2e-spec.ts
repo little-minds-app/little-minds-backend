@@ -8,8 +8,10 @@ describe('Health (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
+    process.env.APP_ENV = 'development';
     process.env.NODE_ENV = 'test';
     process.env.PORT = '3000';
+    process.env.PUBLIC_API_BASE_URL = 'http://localhost:3000';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],

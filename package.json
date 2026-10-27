@@ -29,7 +29,8 @@
     "contracts:validate": "node scripts/contracts/validate.mjs",
     "contracts:compat": "node scripts/contracts/check-compatibility.mjs",
     "contracts:generate": "node scripts/contracts/generate.mjs",
-    "contracts:check": "bash scripts/check-contracts.sh"
+    "contracts:check": "bash scripts/check-contracts.sh",
+    "config:check": "bash scripts/check-env-secrets.sh"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

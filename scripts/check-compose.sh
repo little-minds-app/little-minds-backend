@@ -75,8 +75,10 @@ import sys
 
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
 required = (
+    "APP_ENV=",
     "NODE_ENV=",
     "PORT=",
+    "PUBLIC_API_BASE_URL=",
     "POSTGRES_USER=",
     "POSTGRES_PASSWORD=",
     "POSTGRES_DB=",

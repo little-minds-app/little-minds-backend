@@ -1,0 +1,28 @@
+import { toPublicConfig, isPublicEnvKey } from './public-config';
+import type { AppEnv } from './env.validation';
+
+describe('toPublicConfig', () => {
+  it('omits DATABASE_URL and other secrets', () => {
+    const env: AppEnv = {
+      APP_ENV: 'staging',
+      NODE_ENV: 'production',
+      PORT: 3000,
+      PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
+      DATABASE_URL:
+        'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds',
+    };
+
+    expect(toPublicConfig(env)).toEqual({
+      APP_ENV: 'staging',
+      NODE_ENV: 'production',
+      PORT: 3000,
+      PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
+    });
+    expect(JSON.stringify(toPublicConfig(env))).not.toContain('s3curePass');
+  });
+
+  it('recognizes public env keys only', () => {
+    expect(isPublicEnvKey('APP_ENV')).toBe(true);
+    expect(isPublicEnvKey('DATABASE_URL')).toBe(false);
+  });
+});

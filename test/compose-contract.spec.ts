@@ -53,8 +53,10 @@ describe('Docker Compose local stack contract (LMP-21)', () => {
   });
 
   it('documents safe local-only credentials and Nest bootstrap vars in .env.example', () => {
+    expect(envExample).toContain('APP_ENV=development');
     expect(envExample).toContain('NODE_ENV=development');
     expect(envExample).toContain('PORT=3000');
+    expect(envExample).toContain('PUBLIC_API_BASE_URL=');
     expect(envExample).toContain('POSTGRES_USER=postgres');
     expect(envExample).toContain('POSTGRES_PASSWORD=postgres');
     expect(envExample).toContain('DATABASE_URL=postgresql://');
