@@ -44,11 +44,14 @@ Backend owns the authoritative OpenAPI artifact at [`contracts/openapi.yaml`](./
 
 Clients **must pin a specific backend commit SHA** (or future tag) and that file path — never import floating `main`. Pinning instructions: [`contracts/README.md`](./contracts/README.md).
 
+When OpenAPI / `VERSION` / generated clients change here, treat it as a **client pin + regen** event (client CI owns the pin check; backend CI does not cross-repo verify).
+
 ```bash
 npm run contracts:check   # validate + compatibility + generate TS/Dart + drift
+npm test -- test/openapi.negative.contract.spec.ts  # LMP-27 breakage proofs
 ```
 
-Current LMP-23 surface: `GET /health` only. Blueprint §15 product routes are added with their implementing Jira tasks.
+Current LMP-23 surface: `GET /health` only (`0.1.0`). Blueprint §15 product routes are added with their implementing Jira tasks.
 
 ## Quick start — local supporting services (LMP-21)
 
