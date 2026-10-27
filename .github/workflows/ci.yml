@@ -32,3 +32,8 @@ jobs:
           test -f README.md
           test -f .github/pull_request_template.md
           echo "Repository structure verified."
+
+      - name: LMP-19 documentation structure checks
+        run: |
+          chmod +x scripts/check-lmp19-docs.sh
+          ./scripts/check-lmp19-docs.sh
