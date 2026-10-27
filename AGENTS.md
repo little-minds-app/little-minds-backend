@@ -72,3 +72,17 @@ Tests must be implemented as part of the same Jira task and Pull Request.
 - Preserve NestJS architecture and existing project conventions.
 - Avoid introducing unnecessary dependencies.
 - Request human approval before destructive database operations or irreversible changes.
+
+## 8. Cursor Cloud specific instructions
+
+This checkout is the backend repository’s documentation and CI baseline. It does not yet contain `package.json`, a NestJS service, Docker Compose, or a dev server. Sections 12 and 27 of `docs/LITTLE_MINDS_PRODUCT_BLUEPRINT_v2.6.md` describe the intended API and local stack; those files arrive with later implementation tasks.
+
+- Node.js 22 and npm are already on the Cloud Agent image. There is no lockfile, so do not run `npm ci` or `npm install`.
+- The canonical automated check is `.github/workflows/ci.yml`. From the repository root:
+
+```bash
+test -f README.md
+test -f .github/pull_request_template.md
+```
+
+- No process needs to stay running. Start Docker, PostgreSQL, or an API only after this repository contains those services.
