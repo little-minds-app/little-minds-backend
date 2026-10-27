@@ -1,0 +1,61 @@
+openapi: 3.0.3
+info:
+  title: Little Minds Backend API
+  description: |
+    Authoritative OpenAPI contract for little-minds-backend (ADR-014).
+    LMP-23 scope: process liveness (`GET /health`) only.
+    Product `/v1/...` routes are added by later Jira tasks — do not invent them here.
+  version: 0.1.0
+  contact:
+    name: Little Minds
+servers:
+  - url: http://localhost:3000
+    description: Local NestJS (default PORT)
+tags:
+  - name: Health
+    description: Unauthenticated process liveness (no database dependency)
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags:
+        - Health
+      summary: Process liveness
+      description: |
+        Returns process liveness JSON. Unauthenticated. Does not probe PostgreSQL
+        or other dependencies (readiness arrives in a later task).
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: ok
+                service: little-minds-backend
+                timestamp: '2026-10-27T12:00:00.000Z'
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - service
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+          description: Liveness indicator
+        service:
+          type: string
+          enum:
+            - little-minds-backend
+          description: Stable service identifier
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC ISO-8601 timestamp when the check was produced
