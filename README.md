@@ -53,6 +53,16 @@ npm test -- test/openapi.negative.contract.spec.ts  # LMP-27 breakage proofs
 
 Current LMP-23 surface: `GET /health` only (`0.1.0`). Blueprint §15 product routes are added with their implementing Jira tasks.
 
+## Mentor card content schema (LMP-47)
+
+Backend-owned Parent Play Mentor card JSON Schema + safe-copy rules live under [`content/`](./content/README.md). Near/Far fixtures: `en-US` / `tr-TR`.
+
+```bash
+npm run content:validate-mentor-cards
+```
+
+Contract summary: [`docs/mentor-card-content-contract.md`](./docs/mentor-card-content-contract.md). No mentor HTTP routes or parent UI in this task.
+
 ## Quick start — local supporting services (LMP-21)
 
 Blueprint §27.2 stack: **PostgreSQL**, **MinIO**, **Mailpit**. One command from the repo root:

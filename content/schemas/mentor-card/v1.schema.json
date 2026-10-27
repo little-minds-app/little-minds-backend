@@ -1,0 +1,400 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://little-minds.app/schemas/mentor-card/v1.schema.json",
+  "title": "ParentPlayMentorCard",
+  "description": "Versioned Parent Play Mentor card content contract (Blueprint F-009 / §4.4). Backend-owned; clients consume. schema_version identifies this document revision.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mentor_card_id",
+    "version",
+    "locale",
+    "title",
+    "age_min_months",
+    "age_max_months",
+    "domains",
+    "goals",
+    "interaction_style",
+    "estimated_prep_minutes",
+    "estimated_screen_minutes",
+    "estimated_offscreen_minutes",
+    "materials",
+    "why",
+    "how",
+    "what_to_say",
+    "safety",
+    "adaptations",
+    "parent_script_before",
+    "parent_prompts_during",
+    "parent_prompts_after",
+    "scaffold_down",
+    "extend_up",
+    "evidence_refs",
+    "review_status",
+    "observed_vs_suggested",
+    "not_a_developmental_assessment"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Content schema revision. Major bumps require a new schema file and compatibility policy."
+    },
+    "mentor_card_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "description": "Stable editorial id (not a DB UUID). Example: near_far_play_mentor."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Immutable published content revision for this mentor_card_id + locale."
+    },
+    "locale": {
+      "type": "string",
+      "pattern": "^[a-z]{2}-[A-Z]{2}$",
+      "description": "BCP-47 language-region tag. V1 fixtures ship tr-TR and en-US; the contract is locale-parameterized (not a single hardcoded locale)."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "age_min_months": {
+      "type": "integer",
+      "minimum": 24,
+      "maximum": 71,
+      "description": "Inclusive lower bound of age applicability (months)."
+    },
+    "age_max_months": {
+      "type": "integer",
+      "minimum": 24,
+      "maximum": 71,
+      "description": "Inclusive upper bound of age applicability (months)."
+    },
+    "domains": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "uniqueItems": true
+    },
+    "goals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "uniqueItems": true
+    },
+    "interaction_style": {
+      "type": "string",
+      "enum": [
+        "warm_invitational",
+        "observe_wait_respond_extend",
+        "guided_play",
+        "open_ended"
+      ]
+    },
+    "estimated_prep_minutes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 60
+    },
+    "estimated_screen_minutes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30
+    },
+    "estimated_offscreen_minutes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 60
+    },
+    "materials": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "optional": {
+            "type": "boolean",
+            "default": false
+          },
+          "household_common": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      }
+    },
+    "why": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "learning_intention"],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Plain-language reason this play invitation fits."
+        },
+        "learning_intention": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      }
+    },
+    "how": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prep_summary", "steps"],
+      "properties": {
+        "prep_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        }
+      }
+    },
+    "what_to_say": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "during", "after"],
+      "description": "Caregiver-facing script groups (LM-006 why/how/what-to-say).",
+      "properties": {
+        "before": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        },
+        "during": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        },
+        "after": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "constraints",
+        "requires_adult_supervision",
+        "prohibits_proof_or_photo"
+      ],
+      "properties": {
+        "constraints": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        },
+        "requires_adult_supervision": {
+          "const": true,
+          "description": "Must be true. Off-screen play always assumes adult supervision."
+        },
+        "prohibits_proof_or_photo": {
+          "const": true,
+          "description": "Must be true. No photographic/video proof requirements (Blueprint §5.2)."
+        }
+      }
+    },
+    "adaptations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "summary"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "seated",
+              "low_motor",
+              "low_noise",
+              "sensory_friendly",
+              "small_space",
+              "no_purchase",
+              "tactile",
+              "point_instead_of_move",
+              "other"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        }
+      }
+    },
+    "parent_script_before": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      },
+      "description": "Blueprint §4.4 alias of what_to_say.before (kept for catalog/API mapping)."
+    },
+    "parent_prompts_during": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      }
+    },
+    "parent_prompts_after": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      }
+    },
+    "scaffold_down": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      }
+    },
+    "extend_up": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "Pedagogy/review references; empty allowed for general age-appropriate ideas."
+    },
+    "review_status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "pedagogy_review",
+        "safety_review",
+        "localization_review",
+        "approved",
+        "staged",
+        "published",
+        "archived",
+        "rolled_back"
+      ]
+    },
+    "reviewer_id": {
+      "type": ["string", "null"],
+      "maxLength": 128
+    },
+    "reviewed_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "observed_vs_suggested": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600,
+      "description": "Explains what is observed app behavior vs a suggested invitation."
+    },
+    "not_a_developmental_assessment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600,
+      "description": "Required caregiver-facing non-diagnostic disclaimer."
+    },
+    "linked_activity_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "Optional links to digital activities (e.g. near_far)."
+    },
+    "linked_mission_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Forward-compatible bag for additive keys within schema_version 1.x. Validators ignore unknown keys here; do not put required caregiver copy here.",
+      "additionalProperties": true
+    }
+  }
+}
