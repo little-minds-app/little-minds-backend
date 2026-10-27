@@ -1791,3 +1791,4 @@ Every production gameplay event MUST carry `event_id` (UUID), `schema_version`, 
 **Change policy:** any change to a P0 feature, child-safety policy, event/KPI semantics, content review requirement, or data retention model requires a documented decision and updates to this file, tests, and affected contracts.
 
 ---
+
