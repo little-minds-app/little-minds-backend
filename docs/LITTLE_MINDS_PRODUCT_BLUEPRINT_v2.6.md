@@ -1,7 +1,7 @@
 # LITTLE MINDS — PRODUCT BLUEPRINT & CURSOR DEVELOPMENT CONTRACT
 
-> **Document status:** V2.6 product baseline / implementation contract — phone and tablet compatibility required in V1; implementation-level choices explicitly marked for Day 1  
-> **Date:** 2026-10-24  
+> **Document status:** V2.7 product baseline / implementation contract — phone and tablet compatibility required in V1; approved screen-orientation policy (ADR-018); remaining implementation-level choices explicitly marked for Day 1  
+> **Date:** 2026-10-27  
 > **Primary language:** Turkish (tr-TR); canonical engineering identifiers in English  
 > **Target:** iOS + Android Kids App on phones and tablets, embedded Mobile Parent Dashboard on phones and tablets, Web Parent Dashboard, Operations Admin Console, shared API, isolated staging/QA platform  
 > **Age scope:** 24–71 months (2–5 years 11 months); 72+ months is a future expansion, not silently included.  
@@ -813,6 +813,7 @@ These are **not permission to omit P0 features**; they are explicit choices to r
 12. `ADR-012`: Retention schedule, lawful bases, parental permissions and DPIA/child-rights review.
 13. `ADR-013`: **Approved** cost-aware, pluggable observability; core logging always active; optional exporters and vendors gated (Section 31). Existing `ADR-004` remains reserved for PostgreSQL hosting.
 14. `ADR-014`: **Approved** separate client and backend private GitHub repositories; one Jira project and versioned API contracts (Section 32). Existing `ADR-005` remains reserved for screen-time synchronization.
+15. `ADR-018`: **Product Owner Approved / Accepted** V1 screen-orientation policy by surface; phone and tablet Day-1 mandatory (F-034); state preserved across orientation transitions; QA-UI-001 covers relevant orientations (Section 40).
 
 ---
 
@@ -1759,10 +1760,33 @@ Every production gameplay event MUST carry `event_id` (UUID), `schema_version`, 
 1. A parent can onboard, authenticate, manage the child profile, view actual dashboard metrics, set screen-time limits and manage subscription/privacy on a supported phone **and** tablet for each platform.
 2. Every V1 game mechanic and the near/far end-to-end journey can be completed on phone and tablet without distorted game objects, mismatched hitboxes, inaccessible controls, clipped content or unexpected layout jumps.
 3. Representative small/large phone and tablet viewport tests run in CI; manual QA includes at least one physical phone and tablet on **each** platform before launch, plus orientation, window resize/multitasking (where supported), text scaling and safe-area cases.
-4. Device coverage, minimum OS versions, supported orientation policies and exact responsive breakpoints are finalized in **Day 1 Jira acceptance criteria** and recorded in design-system/device-test documentation; these are implementation choices, not permission to omit tablet support.
+4. Device coverage, minimum OS versions and exact responsive breakpoints are finalized in **Day 1 Jira acceptance criteria** and recorded in design-system/device-test documentation; **supported orientation policies are fixed by ADR-018** (Section 40). These are implementation choices, not permission to omit tablet support.
 5. F-034 is **P0 launch-blocking**: a tablet-specific regression that prevents a required user journey blocks release just as a phone regression would.
 
 **Task policy:** Do not pre-create Jira issues or assign issue numbers here. On Day 1, jointly define the cross-platform adaptive UI and device-matrix acceptance tasks and import approved tasks into Jira.
+
+---
+
+## 40. ADR-018 — SCREEN ORIENTATION POLICY (PRODUCT OWNER APPROVED / ACCEPTED 2026-10-27)
+
+**Status:** Product Owner Approved / Accepted — Gökhan AYDIN. **Scope:** Flutter/Flame Kids Mode surfaces, native Parent Gate/Settings, Next.js Parent Dashboard; F-034 phone/tablet matrix; QA-UI-001.
+
+**Decision:** Fix V1 screen-orientation policy by product surface. Phone and tablet support remain **Day-1 mandatory (F-034 / Section 39)**; this ADR does **not** reopen or weaken that requirement.
+
+| Surface | Orientation policy |
+|---|---|
+| Child Hub | Landscape-only |
+| All educational mini-games | Landscape-only |
+| Game results and rewards | Landscape-only |
+| Child profile selection | Landscape-only |
+| Native Parent Gate and Parent Settings | Portrait + landscape |
+| Next.js Parent Dashboard | Responsive; no orientation lock |
+
+**State preservation:** App state MUST be preserved across orientation transitions on surfaces that allow both orientations, and across any permitted rotation or window-size change on supported phone and tablet devices.
+
+**Testing (QA-UI-001):** Relevant screen orientations for each surface above MUST be covered by automated tests and/or release QA evidence appropriate to the change. Orientation, safe-area and device-matrix cases required by F-034 and Section 39 remain mandatory.
+
+**Supersedes:** Any earlier proposal that treated Kids Mode hub, mini-games, results/rewards or child profile selection as portrait-primary or portrait-locked by default, without changing F-034 phone+tablet P0 scope.
 
 ---
 
@@ -1770,6 +1794,7 @@ Every production gameplay event MUST carry `event_id` (UUID), `schema_version`, 
 
 | Version | Date | Decision |
 |---|---|---|
+| 2.7 | 2026-10-27 | Product Owner Approved / Accepted ADR-018 screen-orientation policy (landscape-only Child Hub, mini-games, results/rewards and child profile selection; portrait+landscape native Parent Gate/Settings; responsive unlocked Next.js Parent Dashboard); F-034 phone+tablet Day-1 unchanged; state preservation and QA-UI-001 orientation coverage required (Section 40). |
 | 2.6 | 2026-10-27 | Added mandatory feature-appropriate automated UI/widget/E2E tests and acceptance/Done gates for every implementation task (QA-UI-001; Section 28.9). |
 | 2.5 | 2026-10-26 | Established mandatory Jira-prefixed, present-tense Git commit message convention for all Little Minds repositories (Section 28.8); updated Section 28 references. |
 | 2.4 | 2026-10-25 | Added V1 P0 phone/tablet compatibility (F-034): adaptive iOS/Android Kids Mode and embedded Parent Dashboard, responsive layouts, orientation/safe areas, consistent behavior and device-matrix release QA (Section 39). |
