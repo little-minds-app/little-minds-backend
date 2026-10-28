@@ -12,7 +12,9 @@ import {
   type ActivitySessionV1,
   type ActivitySessionValidationResult,
   type ActivityValidationIssue,
+  type ServerConsentRecord,
 } from './activity-contract.types';
+import { collectSessionConsentAuthorizationIssues } from './activity-event.consent';
 import {
   collectForbiddenClientIdentityIssues,
   collectPrivacyIssues,
@@ -107,12 +109,21 @@ function validateTemporalOrder(
   return issues;
 }
 
+export type ValidateActivitySessionOptions = {
+  schemaRoot?: string;
+  /**
+   * When provided, session.consent.consent_scope is authorized against server records.
+   * session.consent.decision is never treated as a grant.
+   */
+  serverConsentRecords?: readonly ServerConsentRecord[];
+};
+
 /**
  * Validate an ActivitySessionV1 wire document (schema version + Ajv + privacy).
  */
 export function validateActivitySession(
   payload: unknown,
-  options?: { schemaRoot?: string },
+  options?: ValidateActivitySessionOptions,
 ): ActivitySessionValidationResult {
   if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
     return {
@@ -150,7 +161,16 @@ export function validateActivitySession(
   issues.push(...collectPrivacyIssues(payload));
 
   if (schemaOk) {
-    issues.push(...validateTemporalOrder(payload as ActivitySessionV1));
+    const session = payload as ActivitySessionV1;
+    issues.push(...validateTemporalOrder(session));
+    if (options?.serverConsentRecords) {
+      issues.push(
+        ...collectSessionConsentAuthorizationIssues(
+          session,
+          options.serverConsentRecords,
+        ),
+      );
+    }
   }
 
   if (issues.length > 0) {

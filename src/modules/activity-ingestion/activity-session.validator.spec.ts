@@ -82,4 +82,46 @@ describe('ActivitySessionV1 validation (LMP-50)', () => {
     // Shape validation succeeds; authorization is a separate server-consent check.
     expect(validateActivitySession(session).ok).toBe(true);
   });
+
+  it('rejects session when serverConsentRecords deny despite client decision granted', () => {
+    const session = baseSession();
+    expect(session.consent.decision).toBe('granted');
+    const result = validateActivitySession(session, {
+      serverConsentRecords: [
+        {
+          purpose: 'essential_play_events',
+          consent_scope: 'essential_play_events',
+          status: 'withdrawn',
+          policy_version: 'privacy-notice-draft-0',
+          source: 'server_consent_store',
+        },
+      ],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(
+        result.issues.some((i) => i.code === 'consent.unauthorized_scope'),
+      ).toBe(true);
+    }
+  });
+
+  it('accepts session only with authoritative server grant (ignores client decision)', () => {
+    const session = baseSession();
+    const deniedClient = {
+      ...session,
+      consent: { ...session.consent, decision: 'denied' as const },
+    };
+    const result = validateActivitySession(deniedClient, {
+      serverConsentRecords: [
+        {
+          purpose: 'essential_play_events',
+          consent_scope: 'essential_play_events',
+          status: 'granted',
+          policy_version: 'privacy-notice-draft-0',
+          source: 'sync_scope_grant',
+        },
+      ],
+    });
+    expect(result.ok).toBe(true);
+  });
 });

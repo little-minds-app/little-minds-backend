@@ -133,10 +133,16 @@ export type ActivityEventValidationResult =
   | { ok: true; event: ActivityEventV1 }
   | { ok: false; issues: ActivityValidationIssue[] };
 
-/** Server-side consent row used for authorization checks (not client decision). */
+/**
+ * Server-attested consent row used for authorization checks.
+ * NEVER constructed from client `decision` alone.
+ * `source` must be an authoritative server/sync channel.
+ */
 export type ServerConsentRecord = {
   purpose: string;
   consent_scope: ConsentScope;
   status: 'granted' | 'denied' | 'withdrawn';
   policy_version: string;
+  /** Authoritative origin — client wire decisions are not valid sources. */
+  source: 'server_consent_store' | 'sync_scope_grant';
 };

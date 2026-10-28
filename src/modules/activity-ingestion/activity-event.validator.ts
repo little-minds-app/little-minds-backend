@@ -20,10 +20,7 @@ import {
   type ParentOnlyEventType,
   type ServerConsentRecord,
 } from './activity-contract.types';
-import {
-  isConsentScopeAuthorized,
-  isConsentScopeBlocked,
-} from './activity-event.consent';
+import { collectConsentAuthorizationIssues } from './activity-event.consent';
 import {
   collectForbiddenClientIdentityIssues,
   collectPrivacyIssues,
@@ -170,11 +167,14 @@ function validateActorConsistency(
 
 export type ValidateActivityEventOptions = {
   schemaRoot?: string;
-  /** When provided, optional/withdrawn scopes are checked (TC-EV-015). */
+  /**
+   * When provided, consent_scope is checked against server-attested records (TC-EV-015).
+   * Records must use source server_consent_store | sync_scope_grant.
+   */
   serverConsentRecords?: readonly ServerConsentRecord[];
   /**
    * Client decision is accepted for logging/tests only — never authorizes.
-   * Passing decision:"granted" without server grant still fails authorization.
+   * Passing decision:"granted" without a server grant still fails authorization.
    */
   clientConsentDecision?: string;
 };
@@ -226,20 +226,16 @@ export function validateActivityEvent(
     issues.push(...validateActorConsistency(event));
 
     if (options?.serverConsentRecords) {
-      const scope = event.consent_scope;
-      if (
-        isConsentScopeBlocked(scope, options.serverConsentRecords) ||
-        !isConsentScopeAuthorized(scope, options.serverConsentRecords, {
-          clientDecision: options.clientConsentDecision,
-        })
-      ) {
-        issues.push({
-          code: 'consent.unauthorized_scope',
-          path: 'consent_scope',
-          message:
-            'consent_scope is not authorized by server records (client decision is not authorization)',
-        });
-      }
+      issues.push(
+        ...collectConsentAuthorizationIssues(
+          event.consent_scope,
+          options.serverConsentRecords,
+          {
+            clientDeclaredDecision: options.clientConsentDecision,
+            path: 'consent_scope',
+          },
+        ),
+      );
     }
   }
 

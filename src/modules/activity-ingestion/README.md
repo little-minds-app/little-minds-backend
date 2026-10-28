@@ -18,6 +18,7 @@
 - `schema_version` semver string `"1.0.0"` (≠ OpenAPI `info.version`)
 - Accept UUIDv4 and UUIDv7
 - Consent scopes are purpose-specific; client `decision: granted` is **not** authorization
+- Authorization requires server-attested records (`source: server_consent_store | sync_scope_grant`)
 - Near/Far is compat input only — do not modify the client in this task
 - Reject client `received_at`, `child_id`, unauthorized identity; reject unknown properties
 

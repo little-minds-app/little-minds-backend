@@ -131,11 +131,50 @@ if fail == 0:
 sys.exit(fail)
 PY
 
-# --- OpenAPI pin must remain untouched by this check (smoke) ---
-if [[ -f "$ROOT/contracts/VERSION" ]] && grep -Eq '^0\.1\.0$' "$ROOT/contracts/VERSION"; then
-  pass "LMP-28-TC-006" "OpenAPI contracts/VERSION remains 0.1.0"
+# --- OpenAPI version consistency (additive bumps allowed; do not invent product paths) ---
+# LMP-50+ may bump contracts/VERSION (e.g. 0.1.0 → 0.2.0) when adding components.
+# This check must NOT hardcode a single pin version; client pins a commit SHA separately.
+VERSION_FILE="$ROOT/contracts/VERSION"
+OPENAPI_FILE="$ROOT/contracts/openapi.yaml"
+if [[ ! -f "$VERSION_FILE" || ! -f "$OPENAPI_FILE" ]]; then
+  fail "LMP-28-TC-006" "contracts/VERSION and contracts/openapi.yaml must exist"
 else
-  fail "LMP-28-TC-006" "contracts/VERSION must remain 0.1.0 for LMP-23 client pin"
+  CONTRACT_VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
+  if [[ ! "$CONTRACT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    fail "LMP-28-TC-006" "contracts/VERSION must be semver X.Y.Z (got: ${CONTRACT_VERSION})"
+  elif ! grep -Eq "^[[:space:]]*version:[[:space:]]*['\"]?${CONTRACT_VERSION}['\"]?[[:space:]]*$" "$OPENAPI_FILE"; then
+    fail "LMP-28-TC-006" "OpenAPI info.version must match contracts/VERSION (${CONTRACT_VERSION})"
+  else
+    # Path keys under `paths:` must stay health-only (descriptions may mention future /v1/...).
+    PATH_KEYS="$(
+      awk '
+        /^paths:/ { in_paths=1; next }
+        in_paths && /^[^[:space:]]/ { in_paths=0 }
+        in_paths && /^[[:space:]]+\/[^[:space:]]+:[[:space:]]*$/ {
+          key=$1
+          sub(/:$/, "", key)
+          gsub(/^[[:space:]]+/, "", key)
+          print key
+        }
+      ' "$OPENAPI_FILE"
+    )"
+    if [[ -z "$PATH_KEYS" ]]; then
+      fail "LMP-28-TC-006" "OpenAPI paths: must declare at least /health"
+    else
+      EXTRA_PATHS=""
+      while IFS= read -r p; do
+        [[ -z "$p" ]] && continue
+        if [[ "$p" != "/health" ]]; then
+          EXTRA_PATHS="${EXTRA_PATHS}${p} "
+        fi
+      done <<<"$PATH_KEYS"
+      if [[ -n "$EXTRA_PATHS" ]]; then
+        fail "LMP-28-TC-006" "OpenAPI path surface must remain health-only; unexpected: ${EXTRA_PATHS}"
+      else
+        pass "LMP-28-TC-006" "OpenAPI VERSION=${CONTRACT_VERSION} synced; paths health-only (additive bumps OK)"
+      fi
+    fi
+  fi
 fi
 
 if [[ "$FAIL" -ne 0 ]]; then

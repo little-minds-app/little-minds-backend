@@ -13,6 +13,7 @@ import {
   CONTENT_QA_ONLY_PAYLOAD_KEYS,
 } from './activity-event.firewall';
 import {
+  isClientDecisionMasqueradingAsServerRecord,
   isConsentScopeAuthorized,
   isConsentScopeBlocked,
 } from './activity-event.consent';
@@ -191,6 +192,7 @@ describe('ActivityEventV1 validation (LMP-50)', () => {
         consent_scope: 'optional_product_analytics',
         status: 'withdrawn',
         policy_version: 'privacy-notice-draft-0',
+        source: 'server_consent_store',
       },
     ];
     const result = validateActivityEvent(event, {
@@ -205,12 +207,54 @@ describe('ActivityEventV1 validation (LMP-50)', () => {
     }
     expect(
       isConsentScopeAuthorized('optional_product_analytics', server, {
-        clientDecision: 'granted',
+        clientDeclaredDecision: 'granted',
       }),
     ).toBe(false);
     expect(isConsentScopeBlocked('optional_product_analytics', server)).toBe(
       true,
     );
+  });
+
+  it('never authorizes from client decision:granted alone', () => {
+    const event = baseCompleted();
+    // Empty server store + client claims granted → reject
+    expect(
+      validateActivityEvent(event, {
+        serverConsentRecords: [],
+        clientConsentDecision: 'granted',
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      isConsentScopeAuthorized('essential_play_events', [], {
+        clientDeclaredDecision: 'granted',
+      }),
+    ).toBe(false);
+
+    // Non-authoritative / client-masquerade sources cannot grant
+    expect(
+      isClientDecisionMasqueradingAsServerRecord({
+        decision: 'granted',
+        consent_scope: 'essential_play_events',
+        source: 'client_decision',
+      }),
+    ).toBe(true);
+
+    const grantedServer: ServerConsentRecord[] = [
+      {
+        purpose: 'essential_play_events',
+        consent_scope: 'essential_play_events',
+        status: 'granted',
+        policy_version: 'privacy-notice-draft-0',
+        source: 'server_consent_store',
+      },
+    ];
+    expect(
+      validateActivityEvent(event, {
+        serverConsentRecords: grantedServer,
+        clientConsentDecision: 'denied', // client denial also ignored when server grants
+      }).ok,
+    ).toBe(true);
   });
 
   it('TC-EV-016 rejects missing provenance / invalid actor_scope', () => {
