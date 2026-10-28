@@ -11,8 +11,10 @@ export const SECRET_ENV_KEYS = [
   'MINIO_ROOT_USER',
   'S3_ACCESS_KEY',
   'S3_SECRET_KEY',
-  // Reserved for later Identity / Billing LMPs — document only until required:
+  // Legacy reserved placeholder (do not use for LMP-33 Ed25519 access JWTs):
   'JWT_SECRET',
+  'JWT_ACCESS_PRIVATE_KEY_PEM',
+  'REFRESH_TOKEN_PEPPER',
   'OIDC_CLIENT_SECRET',
   'SMTP_PASSWORD',
 ] as const;
@@ -26,6 +28,14 @@ export const PUBLIC_ENV_KEYS = [
   'PORT',
   'PUBLIC_API_BASE_URL',
   'RELEASE',
+  'JWT_ISSUER',
+  'JWT_AUDIENCE',
+  'JWT_KEY_ID',
+  'JWT_PREVIOUS_KEY_ID',
+  'JWT_ACCESS_PUBLIC_KEY_PEM',
+  'JWT_PREVIOUS_PUBLIC_KEY_PEM',
+  'AUTH_DEV_BOOTSTRAP_ENABLED',
+  'AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST',
 ] as const;
 
 export type PublicEnvKey = (typeof PUBLIC_ENV_KEYS)[number];

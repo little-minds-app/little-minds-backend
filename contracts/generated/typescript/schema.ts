@@ -52,6 +52,137 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/token/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate parent access and refresh tokens
+         * @description Transactional single-winner refresh (ADR-019). Clients must use single-flight
+         *     refresh and must not retry a consumed refresh token. Lost responses require re-authentication.
+         */
+        post: operations["refreshParentSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke the current parent session
+         * @description Requires refresh_token and/or Authorization bearer. Idempotent.
+         */
+        post: operations["logoutParentSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/logout-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke all sessions for the authenticated parent */
+        post: operations["logoutAllParentSessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List sessions for the authenticated parent */
+        get: operations["listParentSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one owned session */
+        delete: operations["revokeParentSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/parent/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Authenticated parent identity probe */
+        get: operations["getParentMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/dev/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Local/test session bootstrap (development only)
+         * @description Hard-disabled in staging/production. Requires AUTH_DEV_BOOTSTRAP_ENABLED,
+         *     allowlisted parent_id (default seed parent), and loopback client.
+         *     Do not call from staging/production clients.
+         */
+        post: operations["createDevParentSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -98,6 +229,59 @@ export interface components {
                  */
                 database: "up" | "down" | "skipped";
             };
+        };
+        RefreshTokenRequest: {
+            refresh_token: string;
+        };
+        LogoutRequest: {
+            refresh_token?: string;
+        };
+        TokenPairResponse: {
+            access_token: string;
+            refresh_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            /** @enum {integer} */
+            expires_in: 900;
+            session_id: components["schemas"]["UuidV4OrV7"];
+            parent_id: components["schemas"]["UuidV4OrV7"];
+        };
+        LogoutAllResponse: {
+            revoked_session_count: number;
+        };
+        AuthError: {
+            /** @enum {string} */
+            error: "invalid_request" | "invalid_token" | "expired_token" | "revoked_session" | "refresh_reuse" | "rate_limited" | "session_limit_exceeded" | "bootstrap_disabled";
+            message: string;
+        };
+        ParentSessionSummary: {
+            session_id: components["schemas"]["UuidV4OrV7"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_refreshed_at?: string | null;
+            /** Format: date-time */
+            expires_at: string;
+            revoked: boolean;
+            client_surface?: string | null;
+            device_id?: components["schemas"]["UuidV4OrV7"];
+            user_agent_summary?: string | null;
+        };
+        ParentSessionListResponse: {
+            sessions: components["schemas"]["ParentSessionSummary"][];
+        };
+        ParentMeResponse: {
+            parent_id: components["schemas"]["UuidV4OrV7"];
+            locale: string;
+            timezone: string;
+            /** @enum {string} */
+            lifecycle: "active" | "pending_deletion" | "deleted";
+        };
+        DevSessionRequest: {
+            parent_id: components["schemas"]["UuidV4OrV7"];
+            /** @enum {string} */
+            client_surface?: "ios" | "android" | "web" | "unknown";
+            device_id?: components["schemas"]["UuidV4OrV7"];
         };
         /**
          * @description Product event/session schema semver. Independent from OpenAPI info.version.
@@ -270,6 +454,264 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["ReadinessStatus"];
+                };
+            };
+        };
+    };
+    refreshParentSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description New token pair */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenPairResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Invalid, expired, revoked, or reused refresh token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    logoutParentSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LogoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Session revoked (or already revoked) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing refresh and bearer */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    logoutAllParentSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogoutAllResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    listParentSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session summaries (no token material) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentSessionListResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    revokeParentSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: components["schemas"]["UuidV4OrV7"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked (idempotent if already revoked and owned) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Unknown or not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    getParentMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Parent account summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentMeResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    createDevParentSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Token pair */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenPairResponse"];
+                };
+            };
+            /** @description Bootstrap disabled or session limit */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Parent not allowlisted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
                 };
             };
         };

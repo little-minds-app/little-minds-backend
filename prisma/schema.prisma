@@ -70,6 +70,17 @@ enum ProfileDraftStatus {
   deleted
 }
 
+enum ParentSessionRevokeReason {
+  logout
+  logout_all
+  refresh_reuse
+  admin_revoke
+  account_deletion
+  expired
+  security_event
+  session_limit
+}
+
 // ===========================================================================
 // 13.1 / 38.2 — Identity, consent, profile
 // ===========================================================================
@@ -97,8 +108,39 @@ model ParentAccount {
   offlineEntitlementGrants       OfflineEntitlementGrant[]
   deletionRequests               DeletionRequest[]
   parentPreferences              ParentPreference[]
+  sessions                       ParentSession[]
 
   @@map("parent_accounts")
+}
+
+/// Parent auth session (ADR-019 / LMP-33). Refresh token plaintext is never stored.
+model ParentSession {
+  id                      String                     @id @default(uuid()) @db.Uuid
+  parentId                String                     @map("parent_id") @db.Uuid
+  tokenFamilyId           String                     @map("token_family_id") @db.Uuid
+  refreshTokenHash        String?                    @map("refresh_token_hash")
+  /// Bounded ring of prior hashes for reuse detection — max 8 entries; never plaintext tokens
+  refreshTokenHashHistory Json                       @default("[]") @map("refresh_token_hash_history")
+  refreshGeneration       Int                        @default(0) @map("refresh_generation")
+  expiresAt               DateTime                   @map("expires_at") @db.Timestamptz(6)
+  revokedAt               DateTime?                  @map("revoked_at") @db.Timestamptz(6)
+  revokedReason           ParentSessionRevokeReason? @map("revoked_reason")
+  deviceId                String?                    @map("device_id") @db.Uuid
+  /// Coarse client surface only — not a fingerprint
+  clientSurface           String?                    @map("client_surface")
+  userAgentSummary        String?                    @map("user_agent_summary")
+  createdAt               DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastRefreshedAt         DateTime?                  @map("last_refreshed_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  device Device?       @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@unique([refreshTokenHash], map: "parent_sessions_refresh_token_hash_key")
+  @@index([parentId, revokedAt], map: "parent_sessions_parent_revoked_idx")
+  @@index([tokenFamilyId], map: "parent_sessions_token_family_idx")
+  @@index([expiresAt], map: "parent_sessions_expires_at_idx")
+  @@map("parent_sessions")
 }
 
 /// Provider-linked identity. Unique active (provider, provider_subject).
@@ -285,6 +327,7 @@ model Device {
   screenTimeIntervals    ScreenTimeInterval[]
   syncCursors            SyncCursor[]
   offlineEntitlementGrants OfflineEntitlementGrant[]
+  parentSessions           ParentSession[]
 
   @@index([parentId])
   @@index([childId])

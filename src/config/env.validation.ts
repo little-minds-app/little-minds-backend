@@ -16,6 +16,8 @@ export type AppEnvironment = (typeof APP_ENV_VALUES)[number];
 const nodeEnvSchema = z.enum(['development', 'test', 'production']);
 const appEnvSchema = z.enum(APP_ENV_VALUES);
 
+const LOCAL_REFRESH_PEPPER = 'local-dev-refresh-pepper-not-for-prod';
+
 const baseSchema = z.object({
   APP_ENV: appEnvSchema.optional(),
   NODE_ENV: nodeEnvSchema.optional(),
@@ -27,6 +29,28 @@ const baseSchema = z.object({
   POSTGRES_PASSWORD: z.string().optional(),
   MINIO_ROOT_PASSWORD: z.string().optional(),
   S3_SECRET_KEY: z.string().optional(),
+  // LMP-33 / ADR-019 auth
+  JWT_ACCESS_PRIVATE_KEY_PEM: z.string().optional(),
+  JWT_ACCESS_PUBLIC_KEY_PEM: z.string().optional(),
+  JWT_PREVIOUS_PUBLIC_KEY_PEM: z.string().optional(),
+  JWT_KEY_ID: z.string().trim().min(1).max(128).optional(),
+  JWT_PREVIOUS_KEY_ID: z.string().trim().min(1).max(128).optional(),
+  JWT_ISSUER: z.string().trim().min(1).max(128).optional(),
+  JWT_AUDIENCE: z.string().trim().min(1).max(128).optional(),
+  REFRESH_TOKEN_PEPPER: z.string().optional(),
+  AUTH_DEV_BOOTSTRAP_ENABLED: z
+    .union([z.string(), z.boolean()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined) {
+        return false;
+      }
+      if (typeof value === 'boolean') {
+        return value;
+      }
+      return value === '1' || value.toLowerCase() === 'true';
+    }),
+  AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST: z.string().optional(),
 });
 
 export type AppEnv = {
@@ -38,6 +62,16 @@ export type AppEnv = {
   RELEASE: string;
   /** Present when provided; required for staging/production Nest boot. */
   DATABASE_URL?: string;
+  JWT_ACCESS_PRIVATE_KEY_PEM?: string;
+  JWT_ACCESS_PUBLIC_KEY_PEM?: string;
+  JWT_PREVIOUS_PUBLIC_KEY_PEM?: string;
+  JWT_KEY_ID?: string;
+  JWT_PREVIOUS_KEY_ID?: string;
+  JWT_ISSUER?: string;
+  JWT_AUDIENCE?: string;
+  REFRESH_TOKEN_PEPPER: string;
+  AUTH_DEV_BOOTSTRAP_ENABLED: boolean;
+  AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST?: string;
 };
 
 function fail(details: string): never {
@@ -148,8 +182,52 @@ function assertStagingProductionSecrets(
   return databaseUrl;
 }
 
+function assertAuthSecrets(
+  appEnv: AppEnvironment,
+  config: {
+    JWT_ACCESS_PRIVATE_KEY_PEM?: string;
+    JWT_ACCESS_PUBLIC_KEY_PEM?: string;
+    REFRESH_TOKEN_PEPPER?: string;
+    AUTH_DEV_BOOTSTRAP_ENABLED: boolean;
+  },
+): string {
+  if (appEnv === 'staging' || appEnv === 'production') {
+    if (
+      !config.JWT_ACCESS_PRIVATE_KEY_PEM ||
+      !config.JWT_ACCESS_PUBLIC_KEY_PEM
+    ) {
+      fail(
+        `JWT_ACCESS_PRIVATE_KEY_PEM and JWT_ACCESS_PUBLIC_KEY_PEM are required when APP_ENV=${appEnv}`,
+      );
+    }
+    if (
+      !config.REFRESH_TOKEN_PEPPER ||
+      config.REFRESH_TOKEN_PEPPER.length < 16 ||
+      config.REFRESH_TOKEN_PEPPER === LOCAL_REFRESH_PEPPER
+    ) {
+      fail(
+        `REFRESH_TOKEN_PEPPER must be a strong non-local secret when APP_ENV=${appEnv}`,
+      );
+    }
+    if (config.AUTH_DEV_BOOTSTRAP_ENABLED) {
+      fail(
+        `AUTH_DEV_BOOTSTRAP_ENABLED must be false when APP_ENV=${appEnv}`,
+      );
+    }
+    return config.REFRESH_TOKEN_PEPPER;
+  }
+
+  if (
+    config.REFRESH_TOKEN_PEPPER &&
+    config.REFRESH_TOKEN_PEPPER.trim().length >= 16
+  ) {
+    return config.REFRESH_TOKEN_PEPPER.trim();
+  }
+  return LOCAL_REFRESH_PEPPER;
+}
+
 /**
- * Startup env schema for Nest bootstrap (LMP-28).
+ * Startup env schema for Nest bootstrap (LMP-28 + LMP-33).
  * Fail-fast on invalid values and on staging/production secret isolation violations.
  */
 export function validateEnv(config: Record<string, unknown>): AppEnv {
@@ -176,12 +254,31 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
       ? parsed.data.RELEASE
       : 'dev';
 
+  const bootstrapEnabled = parsed.data.AUTH_DEV_BOOTSTRAP_ENABLED ?? false;
+  const refreshPepper = assertAuthSecrets(appEnv, {
+    JWT_ACCESS_PRIVATE_KEY_PEM: parsed.data.JWT_ACCESS_PRIVATE_KEY_PEM,
+    JWT_ACCESS_PUBLIC_KEY_PEM: parsed.data.JWT_ACCESS_PUBLIC_KEY_PEM,
+    REFRESH_TOKEN_PEPPER: parsed.data.REFRESH_TOKEN_PEPPER,
+    AUTH_DEV_BOOTSTRAP_ENABLED: bootstrapEnabled,
+  });
+
   const result: AppEnv = {
     APP_ENV: appEnv,
     NODE_ENV: nodeEnv,
     PORT: port,
     PUBLIC_API_BASE_URL: publicApiBaseUrl,
     RELEASE: release,
+    REFRESH_TOKEN_PEPPER: refreshPepper,
+    AUTH_DEV_BOOTSTRAP_ENABLED: bootstrapEnabled,
+    JWT_ACCESS_PRIVATE_KEY_PEM: parsed.data.JWT_ACCESS_PRIVATE_KEY_PEM,
+    JWT_ACCESS_PUBLIC_KEY_PEM: parsed.data.JWT_ACCESS_PUBLIC_KEY_PEM,
+    JWT_PREVIOUS_PUBLIC_KEY_PEM: parsed.data.JWT_PREVIOUS_PUBLIC_KEY_PEM,
+    JWT_KEY_ID: parsed.data.JWT_KEY_ID,
+    JWT_PREVIOUS_KEY_ID: parsed.data.JWT_PREVIOUS_KEY_ID,
+    JWT_ISSUER: parsed.data.JWT_ISSUER,
+    JWT_AUDIENCE: parsed.data.JWT_AUDIENCE,
+    AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST:
+      parsed.data.AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST,
   };
 
   if (appEnv === 'staging' || appEnv === 'production') {

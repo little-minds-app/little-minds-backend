@@ -6,6 +6,11 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import type { AppEnv } from '../src/config/env.validation';
+import {
+  TEST_JWT_PRIVATE_PEM,
+  TEST_JWT_PUBLIC_PEM,
+  TEST_REFRESH_PEPPER,
+} from './fixtures/auth/keys';
 
 function bootEnvLocal(): void {
   process.env.APP_ENV = 'development';
@@ -152,6 +157,20 @@ describe.each(['staging', 'production'] as const)(
             }
             if (key === 'RELEASE') {
               return 'test-release';
+            }
+            // LMP-33: JwtAccessService.onModuleInit still runs; supply keys so
+            // readiness-only staging/production simulation can boot.
+            if (key === 'JWT_ACCESS_PRIVATE_KEY_PEM') {
+              return TEST_JWT_PRIVATE_PEM;
+            }
+            if (key === 'JWT_ACCESS_PUBLIC_KEY_PEM') {
+              return TEST_JWT_PUBLIC_PEM;
+            }
+            if (key === 'REFRESH_TOKEN_PEPPER') {
+              return TEST_REFRESH_PEPPER;
+            }
+            if (key === 'AUTH_DEV_BOOTSTRAP_ENABLED') {
+              return false;
             }
             return undefined;
           },

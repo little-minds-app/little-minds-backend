@@ -22,7 +22,7 @@ Exact product environment names (shared with client flavors):
 | Class | Keys (current) | Rules |
 |---|---|---|
 | **Public** | `APP_ENV`, `NODE_ENV`, `PORT`, `PUBLIC_API_BASE_URL`, `RELEASE` | Safe to log; clients may mirror in build-time config |
-| **Secret** | `DATABASE_URL`, `POSTGRES_PASSWORD`, `MINIO_ROOT_*`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, reserved `JWT_SECRET` / `OIDC_CLIENT_SECRET` / `SMTP_PASSWORD` | Never commit real values; never log raw; inject via local `.env` (gitignored) or a protected secret store |
+| **Secret** | `DATABASE_URL`, `POSTGRES_PASSWORD`, `MINIO_ROOT_*`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `JWT_ACCESS_PRIVATE_KEY_PEM`, `REFRESH_TOKEN_PEPPER`, reserved `JWT_SECRET` / `OIDC_CLIENT_SECRET` / `SMTP_PASSWORD` | Never commit real values; never log raw; inject via local `.env` (gitignored) or a protected secret store. Public JWT verify PEMs are non-secret (ADR-019). |
 
 Fail-fast validation: `src/config/env.validation.ts` (wired through Nest `ConfigModule`).
 
@@ -53,7 +53,7 @@ Clients do **not** read backend `.env` files. Each Flutter flavor sets the dart-
 | `staging` | `LM_API_BASE_URL` | Same value as staging `PUBLIC_API_BASE_URL` (hostname is a **TECHNICAL ASSUMPTION** until staging is provisioned; backend requires `https:` and rejects local/dev hosts) |
 | `production` | `LM_API_BASE_URL` | Same value as production `PUBLIC_API_BASE_URL` (hostname **TECHNICAL ASSUMPTION** until production is provisioned; backend requires `https:` and rejects local/dev hosts) |
 
-OpenAPI path surface remains health-only: **`GET /health`** and **`GET /health/ready`** (see `contracts/VERSION` for current semver; additive bumps such as LMP-32 `0.3.0` are allowed). Do not invent `/v1/...` routes here. Local OpenAPI `servers` URL stays `http://localhost:3000`. Clients pin a backend **commit SHA**, not a hardcoded VERSION string.
+OpenAPI path surface: health (`GET /health`, `GET /health/ready`) plus LMP-33 parent session routes under `/v1/auth/*` and `GET /v1/parent/me` (see `contracts/VERSION`; **0.4.0**). Do not invent unrelated `/v1/...` routes. Local OpenAPI `servers` URL stays `http://localhost:3000`. Clients pin a backend **commit SHA**, not a hardcoded VERSION string.
 
 ## Secret leakage guards
 

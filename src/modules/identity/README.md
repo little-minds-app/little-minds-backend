@@ -1,5 +1,23 @@
-# IdentityModule
+# IdentityModule (LMP-33 / ADR-019)
 
-Thin Nest module stub for LMP-20 modular boundaries (Blueprint §12.3, ADR-002 direction).
+Parent identity session lifecycle inside the Nest modular monolith.
 
-Auth, OTP, sessions, and identity adapters are **out of scope** for LMP-20 and land in later Identity tasks.
+## In scope
+
+- Session mint port (`SessionIssuerService`) for LMP-34+ providers
+- Opaque refresh + Ed25519 access JWT (`jose`)
+- Refresh / logout / logout-all / session list+revoke
+- `GET /v1/parent/me`
+- `ParentAuthGuard` + internal `assertParentOwnsChild` helper
+- Strictly gated `POST /v1/auth/dev/session` (local/test only)
+
+## Out of scope
+
+- GSM OTP (`POST /v1/auth/phone/*`) — **LMP-34**
+- Apple / Google / email adapters — **LMP-35**
+- Web cookie session UX — **LMP-38**
+- Public ownership-check HTTP API — **forbidden** by ADR-019
+
+## Design reference
+
+`docs/adr/ADR-019-parent-identity-secure-session-lifecycle.md`

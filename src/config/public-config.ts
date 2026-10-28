@@ -10,6 +10,7 @@ export type PublicAppConfig = Pick<
  * Strip secrets from validated env for startup logs and diagnostics.
  */
 export function toPublicConfig(env: AppEnv): PublicAppConfig {
+  // Intentionally omit REFRESH_TOKEN_PEPPER, private PEMs, DATABASE_URL, etc.
   return {
     APP_ENV: env.APP_ENV,
     NODE_ENV: env.NODE_ENV,

@@ -16,6 +16,10 @@ async function bootstrap(): Promise<void> {
     PUBLIC_API_BASE_URL: config.get('PUBLIC_API_BASE_URL', { infer: true }),
     RELEASE: config.get('RELEASE', { infer: true }),
     DATABASE_URL: config.get('DATABASE_URL', { infer: true }),
+    REFRESH_TOKEN_PEPPER: config.get('REFRESH_TOKEN_PEPPER', { infer: true }),
+    AUTH_DEV_BOOTSTRAP_ENABLED: config.get('AUTH_DEV_BOOTSTRAP_ENABLED', {
+      infer: true,
+    }),
   });
 
   const logger = new Logger('Bootstrap');

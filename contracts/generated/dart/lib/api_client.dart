@@ -197,14 +197,32 @@ class ApiClient {
           return ActivitySessionProvenance.fromJson(value);
         case 'ActivitySessionV1':
           return ActivitySessionV1.fromJson(value);
+        case 'AuthError':
+          return AuthError.fromJson(value);
         case 'ConsentScope':
           return ConsentScopeTypeTransformer().decode(value);
+        case 'DevSessionRequest':
+          return DevSessionRequest.fromJson(value);
         case 'HealthStatus':
           return HealthStatus.fromJson(value);
+        case 'LogoutAllResponse':
+          return LogoutAllResponse.fromJson(value);
+        case 'LogoutRequest':
+          return LogoutRequest.fromJson(value);
+        case 'ParentMeResponse':
+          return ParentMeResponse.fromJson(value);
+        case 'ParentSessionListResponse':
+          return ParentSessionListResponse.fromJson(value);
+        case 'ParentSessionSummary':
+          return ParentSessionSummary.fromJson(value);
         case 'ReadinessStatus':
           return ReadinessStatus.fromJson(value);
         case 'ReadinessStatusChecks':
           return ReadinessStatusChecks.fromJson(value);
+        case 'RefreshTokenRequest':
+          return RefreshTokenRequest.fromJson(value);
+        case 'TokenPairResponse':
+          return TokenPairResponse.fromJson(value);
         default:
           dynamic match;
           if (value is List && (match = _regList.firstMatch(targetType)?.group(1)) != null) {

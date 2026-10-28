@@ -7,6 +7,7 @@ const mappingPath = join(__dirname, '..', 'prisma', 'MAPPING.md');
 const REQUIRED_MODELS = [
   'ParentAccount',
   'ParentIdentity',
+  'ParentSession',
   'ParentProfile',
   'ProfileDraft',
   'ChildProfile',

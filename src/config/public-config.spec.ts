@@ -11,6 +11,8 @@ describe('toPublicConfig', () => {
       RELEASE: '2026.10.28-rc1',
       DATABASE_URL:
         'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds',
+      REFRESH_TOKEN_PEPPER: 'staging-refresh-pepper-strong!!',
+      AUTH_DEV_BOOTSTRAP_ENABLED: false,
     };
 
     expect(toPublicConfig(env)).toEqual({
