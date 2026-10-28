@@ -62,9 +62,34 @@
 | §38 `content_cache_index` | Device-local; not in PostgreSQL |
 | Separate `content_versions` | **Open** — `activity_variants.id` used as `content_version_id` for Day 1 |
 
+## LMP-50 — Activity wire contract ↔ Prisma (no migrations)
+
+Authoritative wire schemas: `contracts/schemas/activity/` (`schema_version` **1.0.0**). Docs: `docs/activity-event-contracts.md`.
+
+| Wire field | Prisma | Notes |
+|---|---|---|
+| `play_session_id` | `ActivitySession.id` / `ActivityEvent.playSessionId` | Canonical session id |
+| `event_id` | `ActivityEvent.eventId` (PK) | Idempotency key |
+| `device_id` | `deviceId` | App-scoped UUID |
+| `content_version_id` | `contentVersionId` → `activity_variants.id` | Day-1 target unchanged |
+| `schema_version` | `schemaVersion` **String** | Semver `"1.0.0"` on wire |
+| `occurred_at` | `occurredAt` | Client UTC (untrusted) |
+| `monotonic_duration_seconds` | `monotonicDurationSeconds` | Required for duration-bearing events |
+| `consent_scope` | `consentScope` | Purpose-specific allowlist |
+| `payload` | `payloadJson` | Allowlisted typed JSON only |
+| `completion_status` | `completionStatus` | Wire enum initial set; Prisma remains String |
+| — | `ActivityEvent.receivedAt` | **Server-only** — reject if client sends |
+| — | `ActivityEvent.childId` / `ActivitySession.childId` | **Server-derived** from auth scope — reject on client wire |
+| Session `consent` / event `provenance` | Not separate columns yet | Persist inside allowlisted JSON or later columns in ingest task — **no migration in LMP-50** |
+| Parent-only events omit `play_session_id` | `playSessionId` is required FK today | Persistence strategy deferred to ingest task; do not invent orphan sessions |
+
+**UUIDv4 + UUIDv7** are both accepted on the wire (LMP-50 approved). Prisma `@default(uuid())` remains v4 until a reviewed generator lands — open item below is unchanged for DB defaults.
+
+**Out of scope:** retention day counts, live ingest route, destructive migrations.
+
 ## Unresolved decisions (do not silently lock)
 
-1. **UUIDv7 vs v4** — §38 prefers UUIDv7; Prisma `uuid()` is v4 until a reviewed generator is chosen.
+1. **UUIDv7 vs v4** — §38 prefers UUIDv7; Prisma `uuid()` is v4 until a reviewed generator is chosen. Wire contracts accept both v4 and v7 (LMP-50).
 2. **Physical `content_versions` layout** — polymorphic vs activity-variant-only (§38.6).
 3. **`asset_entries` normalization** vs `entries_json` on manifests.
 4. **`activity_definitions.skill_tags` join table** vs JSON array.

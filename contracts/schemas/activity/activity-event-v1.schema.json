@@ -1,0 +1,548 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://little-minds.app/schemas/activity/activity-event-v1.schema.json",
+  "title": "ActivityEventV1",
+  "description": "Versioned activity event envelope (LMP-50 / Blueprint §14.1 + §38.4). Rejects client received_at / child_id. Per-type payloads are flat allowlists (max depth 1 unless noted).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "device_id",
+    "content_version_id",
+    "occurred_at",
+    "consent_scope",
+    "consent_policy_version",
+    "provenance",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "defs.schema.json#/definitions/SchemaVersionV1"
+    },
+    "event_id": {
+      "$ref": "defs.schema.json#/definitions/UuidV4OrV7"
+    },
+    "event_type": {
+      "$ref": "defs.schema.json#/definitions/EventType"
+    },
+    "play_session_id": {
+      "$ref": "defs.schema.json#/definitions/UuidV4OrV7",
+      "description": "Required for child_play actor_scope. Parent-only events MUST omit this field."
+    },
+    "device_id": {
+      "$ref": "defs.schema.json#/definitions/UuidV4OrV7"
+    },
+    "content_version_id": {
+      "$ref": "defs.schema.json#/definitions/UuidV4OrV7"
+    },
+    "occurred_at": {
+      "$ref": "defs.schema.json#/definitions/UtcInstantZ"
+    },
+    "monotonic_duration_seconds": {
+      "$ref": "defs.schema.json#/definitions/MonotonicDurationSeconds"
+    },
+    "consent_scope": {
+      "$ref": "defs.schema.json#/definitions/ConsentScope"
+    },
+    "consent_policy_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "provenance": {
+      "$ref": "defs.schema.json#/definitions/EventProvenance"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Typed per event_type; see allOf branches. additionalProperties false per branch."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "provenance": {
+            "properties": { "actor_scope": { "const": "child_play" } },
+            "required": ["actor_scope"]
+          }
+        },
+        "required": ["provenance"]
+      },
+      "then": {
+        "required": ["play_session_id"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "provenance": {
+            "properties": { "actor_scope": { "const": "parent" } },
+            "required": ["actor_scope"]
+          }
+        },
+        "required": ["provenance"]
+      },
+      "then": {
+        "not": { "required": ["play_session_id"] }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "activity_completed",
+              "activity_abandoned",
+              "child_mode_foreground_ended",
+              "screen_limit_reached"
+            ]
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "required": ["monotonic_duration_seconds"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "activity_started" } },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "restart": { "type": "boolean" },
+              "age_band": { "$ref": "defs.schema.json#/definitions/AgeBand" },
+              "age_months": {
+                "type": "integer",
+                "minimum": 24,
+                "maximum": 71
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "activity_attempted" } },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "relation": {
+                "$ref": "defs.schema.json#/definitions/NearFarRelation"
+              },
+              "prompt": {
+                "type": "string",
+                "enum": ["place_near", "place_far", "observe", "other"]
+              },
+              "attempt_index": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "eligible_first_attempts": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "correct_first_attempts": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "activity_hint_used" } },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "hint_level": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "activity_completed" } },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["completion_status"],
+            "properties": {
+              "completion_status": {
+                "type": "string",
+                "enum": ["completed"]
+              },
+              "scoring": {
+                "$ref": "defs.schema.json#/definitions/ScoringNeutral"
+              },
+              "hints_used": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "eligible_first_attempts": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "correct_first_attempts": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "activity_abandoned" } },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["completion_status"],
+            "properties": {
+              "completion_status": {
+                "type": "string",
+                "enum": ["abandoned", "interrupted"]
+              },
+              "hints_used": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": { "const": "child_mode_foreground_started" }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {}
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": { "const": "child_mode_foreground_ended" }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {}
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": { "const": "real_world_mission_offered" }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mission_id"],
+            "properties": {
+              "mission_id": {
+                "$ref": "defs.schema.json#/definitions/StableContentId"
+              },
+              "mentor_card_id": {
+                "$ref": "defs.schema.json#/definitions/StableContentId"
+              },
+              "material_codes": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "$ref": "defs.schema.json#/definitions/StableContentId"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": { "const": "real_world_mission_opened" }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mission_id"],
+            "properties": {
+              "mission_id": {
+                "$ref": "defs.schema.json#/definitions/StableContentId"
+              },
+              "mentor_card_id": {
+                "$ref": "defs.schema.json#/definitions/StableContentId"
+              },
+              "material_codes": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "$ref": "defs.schema.json#/definitions/StableContentId"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": { "const": "mission_feedback_submitted" }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mission_id", "status", "proof_required"],
+            "properties": {
+              "mission_id": {
+                "$ref": "defs.schema.json#/definitions/StableContentId"
+              },
+              "status": {
+                "$ref": "defs.schema.json#/definitions/MissionFeedbackStatus"
+              },
+              "proof_required": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "parent" },
+              "source": { "const": "caregiver_report" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "mentor_card_opened" } },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mentor_card_id"],
+            "properties": {
+              "mentor_card_id": {
+                "$ref": "defs.schema.json#/definitions/StableContentId"
+              },
+              "locale": {
+                "type": "string",
+                "pattern": "^[a-z]{2}-[A-Z]{2}$"
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "parent" },
+              "source": { "enum": ["instrumented", "caregiver_report"] }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "screen_limit_reached" } },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "policy_version": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": { "const": "content_pack_downloaded" }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pack_id"],
+            "properties": {
+              "pack_id": {
+                "$ref": "defs.schema.json#/definitions/StableContentId"
+              },
+              "pack_version": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000
+              }
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "actor_scope": { "const": "child_play" },
+              "source": { "const": "instrumented" }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

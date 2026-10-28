@@ -30,6 +30,14 @@ part 'auth/http_bearer_auth.dart';
 
 part 'api/health_api.dart';
 
+part 'model/activity_event_provenance.dart';
+part 'model/activity_event_type.dart';
+part 'model/activity_event_v1.dart';
+part 'model/activity_schema_version.dart';
+part 'model/activity_session_consent.dart';
+part 'model/activity_session_provenance.dart';
+part 'model/activity_session_v1.dart';
+part 'model/consent_scope.dart';
 part 'model/health_status.dart';
 
 

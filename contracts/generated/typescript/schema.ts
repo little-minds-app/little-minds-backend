@@ -46,6 +46,96 @@ export interface components {
              */
             timestamp: string;
         };
+        /**
+         * @description Product event/session schema semver. Independent from OpenAPI info.version.
+         * @enum {string}
+         */
+        ActivitySchemaVersion: "1.0.0";
+        /** @description RFC 4122 UUID with version nibble 4 or 7 */
+        UuidV4OrV7: string;
+        /** @description UTC ISO-8601 instant ending in Z */
+        UtcInstantZ: string;
+        /**
+         * @description Purpose-specific consent scope (draft placeholders until legal sign-off)
+         * @enum {string}
+         */
+        ConsentScope: "essential_play_events" | "essential_service_telemetry" | "optional_product_analytics";
+        /**
+         * @description Blueprint §14.1 allowlist
+         * @enum {string}
+         */
+        ActivityEventType: "activity_started" | "activity_attempted" | "activity_hint_used" | "activity_completed" | "activity_abandoned" | "child_mode_foreground_started" | "child_mode_foreground_ended" | "real_world_mission_offered" | "real_world_mission_opened" | "mission_feedback_submitted" | "mentor_card_opened" | "screen_limit_reached" | "content_pack_downloaded";
+        ActivitySessionConsent: {
+            /** @enum {string} */
+            purpose: "essential_service_telemetry" | "essential_play_events" | "optional_product_analytics";
+            policy_version: string;
+            consent_scope: components["schemas"]["ConsentScope"];
+            /**
+             * @description Client UX evidence only — never treated as server authorization
+             * @enum {string}
+             */
+            decision: "granted" | "denied" | "withdrawn";
+        };
+        ActivitySessionProvenance: {
+            /** @enum {string} */
+            emitter: "kids_mode_client" | "parent_dashboard" | "sync_worker";
+            /** @enum {string} */
+            capture_channel: "offline_queue" | "online_direct" | "replay_backfill";
+            /** @enum {string} */
+            clock_trust: "monotonic_within_boot" | "wall_clock_only" | "unknown";
+        };
+        ActivityEventProvenance: {
+            /** @enum {string} */
+            emitter: "kids_mode_client" | "parent_dashboard" | "sync_worker";
+            /** @enum {string} */
+            actor_scope: "child_play" | "parent";
+            /** @enum {string} */
+            source: "instrumented" | "caregiver_report";
+            /** @enum {string} */
+            clock_trust: "monotonic_within_boot" | "wall_clock_only" | "unknown";
+        };
+        /**
+         * @description Versioned activity session wire document. Client MUST NOT send child_id or received_at.
+         *     Full validation rules: contracts/schemas/activity/activity-session-v1.schema.json
+         */
+        ActivitySessionV1: {
+            schema_version: components["schemas"]["ActivitySchemaVersion"];
+            play_session_id: components["schemas"]["UuidV4OrV7"];
+            device_id: components["schemas"]["UuidV4OrV7"];
+            content_version_id: components["schemas"]["UuidV4OrV7"];
+            started_at: components["schemas"]["UtcInstantZ"];
+            ended_at?: components["schemas"]["UtcInstantZ"];
+            monotonic_duration_seconds?: number;
+            /** @enum {string} */
+            completion_status: "started" | "completed" | "abandoned" | "interrupted";
+            app_build?: string;
+            locale?: string;
+            consent: components["schemas"]["ActivitySessionConsent"];
+            provenance: components["schemas"]["ActivitySessionProvenance"];
+        };
+        /**
+         * @description Versioned activity event envelope (§14.1 + §38.4). Rejects client received_at / child_id.
+         *     Parent-only events omit play_session_id. Per-type payloads enforced by JSON Schema.
+         *     Full validation: contracts/schemas/activity/activity-event-v1.schema.json
+         */
+        ActivityEventV1: {
+            schema_version: components["schemas"]["ActivitySchemaVersion"];
+            event_id: components["schemas"]["UuidV4OrV7"];
+            event_type: components["schemas"]["ActivityEventType"];
+            /** @description Required for child_play; omit for parent-only events */
+            play_session_id?: components["schemas"]["UuidV4OrV7"];
+            device_id: components["schemas"]["UuidV4OrV7"];
+            content_version_id: components["schemas"]["UuidV4OrV7"];
+            occurred_at: components["schemas"]["UtcInstantZ"];
+            monotonic_duration_seconds?: number;
+            consent_scope: components["schemas"]["ConsentScope"];
+            consent_policy_version: string;
+            provenance: components["schemas"]["ActivityEventProvenance"];
+            /** @description Typed allowlisted payload per event_type (see JSON Schema) */
+            payload: {
+                [key: string]: unknown;
+            };
+        };
     };
     responses: never;
     parameters: never;

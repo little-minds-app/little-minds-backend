@@ -183,6 +183,22 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'ActivityEventProvenance':
+          return ActivityEventProvenance.fromJson(value);
+        case 'ActivityEventType':
+          return ActivityEventTypeTypeTransformer().decode(value);
+        case 'ActivityEventV1':
+          return ActivityEventV1.fromJson(value);
+        case 'ActivitySchemaVersion':
+          return ActivitySchemaVersionTypeTransformer().decode(value);
+        case 'ActivitySessionConsent':
+          return ActivitySessionConsent.fromJson(value);
+        case 'ActivitySessionProvenance':
+          return ActivitySessionProvenance.fromJson(value);
+        case 'ActivitySessionV1':
+          return ActivitySessionV1.fromJson(value);
+        case 'ConsentScope':
+          return ConsentScopeTypeTransformer().decode(value);
         case 'HealthStatus':
           return HealthStatus.fromJson(value);
         default:

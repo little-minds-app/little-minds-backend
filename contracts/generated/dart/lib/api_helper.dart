@@ -55,6 +55,15 @@ String parameterToString(dynamic value) {
   if (value is DateTime) {
     return value.toUtc().toIso8601String();
   }
+  if (value is ActivityEventType) {
+    return ActivityEventTypeTypeTransformer().encode(value).toString();
+  }
+  if (value is ActivitySchemaVersion) {
+    return ActivitySchemaVersionTypeTransformer().encode(value).toString();
+  }
+  if (value is ConsentScope) {
+    return ConsentScopeTypeTransformer().encode(value).toString();
+  }
   return value.toString();
 }
 

@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "018f0000-0000-7000-8000-0000000000b1",
+  "event_type": "mission_feedback_submitted",
+  "device_id": "018f0000-0000-4000-8000-000000000003",
+  "content_version_id": "018f0000-0000-4000-8000-000000000004",
+  "occurred_at": "2026-10-28T06:05:00.000Z",
+  "consent_scope": "essential_play_events",
+  "consent_policy_version": "privacy-notice-draft-0",
+  "provenance": {
+    "emitter": "parent_dashboard",
+    "actor_scope": "parent",
+    "source": "caregiver_report",
+    "clock_trust": "wall_clock_only"
+  },
+  "payload": {
+    "mission_id": "near_far_sock_soft_toy_v1",
+    "status": "completed",
+    "proof_required": false
+  }
+}

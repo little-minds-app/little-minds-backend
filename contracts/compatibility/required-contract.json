@@ -1,5 +1,5 @@
 {
-  "$comment": "Minimum non-breaking contract surface for LMP-23. Removing listed paths/fields without a major VERSION bump fails CI. Paths outside allowlist fail (scope lock — no invented product APIs).",
+  "$comment": "Minimum non-breaking contract surface. Paths outside allowlist fail (scope lock — no invented product APIs). LMP-50 adds Activity* schemas without ingest paths.",
   "contractVersionFile": "contracts/VERSION",
   "allowBreakingRemovalsFromMajor": 1,
   "allowedPaths": ["/health"],
@@ -21,6 +21,34 @@
         "service": { "enum": ["little-minds-backend"] },
         "timestamp": { "type": "string", "format": "date-time" }
       }
+    },
+    "ActivitySessionV1": {
+      "required": [
+        "schema_version",
+        "play_session_id",
+        "device_id",
+        "content_version_id",
+        "started_at",
+        "completion_status",
+        "consent",
+        "provenance"
+      ],
+      "properties": {}
+    },
+    "ActivityEventV1": {
+      "required": [
+        "schema_version",
+        "event_id",
+        "event_type",
+        "device_id",
+        "content_version_id",
+        "occurred_at",
+        "consent_scope",
+        "consent_policy_version",
+        "provenance",
+        "payload"
+      ],
+      "properties": {}
     }
   }
 }
