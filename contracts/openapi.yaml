@@ -3,14 +3,15 @@ info:
   title: Little Minds Backend API
   description: |
     Authoritative OpenAPI contract for little-minds-backend (ADR-014).
-    Paths: health/readiness, LMP-33 parent session lifecycle, and LMP-34 GSM OTP
-    (`POST /v1/auth/phone/start|verify` per ADR-020).
+    Paths: health/readiness, LMP-33 parent session lifecycle, LMP-34 GSM OTP
+    (`POST /v1/auth/phone/start|verify` per ADR-020), and LMP-35 multi-provider
+    auth (`POST /v1/auth/apple|google|oidc/nonce|email/start|email/verify` per ADR-021).
     LMP-32 adds structured logging / correlation (not path surface) plus readiness.
     LMP-50 adds ActivitySessionV1 / ActivityEventV1 **components** for versioned
     event contracts. Live `POST /v1/events/batch` is intentionally **not** published
     here — ingest lands in a later Jira task. Authoritative Ajv JSON Schemas live under
     `contracts/schemas/activity/` (`schema_version` 1.0.0, independent of this info.version).
-  version: 0.5.0
+  version: 0.6.0
   contact:
     name: Little Minds
 servers:
@@ -20,7 +21,9 @@ tags:
   - name: Health
     description: Unauthenticated liveness and readiness (alert-ready signals; no paid vendors)
   - name: Auth
-    description: Parent session lifecycle (ADR-019 / LMP-33) and GSM OTP (ADR-020 / LMP-34)
+    description: |
+      Parent session lifecycle (ADR-019 / LMP-33), GSM OTP (ADR-020 / LMP-34),
+      and Apple / Google / Email OTP (ADR-021 / LMP-35)
   - name: Parent
     description: Authenticated parent identity probe
 paths:
@@ -318,6 +321,198 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthError'
+  /v1/auth/oidc/nonce:
+    post:
+      operationId: issueOidcNonce
+      tags: [Auth]
+      summary: Issue short-lived OIDC nonce (ADR-021)
+      description: |
+        Unauthenticated. Returns a server-issued nonce for Apple / Google
+        ID-token paths. Single-use; TTL 600s. Rate-limited per IP.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OidcNonceRequest'
+      responses:
+        '200':
+          description: Nonce issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OidcNonceResponse'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+  /v1/auth/apple:
+    post:
+      operationId: authenticateApple
+      tags: [Auth]
+      summary: Apple Sign In with JWKS + mandatory nonce (ADR-021)
+      description: |
+        Verifies Apple ID token via JWKS (asymmetric), issuer/audience/exp/iat/sub,
+        and mandatory single-use server nonce. U7 Option A creates parent on first
+        success via mintSessionTx. Never trusts client-supplied Apple user id/email/name.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppleAuthRequest'
+      responses:
+        '200':
+          description: Token pair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPairResponse'
+        '400':
+          description: Malformed body or invalid notice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '401':
+          description: Invalid token / nonce / replay
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '403':
+          description: Session limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+  /v1/auth/google:
+    post:
+      operationId: authenticateGoogle
+      tags: [Auth]
+      summary: Google Sign-In nonce or auth-code+PKCE (ADR-021)
+      description: |
+        Prefer ID token + mandatory nonce. Else authorization_code + code_verifier
+        (PKCE) with server-side token exchange then JWKS verify. Never accepts
+        ID-token-without-nonce. Fail-closed when Google config / PKCE disabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+      responses:
+        '200':
+          description: Token pair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPairResponse'
+        '400':
+          description: Malformed body / neither path satisfiable / invalid notice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '401':
+          description: Invalid token / nonce / PKCE / replay
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '403':
+          description: Session limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+  /v1/auth/email/start:
+    post:
+      operationId: startEmailOtp
+      tags: [Auth]
+      summary: Start Email OTP challenge (ADR-021)
+      description: |
+        Unauthenticated. Applies email_norm_v1. Requires notice_version +
+        notice_locale (KVKK Option A). Never returns OTP. deliveryState=sent
+        required before verify.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailOtpStartRequest'
+      responses:
+        '200':
+          description: Challenge issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailOtpStartResponse'
+        '400':
+          description: email_norm_v1 reject or invalid notice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '429':
+          description: Cooldown or rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '503':
+          description: Mail unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+  /v1/auth/email/verify:
+    post:
+      operationId: verifyEmailOtp
+      tags: [Auth]
+      summary: Verify Email OTP and mint parent session (ADR-021)
+      description: |
+        Gate: status=pending and deliveryState=sent. U7 Option A creates parent
+        on first success. No privacy fields on verify. No silent email link (LMP-36).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailOtpVerifyRequest'
+      responses:
+        '200':
+          description: Token pair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPairResponse'
+        '400':
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '401':
+          description: Invalid or expired OTP / not durable-sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '403':
+          description: Session limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
   /v1/auth/dev/session:
     post:
       operationId: createDevParentSession
@@ -497,8 +692,136 @@ components:
             - otp_invalid
             - otp_cooldown
             - sms_unavailable
+            - mail_unavailable
         message:
           type: string
+    OidcNonceRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        provider:
+          type: string
+          enum: [apple, google, shared]
+          description: Optional hint; default shared
+    OidcNonceResponse:
+      type: object
+      additionalProperties: false
+      required: [nonce, expires_in]
+      properties:
+        nonce:
+          type: string
+          minLength: 8
+          maxLength: 128
+        expires_in:
+          type: integer
+          enum: [600]
+    AppleAuthRequest:
+      type: object
+      additionalProperties: false
+      required: [id_token, nonce, notice_version, notice_locale]
+      properties:
+        id_token:
+          type: string
+          minLength: 20
+          maxLength: 8192
+        nonce:
+          type: string
+          minLength: 8
+          maxLength: 128
+        notice_version:
+          type: string
+          maxLength: 64
+        notice_locale:
+          type: string
+          maxLength: 16
+        client_surface:
+          type: string
+          maxLength: 32
+        device_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+    GoogleAuthRequest:
+      type: object
+      additionalProperties: false
+      required: [notice_version, notice_locale]
+      description: |
+        Provide either (id_token + nonce) OR (authorization_code + code_verifier
+        + redirect_uri). ID token without nonce is rejected.
+      properties:
+        id_token:
+          type: string
+          minLength: 20
+          maxLength: 8192
+        nonce:
+          type: string
+          minLength: 8
+          maxLength: 128
+        authorization_code:
+          type: string
+          minLength: 8
+          maxLength: 2048
+        code_verifier:
+          type: string
+          minLength: 43
+          maxLength: 128
+        redirect_uri:
+          type: string
+          maxLength: 2048
+        notice_version:
+          type: string
+          maxLength: 64
+        notice_locale:
+          type: string
+          maxLength: 16
+        client_surface:
+          type: string
+          maxLength: 32
+        device_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+    EmailOtpStartRequest:
+      type: object
+      additionalProperties: false
+      required: [email, notice_version, notice_locale]
+      properties:
+        email:
+          type: string
+          maxLength: 320
+        notice_version:
+          type: string
+          maxLength: 64
+        notice_locale:
+          type: string
+          maxLength: 16
+        client_surface:
+          type: string
+          maxLength: 32
+    EmailOtpStartResponse:
+      type: object
+      additionalProperties: false
+      required: [challenge_id, expires_in, resend_after]
+      properties:
+        challenge_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        expires_in:
+          type: integer
+          enum: [600]
+        resend_after:
+          type: integer
+          enum: [60]
+    EmailOtpVerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [challenge_id, code]
+      properties:
+        challenge_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+        client_surface:
+          type: string
+          maxLength: 32
+        device_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
     PhoneOtpStartRequest:
       type: object
       additionalProperties: false

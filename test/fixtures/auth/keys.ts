@@ -4,6 +4,7 @@ export const TEST_JWT_PUBLIC_PEM = "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA
 export const TEST_REFRESH_PEPPER = 'test-refresh-pepper-32chars-min!!';
 export const TEST_OTP_PEPPER = 'test-otp-pepper-32chars-minimum!!';
 export const TEST_PHONE_SUBJECT_PEPPER = 'test-phone-subject-pepper-32ch!!';
+export const TEST_EMAIL_SUBJECT_PEPPER = 'test-email-subject-pepper-32ch!!';
 
 export const stagingAuthEnv = {
   JWT_ACCESS_PRIVATE_KEY_PEM: TEST_JWT_PRIVATE_PEM,
@@ -13,4 +14,6 @@ export const stagingAuthEnv = {
   SMS_SENDER: 'production' as const,
   OTP_PEPPER: TEST_OTP_PEPPER,
   PHONE_SUBJECT_PEPPER: TEST_PHONE_SUBJECT_PEPPER,
+  MAIL_SENDER: 'production' as const,
+  EMAIL_SUBJECT_PEPPER: TEST_EMAIL_SUBJECT_PEPPER,
 } as const;

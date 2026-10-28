@@ -16,6 +16,120 @@ class AuthApi {
 
   final ApiClient apiClient;
 
+  /// Apple Sign In with JWKS + mandatory nonce (ADR-021)
+  ///
+  /// Verifies Apple ID token via JWKS (asymmetric), issuer/audience/exp/iat/sub, and mandatory single-use server nonce. U7 Option A creates parent on first success via mintSessionTx. Never trusts client-supplied Apple user id/email/name. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [AppleAuthRequest] appleAuthRequest (required):
+  Future<Response> authenticateAppleWithHttpInfo(AppleAuthRequest appleAuthRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/apple';
+
+    // ignore: prefer_final_locals
+    Object? postBody = appleAuthRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Apple Sign In with JWKS + mandatory nonce (ADR-021)
+  ///
+  /// Verifies Apple ID token via JWKS (asymmetric), issuer/audience/exp/iat/sub, and mandatory single-use server nonce. U7 Option A creates parent on first success via mintSessionTx. Never trusts client-supplied Apple user id/email/name. 
+  ///
+  /// Parameters:
+  ///
+  /// * [AppleAuthRequest] appleAuthRequest (required):
+  Future<TokenPairResponse?> authenticateApple(AppleAuthRequest appleAuthRequest, { Future<void>? abortTrigger, }) async {
+    final response = await authenticateAppleWithHttpInfo(appleAuthRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'TokenPairResponse',) as TokenPairResponse;
+    
+    }
+    return null;
+  }
+
+  /// Google Sign-In nonce or auth-code+PKCE (ADR-021)
+  ///
+  /// Prefer ID token + mandatory nonce. Else authorization_code + code_verifier (PKCE) with server-side token exchange then JWKS verify. Never accepts ID-token-without-nonce. Fail-closed when Google config / PKCE disabled. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [GoogleAuthRequest] googleAuthRequest (required):
+  Future<Response> authenticateGoogleWithHttpInfo(GoogleAuthRequest googleAuthRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/google';
+
+    // ignore: prefer_final_locals
+    Object? postBody = googleAuthRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Google Sign-In nonce or auth-code+PKCE (ADR-021)
+  ///
+  /// Prefer ID token + mandatory nonce. Else authorization_code + code_verifier (PKCE) with server-side token exchange then JWKS verify. Never accepts ID-token-without-nonce. Fail-closed when Google config / PKCE disabled. 
+  ///
+  /// Parameters:
+  ///
+  /// * [GoogleAuthRequest] googleAuthRequest (required):
+  Future<TokenPairResponse?> authenticateGoogle(GoogleAuthRequest googleAuthRequest, { Future<void>? abortTrigger, }) async {
+    final response = await authenticateGoogleWithHttpInfo(googleAuthRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'TokenPairResponse',) as TokenPairResponse;
+    
+    }
+    return null;
+  }
+
   /// Local/test session bootstrap (development only)
   ///
   /// Hard-disabled in staging/production. Requires AUTH_DEV_BOOTSTRAP_ENABLED, allowlisted parent_id (default seed parent), and loopback client. Do not call from staging/production clients. 
@@ -68,6 +182,63 @@ class AuthApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'TokenPairResponse',) as TokenPairResponse;
+    
+    }
+    return null;
+  }
+
+  /// Issue short-lived OIDC nonce (ADR-021)
+  ///
+  /// Unauthenticated. Returns a server-issued nonce for Apple / Google ID-token paths. Single-use; TTL 600s. Rate-limited per IP. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [OidcNonceRequest] oidcNonceRequest:
+  Future<Response> issueOidcNonceWithHttpInfo({ OidcNonceRequest? oidcNonceRequest, Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/oidc/nonce';
+
+    // ignore: prefer_final_locals
+    Object? postBody = oidcNonceRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Issue short-lived OIDC nonce (ADR-021)
+  ///
+  /// Unauthenticated. Returns a server-issued nonce for Apple / Google ID-token paths. Single-use; TTL 600s. Rate-limited per IP. 
+  ///
+  /// Parameters:
+  ///
+  /// * [OidcNonceRequest] oidcNonceRequest:
+  Future<OidcNonceResponse?> issueOidcNonce({ OidcNonceRequest? oidcNonceRequest, Future<void>? abortTrigger, }) async {
+    final response = await issueOidcNonceWithHttpInfo(oidcNonceRequest: oidcNonceRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'OidcNonceResponse',) as OidcNonceResponse;
     
     }
     return null;
@@ -315,6 +486,63 @@ class AuthApi {
     }
   }
 
+  /// Start Email OTP challenge (ADR-021)
+  ///
+  /// Unauthenticated. Applies email_norm_v1. Requires notice_version + notice_locale (KVKK Option A). Never returns OTP. deliveryState=sent required before verify. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [EmailOtpStartRequest] emailOtpStartRequest (required):
+  Future<Response> startEmailOtpWithHttpInfo(EmailOtpStartRequest emailOtpStartRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/email/start';
+
+    // ignore: prefer_final_locals
+    Object? postBody = emailOtpStartRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Start Email OTP challenge (ADR-021)
+  ///
+  /// Unauthenticated. Applies email_norm_v1. Requires notice_version + notice_locale (KVKK Option A). Never returns OTP. deliveryState=sent required before verify. 
+  ///
+  /// Parameters:
+  ///
+  /// * [EmailOtpStartRequest] emailOtpStartRequest (required):
+  Future<EmailOtpStartResponse?> startEmailOtp(EmailOtpStartRequest emailOtpStartRequest, { Future<void>? abortTrigger, }) async {
+    final response = await startEmailOtpWithHttpInfo(emailOtpStartRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'EmailOtpStartResponse',) as EmailOtpStartResponse;
+    
+    }
+    return null;
+  }
+
   /// Start GSM OTP challenge (ADR-020)
   ///
   /// Unauthenticated. Türkiye (+90) only Day-1. Requires uniform `notice_version` + `notice_locale` (KVKK Option A). Never returns OTP. Anti-enumeration: response shape identical for existing vs new parents. 
@@ -367,6 +595,63 @@ class AuthApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'PhoneOtpStartResponse',) as PhoneOtpStartResponse;
+    
+    }
+    return null;
+  }
+
+  /// Verify Email OTP and mint parent session (ADR-021)
+  ///
+  /// Gate: status=pending and deliveryState=sent. U7 Option A creates parent on first success. No privacy fields on verify. No silent email link (LMP-36). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [EmailOtpVerifyRequest] emailOtpVerifyRequest (required):
+  Future<Response> verifyEmailOtpWithHttpInfo(EmailOtpVerifyRequest emailOtpVerifyRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/email/verify';
+
+    // ignore: prefer_final_locals
+    Object? postBody = emailOtpVerifyRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Verify Email OTP and mint parent session (ADR-021)
+  ///
+  /// Gate: status=pending and deliveryState=sent. U7 Option A creates parent on first success. No privacy fields on verify. No silent email link (LMP-36). 
+  ///
+  /// Parameters:
+  ///
+  /// * [EmailOtpVerifyRequest] emailOtpVerifyRequest (required):
+  Future<TokenPairResponse?> verifyEmailOtp(EmailOtpVerifyRequest emailOtpVerifyRequest, { Future<void>? abortTrigger, }) async {
+    final response = await verifyEmailOtpWithHttpInfo(emailOtpVerifyRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'TokenPairResponse',) as TokenPairResponse;
     
     }
     return null;

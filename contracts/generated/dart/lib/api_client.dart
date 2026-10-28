@@ -197,18 +197,32 @@ class ApiClient {
           return ActivitySessionProvenance.fromJson(value);
         case 'ActivitySessionV1':
           return ActivitySessionV1.fromJson(value);
+        case 'AppleAuthRequest':
+          return AppleAuthRequest.fromJson(value);
         case 'AuthError':
           return AuthError.fromJson(value);
         case 'ConsentScope':
           return ConsentScopeTypeTransformer().decode(value);
         case 'DevSessionRequest':
           return DevSessionRequest.fromJson(value);
+        case 'EmailOtpStartRequest':
+          return EmailOtpStartRequest.fromJson(value);
+        case 'EmailOtpStartResponse':
+          return EmailOtpStartResponse.fromJson(value);
+        case 'EmailOtpVerifyRequest':
+          return EmailOtpVerifyRequest.fromJson(value);
+        case 'GoogleAuthRequest':
+          return GoogleAuthRequest.fromJson(value);
         case 'HealthStatus':
           return HealthStatus.fromJson(value);
         case 'LogoutAllResponse':
           return LogoutAllResponse.fromJson(value);
         case 'LogoutRequest':
           return LogoutRequest.fromJson(value);
+        case 'OidcNonceRequest':
+          return OidcNonceRequest.fromJson(value);
+        case 'OidcNonceResponse':
+          return OidcNonceResponse.fromJson(value);
         case 'ParentMeResponse':
           return ParentMeResponse.fromJson(value);
         case 'ParentSessionListResponse':

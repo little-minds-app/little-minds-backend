@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Normative companion to **Accepted** ADR-021. Live OpenAPI remains **`0.5.0`** until implementation publishes **`0.6.0`**. |
+| **Status** | Normative companion to **Accepted** ADR-021. Live OpenAPI **`0.6.0`** published by LMP-35 Phase B implementation. |
 | **Parent ADR** | [ADR-021](./ADR-021-multi-provider-identity-adapters.md) (**Accepted** 2026-10-28) |
 | **Jira** | LMP-35 |
 
@@ -29,8 +29,8 @@ Option A `notice_version` + `notice_locale` on email start and Apple/Google auth
 
 | Phase | Version |
 |---|---|
-| This docs PR | Live **`0.5.0`** |
-| Phase B implementation | Propose **`0.6.0`** |
+| Docs Accept PR | Was **`0.5.0`** |
+| Phase B implementation | Live **`0.6.0`** |
 
 ---
 

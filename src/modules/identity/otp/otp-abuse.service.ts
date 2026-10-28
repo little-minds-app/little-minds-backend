@@ -12,6 +12,14 @@ import {
   WINDOW_1M_MS,
   WINDOW_24H_MS,
 } from './otp.constants';
+import {
+  EMAIL_GLOBAL_PER_DAY,
+  EMAIL_PER_IP_15M,
+  EMAIL_PER_IP_24H,
+  EMAIL_PER_SUBJECT_15M,
+  EMAIL_PER_SUBJECT_24H,
+  EMAIL_VERIFY_PER_IP_PER_MIN,
+} from './multi-provider.constants';
 import { throwOtpCooldown, throwRateLimited } from '../session/auth.errors';
 
 type TxClient = Prisma.TransactionClient;
@@ -89,6 +97,75 @@ export class OtpAbuseService {
       windowStart: w1,
       field: 'verify',
       limit: VERIFY_PER_IP_PER_MIN,
+      cooldownStyle: false,
+    });
+  }
+
+  /** Email OTP send limits (ADR-021 §7.2) — distinct buckets from SMS. */
+  async assertAndIncrementEmail(params: {
+    subjectKey: string;
+    ip: string;
+    tx?: TxClient;
+  }): Promise<void> {
+    const db = params.tx ?? this.prisma.db;
+    const now = Date.now();
+    const w15 = floorWindow(now, WINDOW_15M_MS);
+    const w24 = floorWindow(now, WINDOW_24H_MS);
+
+    await this.bumpOrThrow(db, {
+      bucketType: 'email_subject_15m',
+      bucketKey: params.subjectKey,
+      windowStart: w15,
+      field: 'send',
+      limit: EMAIL_PER_SUBJECT_15M,
+      cooldownStyle: true,
+    });
+    await this.bumpOrThrow(db, {
+      bucketType: 'email_subject_24h',
+      bucketKey: params.subjectKey,
+      windowStart: w24,
+      field: 'send',
+      limit: EMAIL_PER_SUBJECT_24H,
+      cooldownStyle: true,
+    });
+    await this.bumpOrThrow(db, {
+      bucketType: 'email_ip_15m',
+      bucketKey: params.ip,
+      windowStart: w15,
+      field: 'send',
+      limit: EMAIL_PER_IP_15M,
+      cooldownStyle: false,
+    });
+    await this.bumpOrThrow(db, {
+      bucketType: 'email_ip_24h',
+      bucketKey: params.ip,
+      windowStart: w24,
+      field: 'send',
+      limit: EMAIL_PER_IP_24H,
+      cooldownStyle: false,
+    });
+    await this.bumpOrThrow(db, {
+      bucketType: 'email_global_24h',
+      bucketKey: 'global',
+      windowStart: w24,
+      field: 'send',
+      limit: EMAIL_GLOBAL_PER_DAY,
+      cooldownStyle: false,
+    });
+  }
+
+  async assertAndIncrementEmailVerifyIp(
+    ip: string,
+    tx?: TxClient,
+  ): Promise<void> {
+    const db = tx ?? this.prisma.db;
+    const w1 = floorWindow(Date.now(), WINDOW_1M_MS);
+    await this.bumpOrThrow(db, {
+      bucketType: 'email_verify_ip_1m',
+      bucketKey: ip,
+      windowStart: w1,
+      field: 'verify',
+      limit: EMAIL_VERIFY_PER_IP_PER_MIN,
       cooldownStyle: false,
     });
   }

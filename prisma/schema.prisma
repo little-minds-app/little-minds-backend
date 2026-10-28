@@ -232,6 +232,22 @@ model OtpAbuseCounter {
   @@map("otp_abuse_counters")
 }
 
+/// Server-issued OIDC nonces for Apple / Google ID-token paths (ADR-021).
+/// Plaintext nonce is returned once to the client; only the hash is stored.
+model AuthOidcNonce {
+  id         String    @id @default(uuid()) @db.Uuid
+  /// Hex SHA-256 of the plaintext nonce (single-use consume).
+  nonceHash  String    @unique @map("nonce_hash")
+  /// apple | google | shared
+  provider   String
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([expiresAt], map: "auth_oidc_nonces_expires_at_idx")
+  @@map("auth_oidc_nonces")
+}
+
 /// Provider-linked identity. Unique active (provider, provider_subject).
 model ParentIdentity {
   id              String    @id @default(uuid()) @db.Uuid

@@ -205,6 +205,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/oidc/nonce": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue short-lived OIDC nonce (ADR-021)
+         * @description Unauthenticated. Returns a server-issued nonce for Apple / Google
+         *     ID-token paths. Single-use; TTL 600s. Rate-limited per IP.
+         */
+        post: operations["issueOidcNonce"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/apple": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apple Sign In with JWKS + mandatory nonce (ADR-021)
+         * @description Verifies Apple ID token via JWKS (asymmetric), issuer/audience/exp/iat/sub,
+         *     and mandatory single-use server nonce. U7 Option A creates parent on first
+         *     success via mintSessionTx. Never trusts client-supplied Apple user id/email/name.
+         */
+        post: operations["authenticateApple"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Google Sign-In nonce or auth-code+PKCE (ADR-021)
+         * @description Prefer ID token + mandatory nonce. Else authorization_code + code_verifier
+         *     (PKCE) with server-side token exchange then JWKS verify. Never accepts
+         *     ID-token-without-nonce. Fail-closed when Google config / PKCE disabled.
+         */
+        post: operations["authenticateGoogle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/email/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Email OTP challenge (ADR-021)
+         * @description Unauthenticated. Applies email_norm_v1. Requires notice_version +
+         *     notice_locale (KVKK Option A). Never returns OTP. deliveryState=sent
+         *     required before verify.
+         */
+        post: operations["startEmailOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/email/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Email OTP and mint parent session (ADR-021)
+         * @description Gate: status=pending and deliveryState=sent. U7 Option A creates parent
+         *     on first success. No privacy fields on verify. No silent email link (LMP-36).
+         */
+        post: operations["verifyEmailOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/dev/session": {
         parameters: {
             query?: never;
@@ -295,8 +403,62 @@ export interface components {
         };
         AuthError: {
             /** @enum {string} */
-            error: "invalid_request" | "invalid_token" | "expired_token" | "revoked_session" | "refresh_reuse" | "rate_limited" | "session_limit_exceeded" | "bootstrap_disabled" | "otp_invalid" | "otp_cooldown" | "sms_unavailable";
+            error: "invalid_request" | "invalid_token" | "expired_token" | "revoked_session" | "refresh_reuse" | "rate_limited" | "session_limit_exceeded" | "bootstrap_disabled" | "otp_invalid" | "otp_cooldown" | "sms_unavailable" | "mail_unavailable";
             message: string;
+        };
+        OidcNonceRequest: {
+            /**
+             * @description Optional hint; default shared
+             * @enum {string}
+             */
+            provider?: "apple" | "google" | "shared";
+        };
+        OidcNonceResponse: {
+            nonce: string;
+            /** @enum {integer} */
+            expires_in: 600;
+        };
+        AppleAuthRequest: {
+            id_token: string;
+            nonce: string;
+            notice_version: string;
+            notice_locale: string;
+            client_surface?: string;
+            device_id?: components["schemas"]["UuidV4OrV7"];
+        };
+        /**
+         * @description Provide either (id_token + nonce) OR (authorization_code + code_verifier
+         *     + redirect_uri). ID token without nonce is rejected.
+         */
+        GoogleAuthRequest: {
+            id_token?: string;
+            nonce?: string;
+            authorization_code?: string;
+            code_verifier?: string;
+            redirect_uri?: string;
+            notice_version: string;
+            notice_locale: string;
+            client_surface?: string;
+            device_id?: components["schemas"]["UuidV4OrV7"];
+        };
+        EmailOtpStartRequest: {
+            email: string;
+            notice_version: string;
+            notice_locale: string;
+            client_surface?: string;
+        };
+        EmailOtpStartResponse: {
+            challenge_id: components["schemas"]["UuidV4OrV7"];
+            /** @enum {integer} */
+            expires_in: 600;
+            /** @enum {integer} */
+            resend_after: 60;
+        };
+        EmailOtpVerifyRequest: {
+            challenge_id: components["schemas"]["UuidV4OrV7"];
+            code: string;
+            client_surface?: string;
+            device_id?: components["schemas"]["UuidV4OrV7"];
         };
         PhoneOtpStartRequest: {
             phone: string;
@@ -817,6 +979,252 @@ export interface operations {
                 };
             };
             /** @description Invalid or expired OTP */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Session limit exceeded */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    issueOidcNonce: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OidcNonceRequest"];
+            };
+        };
+        responses: {
+            /** @description Nonce issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OidcNonceResponse"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    authenticateApple: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppleAuthRequest"];
+            };
+        };
+        responses: {
+            /** @description Token pair */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenPairResponse"];
+                };
+            };
+            /** @description Malformed body or invalid notice */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Invalid token / nonce / replay */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Session limit exceeded */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    authenticateGoogle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleAuthRequest"];
+            };
+        };
+        responses: {
+            /** @description Token pair */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenPairResponse"];
+                };
+            };
+            /** @description Malformed body / neither path satisfiable / invalid notice */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Invalid token / nonce / PKCE / replay */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Session limit exceeded */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    startEmailOtp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailOtpStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Challenge issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailOtpStartResponse"];
+                };
+            };
+            /** @description email_norm_v1 reject or invalid notice */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Cooldown or rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Mail unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    verifyEmailOtp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailOtpVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Token pair */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenPairResponse"];
+                };
+            };
+            /** @description Malformed body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Invalid or expired OTP / not durable-sent */
             401: {
                 headers: {
                     [name: string]: unknown;

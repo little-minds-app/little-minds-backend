@@ -25,6 +25,13 @@ async function bootstrap(): Promise<void> {
     SMS_SENDER: config.get('SMS_SENDER', { infer: true }),
     OTP_PEPPER: config.get('OTP_PEPPER', { infer: true }),
     PHONE_SUBJECT_PEPPER: config.get('PHONE_SUBJECT_PEPPER', { infer: true }),
+    MAIL_SENDER: config.get('MAIL_SENDER', { infer: true }),
+    EMAIL_SUBJECT_PEPPER: config.get('EMAIL_SUBJECT_PEPPER', { infer: true }),
+    APPLE_CLIENT_IDS: config.get('APPLE_CLIENT_IDS', { infer: true }),
+    GOOGLE_CLIENT_IDS: config.get('GOOGLE_CLIENT_IDS', { infer: true }),
+    GOOGLE_ISSUERS: config.get('GOOGLE_ISSUERS', { infer: true }),
+    GOOGLE_REDIRECT_URIS: config.get('GOOGLE_REDIRECT_URIS', { infer: true }),
+    GOOGLE_PKCE_ENABLED: config.get('GOOGLE_PKCE_ENABLED', { infer: true }),
   });
 
   const logger = new Logger('Bootstrap');

@@ -11,6 +11,8 @@ export type PublicAppConfig = Pick<
   | 'LISTEN_HOST'
   | 'AUTH_DEV_BOOTSTRAP_ENABLED'
   | 'SMS_SENDER'
+  | 'MAIL_SENDER'
+  | 'GOOGLE_PKCE_ENABLED'
 >;
 
 /**
@@ -27,6 +29,8 @@ export function toPublicConfig(env: AppEnv): PublicAppConfig {
     LISTEN_HOST: env.LISTEN_HOST,
     AUTH_DEV_BOOTSTRAP_ENABLED: env.AUTH_DEV_BOOTSTRAP_ENABLED,
     SMS_SENDER: env.SMS_SENDER,
+    MAIL_SENDER: env.MAIL_SENDER,
+    GOOGLE_PKCE_ENABLED: env.GOOGLE_PKCE_ENABLED,
   };
 }
 

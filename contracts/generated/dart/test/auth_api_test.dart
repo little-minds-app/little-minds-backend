@@ -17,12 +17,39 @@ void main() {
   // final instance = AuthApi();
 
   group('tests for AuthApi', () {
+    // Apple Sign In with JWKS + mandatory nonce (ADR-021)
+    //
+    // Verifies Apple ID token via JWKS (asymmetric), issuer/audience/exp/iat/sub, and mandatory single-use server nonce. U7 Option A creates parent on first success via mintSessionTx. Never trusts client-supplied Apple user id/email/name. 
+    //
+    //Future<TokenPairResponse> authenticateApple(AppleAuthRequest appleAuthRequest) async
+    test('test authenticateApple', () async {
+      // TODO
+    });
+
+    // Google Sign-In nonce or auth-code+PKCE (ADR-021)
+    //
+    // Prefer ID token + mandatory nonce. Else authorization_code + code_verifier (PKCE) with server-side token exchange then JWKS verify. Never accepts ID-token-without-nonce. Fail-closed when Google config / PKCE disabled. 
+    //
+    //Future<TokenPairResponse> authenticateGoogle(GoogleAuthRequest googleAuthRequest) async
+    test('test authenticateGoogle', () async {
+      // TODO
+    });
+
     // Local/test session bootstrap (development only)
     //
     // Hard-disabled in staging/production. Requires AUTH_DEV_BOOTSTRAP_ENABLED, allowlisted parent_id (default seed parent), and loopback client. Do not call from staging/production clients. 
     //
     //Future<TokenPairResponse> createDevParentSession(DevSessionRequest devSessionRequest) async
     test('test createDevParentSession', () async {
+      // TODO
+    });
+
+    // Issue short-lived OIDC nonce (ADR-021)
+    //
+    // Unauthenticated. Returns a server-issued nonce for Apple / Google ID-token paths. Single-use; TTL 600s. Rate-limited per IP. 
+    //
+    //Future<OidcNonceResponse> issueOidcNonce({ OidcNonceRequest oidcNonceRequest }) async
+    test('test issueOidcNonce', () async {
       // TODO
     });
 
@@ -65,12 +92,30 @@ void main() {
       // TODO
     });
 
+    // Start Email OTP challenge (ADR-021)
+    //
+    // Unauthenticated. Applies email_norm_v1. Requires notice_version + notice_locale (KVKK Option A). Never returns OTP. deliveryState=sent required before verify. 
+    //
+    //Future<EmailOtpStartResponse> startEmailOtp(EmailOtpStartRequest emailOtpStartRequest) async
+    test('test startEmailOtp', () async {
+      // TODO
+    });
+
     // Start GSM OTP challenge (ADR-020)
     //
     // Unauthenticated. Türkiye (+90) only Day-1. Requires uniform `notice_version` + `notice_locale` (KVKK Option A). Never returns OTP. Anti-enumeration: response shape identical for existing vs new parents. 
     //
     //Future<PhoneOtpStartResponse> startPhoneOtp(PhoneOtpStartRequest phoneOtpStartRequest) async
     test('test startPhoneOtp', () async {
+      // TODO
+    });
+
+    // Verify Email OTP and mint parent session (ADR-021)
+    //
+    // Gate: status=pending and deliveryState=sent. U7 Option A creates parent on first success. No privacy fields on verify. No silent email link (LMP-36). 
+    //
+    //Future<TokenPairResponse> verifyEmailOtp(EmailOtpVerifyRequest emailOtpVerifyRequest) async
+    test('test verifyEmailOtp', () async {
       // TODO
     });
 
