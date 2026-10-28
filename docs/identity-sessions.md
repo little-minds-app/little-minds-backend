@@ -56,3 +56,13 @@ Owned by **LMP-34**. Design ADR (**Accepted** 2026-10-28): [`docs/adr/ADR-020-gs
 - **Verify gate:** only `status=pending` **and** `deliveryState=sent` (durable adapter acceptance). `pending_send` / `failed` → uniform `otp_invalid` (no handset-delivery claim; no OTP in errors).
 - **Ambiguous SMS send:** challenge committed before SMS (SMS outside long txns). Adapter failure → `503 sms_unavailable`. Adapter accept + post-send persistence failure → **no auto-resend**; `503 sms_unavailable`; stale `pending_send` superseded after ~90s so a **new** start can proceed. Lost HTTP after mark-sent → honor cooldown / new start.
 - **Retention (U16):** boot+interval scrub — challenges ~24h (SET NULL on delivery FK), delivery attempts ~7d, stale abuse counters ~48h.
+
+## Apple / Google / Email OTP (LMP-35)
+
+Owned by **LMP-35**. Design ADR (**Accepted** 2026-10-28): [`docs/adr/ADR-021-multi-provider-identity-adapters.md`](./adr/ADR-021-multi-provider-identity-adapters.md).
+
+- **Apple:** JWKS ID-token verify + **mandatory nonce** (replay-safe).
+- **Google:** prefer ID-token + nonce (e.g. iOS 9+); else **authorization-code + PKCE only** — no weak ID-token-without-nonce; fail-closed.
+- **Email OTP:** LM-owned; `MailSender` delivery-only; **`email_norm_v1`** (preserve local-part case; reject Unicode local; no provider collapse); verify only **`deliveryState=sent`**; limits 3/10 subject, 10/40 IP, 2000/day unactivated ceiling.
+- **U7 Option A (Accepted):** first success may create parent + identity (no silent cross-provider email link).
+- Account **linking** is **LMP-36**. Sessions via ADR-019 `mintSessionTx`. Live OpenAPI **`0.5.0`** until Phase B proposes **`0.6.0`**.
