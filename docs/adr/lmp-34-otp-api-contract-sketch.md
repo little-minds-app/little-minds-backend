@@ -2,18 +2,19 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Sketch only — **not** published in `contracts/openapi.yaml` until ADR-020 is **Accepted** and the **implementation** PR bumps OpenAPI (proposed **`0.5.0`** — **U14**). This docs PR does **not** change live **`0.4.0`**. |
-| **Parent ADR** | [ADR-020](./ADR-020-gsm-otp-sign-in.md) |
+| **Status** | Sketch only — **not** published until ADR-020 **Accept** + implementation PR OpenAPI **`0.5.0`**. Live contract stays **`0.4.0`**. |
+| **Parent ADR** | [ADR-020](./ADR-020-gsm-otp-sign-in.md) (**Proposed**) |
 | **Jira** | LMP-34 |
-| **Depends** | Reuses LMP-33 `TokenPairResponse` / `AuthError` shapes from live `0.4.0` |
 
-> Field names, enums, and HTTP status choices below are **illustrative**. Numeric cooldowns/TTLs and anti-enumeration status policy are **Unresolved** in ADR-020 (U1–U6, U12, U15). Do not treat this sketch as authority to invent those defaults in code.
+> Numerical fields below mirror **recommended proposals** (U1–U6, U14–U16). Only **U7 Option A** and LM-owned / delivery-only SMS architecture are human-**selected**. Do not treat proposals as Accepted security parameters.
 
 ---
 
-## Security scheme
+## Architecture note (selected)
 
-Reuse LMP-33 `parentAccessToken` for post-login calls. Phone start/verify are **unauthenticated** (rate-limited).
+- Backend owns OTP generate/verify and parent/session lifecycle (ADR-019 `SessionIssuerService`).
+- `SmsSender` is **delivery-only** (`FakeSmsSender` now; future Netgsm / Twilio Programmable Messaging / Plivo candidates — **not** approved or integrated).
+- Firebase Phone Auth / Twilio Verify are **not** `SmsSender` implementations (they own verification).
 
 ---
 
@@ -21,77 +22,22 @@ Reuse LMP-33 `parentAccessToken` for post-login calls. Phone start/verify are **
 
 ### `POST /v1/auth/phone/start`
 
-```yaml
-/v1/auth/phone/start:
-  post:
-    operationId: startPhoneOtp
-    summary: Request a GSM OTP challenge (rate-limited)
-    tags: [Auth]
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/PhoneOtpStartRequest'
-    responses:
-      '200':
-        description: |
-          Challenge accepted for delivery attempt. Anti-enumeration policy (always-200 vs
-          differentiated errors) is Unresolved U12 — do not invent in implementation.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PhoneOtpStartResponse'
-      '400':
-        $ref: '#/components/responses/AuthError'
-      '429':
-        $ref: '#/components/responses/AuthError'
-      '503':
-        description: SMS adapter unavailable / circuit open
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AuthError'
-```
+Unauthenticated; rate-limited (durable IP + subject + global). TR-only Day-1 (**U10** proposal).
+
+**200** uniform `PhoneOtpStartResponse` for well-formed requests (anti-enumeration). Never returns `otp_code`.  
+**400** generic `invalid_request` (non-TR / malformed).  
+**429** `otp_cooldown` / `rate_limited`.  
+**503** `sms_unavailable` (uniform — no existence oracle).
 
 ### `POST /v1/auth/phone/verify`
 
-```yaml
-/v1/auth/phone/verify:
-  post:
-    operationId: verifyPhoneOtp
-    summary: Verify GSM OTP and mint parent session via SessionIssuer
-    tags: [Auth]
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/PhoneOtpVerifyRequest'
-    responses:
-      '200':
-        description: OTP consumed; returns LMP-33 token pair
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TokenPairResponse'
-      '400':
-        $ref: '#/components/responses/AuthError'
-      '401':
-        description: Invalid / expired / consumed / locked OTP (generic)
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AuthError'
-      '403':
-        description: session_limit_exceeded from mint (ADR-019)
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AuthError'
-      '429':
-        $ref: '#/components/responses/AuthError'
-```
+**U7 Option A:** existing phone identity → sign in; unknown → create parent + phone identity (no silent cross-provider merge).  
+Prefer **one DB transaction**: validate/consume challenge + identity resolve/create + session mint (`mintSessionTx` prerequisite — ADR-020 §8). JWT sign after commit.
+
+**200** `TokenPairResponse` (LMP-33).  
+**401** `otp_invalid` (uniform).  
+**400** malformed / privacy-notice field issues when required for new subjects.  
+**429** rate limited.
 
 ---
 
@@ -105,23 +51,10 @@ PhoneOtpStartRequest:
   additionalProperties: false
   required: [phone]
   properties:
-    phone:
-      type: string
-      description: |
-        National or E.164 input; server re-normalizes. Exact dial-code field split
-        (phone vs country_code) may be refined on Accept.
-      minLength: 5
-      maxLength: 32
-    country_code:
-      type: string
-      description: Optional ISO/dial hint; server must not trust without normalization
-      maxLength: 8
-    client_surface:
-      type: string
-      description: Coarse surface (ios|android|web) — not a fingerprint
-      maxLength: 32
-    device_id:
-      $ref: '#/components/schemas/UuidV4OrV7'
+    phone: { type: string, minLength: 5, maxLength: 32 }
+    country_code: { type: string, maxLength: 8 }
+    client_surface: { type: string, maxLength: 32 }
+    device_id: { $ref: '#/components/schemas/UuidV4OrV7' }
 ```
 
 ### PhoneOtpStartResponse
@@ -130,19 +63,11 @@ PhoneOtpStartRequest:
 PhoneOtpStartResponse:
   type: object
   additionalProperties: false
-  required: [challenge_id]
+  required: [challenge_id, expires_in, resend_after]
   properties:
-    challenge_id:
-      $ref: '#/components/schemas/UuidV4OrV7'
-    expires_in:
-      type: integer
-      description: Seconds until OTP expiry — value from Accept U2; omit until set
-      minimum: 1
-    resend_after:
-      type: integer
-      description: Seconds until resend allowed — value from Accept U4; omit until set
-      minimum: 0
-    # NEVER include otp_code in staging/production schemas.
+    challenge_id: { $ref: '#/components/schemas/UuidV4OrV7' }
+    expires_in: { type: integer, enum: [300] }      # U2 proposal
+    resend_after: { type: integer, enum: [60] }     # U4 proposal
 ```
 
 ### PhoneOtpVerifyRequest
@@ -153,80 +78,79 @@ PhoneOtpVerifyRequest:
   additionalProperties: false
   required: [challenge_id, code]
   properties:
-    challenge_id:
-      $ref: '#/components/schemas/UuidV4OrV7'
-    code:
+    challenge_id: { $ref: '#/components/schemas/UuidV4OrV7' }
+    code: { type: string, pattern: '^[0-9]{6}$' }   # U1 proposal
+    privacy_notice_version:
       type: string
-      description: User-entered OTP — never log; length from Accept U1
-      minLength: 4
-      maxLength: 16
-    client_surface:
-      type: string
-      maxLength: 32
-    device_id:
-      $ref: '#/components/schemas/UuidV4OrV7'
+      maxLength: 64
+      description: |
+        Exact requiredness for new vs existing subjects is an Accept consistency
+        item with U7/U12/U13 — notice ack ≠ optional-processing consent.
+    client_surface: { type: string, maxLength: 32 }
+    device_id: { $ref: '#/components/schemas/UuidV4OrV7' }
 ```
 
-### AuthError extensions (proposed — U15)
+### AuthError extensions (U15 proposal)
 
-Extend live LMP-33 `AuthError.error` enum **additively** in the implementation PR:
-
-```text
-otp_invalid
-otp_cooldown
-sms_unavailable
-```
-
-Retain existing: `invalid_request`, `invalid_token`, `expired_token`, `revoked_session`, `refresh_reuse`, `rate_limited`, `session_limit_exceeded`, `bootstrap_disabled`, `database_unavailable`.
+Additive: `otp_invalid`, `otp_cooldown`, `sms_unavailable`.
 
 ---
 
-## Out of scope paths (not in LMP-34 Day-1 sketch)
+## Proposed rate / abuse numbers (not enablement)
 
-| Path | Owner |
-|---|---|
-| `POST /v1/auth/identities/link` | LMP-35 / recovery follow-up (ADR-020 U18) |
-| `POST /v1/parents/register` | Only if Accept picks explicit register (**U7-B**) |
-| Apple / Google / email OTP | LMP-35 |
-| Dev OTP echo endpoint | Test-only if Accept picks **U17**; never in published staging/production contract |
+See ADR-020 §7: 5 attempts/challenge; 60s resend; 3 SMS/phone/15m; 10 SMS/phone/24h; 5 SMS/IP/15m; 30 SMS/IP/24h; 10 verify/IP/min; 500 SMS/day global planning candidate.
+
+Prefer PostgreSQL durable counters.
 
 ---
 
-## Prisma migration sketch (non-live)
+## Out of scope Day-1
 
-Illustrative only — column nullability/enums await Accept (U8, U15, U16):
+Provider link, phone change/recovery (**U18**), public fake OTP route (**U17**), real staging SMS (**U19**), non-TR numbers (**U10**), vendor SDKs/credentials, live OpenAPI phone paths, applied migrations.
+
+---
+
+## Prisma sketch (non-live)
 
 ```sql
--- proposed additive migration after ADR-020 Accept
+-- After Accept only
 CREATE TABLE otp_challenges (
-  id              uuid PRIMARY KEY,
-  provider        text NOT NULL,
-  subject_key     text NOT NULL,
-  code_hash       text NOT NULL,
-  status          text NOT NULL,
-  attempt_count   integer NOT NULL DEFAULT 0,
-  send_count      integer NOT NULL DEFAULT 0,
-  expires_at      timestamptz NOT NULL,
-  consumed_at     timestamptz,
-  last_sent_at    timestamptz,
-  created_at      timestamptz NOT NULL DEFAULT now(),
-  updated_at      timestamptz NOT NULL DEFAULT now()
+  id uuid PRIMARY KEY,
+  provider text NOT NULL,
+  subject_key text NOT NULL,
+  code_hash text NOT NULL,
+  status text NOT NULL,          -- pending|consumed|expired|locked|superseded
+  delivery_state text NOT NULL,  -- pending_send|sent|failed|superseded
+  attempt_count integer NOT NULL DEFAULT 0,
+  send_count integer NOT NULL DEFAULT 0,
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  last_sent_at timestamptz,
+  sealed_destination text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
-
-CREATE INDEX otp_challenges_subject_status_idx
-  ON otp_challenges (provider, subject_key, status, expires_at);
+CREATE UNIQUE INDEX otp_challenges_one_pending_per_subject
+  ON otp_challenges (provider, subject_key) WHERE status = 'pending';
 
 CREATE TABLE otp_delivery_attempts (
-  id                   uuid PRIMARY KEY,
-  challenge_id         uuid NOT NULL REFERENCES otp_challenges(id) ON DELETE CASCADE,
-  adapter              text NOT NULL,
-  result               text NOT NULL,
-  provider_message_id  text,
-  created_at           timestamptz NOT NULL DEFAULT now()
+  id uuid PRIMARY KEY,
+  challenge_id uuid NOT NULL REFERENCES otp_challenges(id) ON DELETE CASCADE,
+  adapter text NOT NULL,         -- fake|production (vendor name not required)
+  result text NOT NULL,
+  provider_message_id text,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX otp_delivery_attempts_challenge_idx
-  ON otp_delivery_attempts (challenge_id);
+CREATE TABLE otp_abuse_counters (
+  bucket_type text NOT NULL,     -- subject|ip|global
+  bucket_key text NOT NULL,
+  window_start timestamptz NOT NULL,
+  send_count integer NOT NULL DEFAULT 0,
+  verify_count integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (bucket_type, bucket_key, window_start)
+);
 ```
 
-No plaintext OTP column. No phone PK on `parent_accounts`.
+Hash: `HMAC-SHA256(OTP_PEPPER, challenge_id || ":" || subject_key || ":" || code)`  
+Subject: `hex(HMAC-SHA256(PHONE_SUBJECT_PEPPER, e164))`

@@ -13,7 +13,7 @@ Parent identity session lifecycle inside the Nest modular monolith.
 
 ## Out of scope (this module's LMP-33 surface)
 
-- GSM OTP (`POST /v1/auth/phone/*`) — **LMP-34** (Proposed ADR-020)
+- GSM OTP (`POST /v1/auth/phone/*`) — **LMP-34** (Proposed ADR-020; LM-owned OTP + delivery-only SMS)
 - Apple / Google / email adapters — **LMP-35**
 - Web cookie session UX — **LMP-38**
 - Public ownership-check HTTP API — **forbidden** by ADR-019
@@ -21,4 +21,4 @@ Parent identity session lifecycle inside the Nest modular monolith.
 ## Design reference
 
 - Sessions: `docs/adr/ADR-019-parent-identity-secure-session-lifecycle.md` (**Accepted**)
-- GSM OTP: `docs/adr/ADR-020-gsm-otp-sign-in.md` (**Proposed** — no implementation until Accept)
+- GSM OTP: `docs/adr/ADR-020-gsm-otp-sign-in.md` (**Proposed** — U7 Option A selected; remaining U-items await Accept; no runtime until then)
