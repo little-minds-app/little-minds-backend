@@ -62,7 +62,7 @@ Successful verify → **only** ADR-019 `SessionIssuerService` (no second session
 |---|---|---|---|
 | Sessions, refresh, logout, guards, `/v1/parent/me` | ✅ | consumes | — |
 | Dev bootstrap | ✅ | must not replace | — |
-| Session mint | ✅ owns | must call (may need `mintSessionTx` — §8) | — |
+| Session mint | ✅ owns | must call (may need `mintSessionTx` — §9) | — |
 | `POST /v1/auth/phone/start\|verify` | ❌ | ✅ | — |
 | Fake / production `SmsSender` ports | ❌ | ✅ (fake now; production adapters gated) | vendor activate later |
 | Apple / Google / email / provider link | ❌ | ❌ | LMP-35 |
@@ -166,24 +166,23 @@ Notice must be accessible **before or at** phone collection — **not** only aft
   - **Client:** show contextual notice + link; only call start after the notice UX for that surface was presented; send only server-issued presentation material (see §6.4).
   - **Server:** validate presentation material against catalog; refuse start with **uniform** `400 invalid_request` if missing/invalid/expired; persist binding on challenge; on U7 create, copy evidence into `privacy_notice_acknowledgments` (or equivalent) in the **same** verify transaction as identity+mint.
 
-### 6.4 Preferred start/verify binding (fixes `privacy_notice_version` ambiguity)
+### 6.4 V1 start/verify binding — Option A (normative proposal for Accept)
 
-**Rejected:** conditional `privacy_notice_version` on **verify** required only for unknown parents — forces client account-existence branching, risks **U12** oracle, conflates notice with consent, and is redundant if notice was already presented at start.
+**Rejected:** conditional `privacy_notice_version` on **verify** for unknown parents only — account-existence branching / **U12** oracle / notice≠consent confusion.
 
-**Recommended (uniform contract):**
+**V1 selected shape (Option A):** uniform `notice_version` + `notice_locale` on **`POST /v1/auth/phone/start`** for every caller.
 
-1. App obtains **active** notice metadata from server-owned catalog (existing Blueprint-oriented privacy routes when published, or build-time pinned version **plus** server validation — Accept may pick). Prefer not adding a new endpoint unless catalog access is otherwise missing.
-2. `POST /v1/auth/phone/start` includes a **uniform** `notice_presentation` object for **every** caller, e.g. either:
-   - `notice_version` + `notice_locale` that must equal the server’s **currently active** published pair, **or**
-   - a short-lived opaque **`notice_presentation_token`** minted by the server when the notice was served (`HMAC`/`AEAD` over `notice_version|locale|nonce|exp`, dedicated pepper; single-use or challenge-bound; TTL short).
-3. Server validates presentation → stores `notice_version` / `locale` / `presented_at` / `surface` on `otp_challenges`.
-4. `POST /v1/auth/phone/verify` body is **only** `challenge_id` + `code` (+ optional device/surface). **No** privacy fields. No new vs existing branching in the client contract.
+1. Client presents notice UX **before** phone submit (contextual text + full-notice link). Active version/locale come from the **server-owned catalog** (published versions known to the app via existing/future privacy catalog access already in product scope — **no new notice-token mint endpoint** in LMP-34 V1).
+2. `POST /v1/auth/phone/start` requires uniform fields `notice_version` + `notice_locale` that must equal the server’s **currently active** published pair (plus optional coarse `presentation_surface`).
+3. Server validates → stores `notice_version` / `notice_locale` / `presented_at` (server clock) / `presentation_surface` on `otp_challenges`.
+4. `POST /v1/auth/phone/verify` is **only** `challenge_id` + `code` (+ optional device/surface). **No** privacy fields.
 5. On verify success:
-   - **Existing parent:** mint session; optionally record a minimized “notice still current” association if policy requires version-update awareness — **must not** become a consent gate or block login solely for notice refresh without a separate product/legal policy.
+   - **Existing parent:** mint session; notice version-update policy must not become a consent gate.
    - **New parent (U7):** create parent + phone identity + notice-presentation evidence row + session mint in one txn (**U13** / `mintSessionTx`).
 
-**Security properties of presentation token (if used):** integrity + expiry; not forgeable without pepper; does not encode whether a phone is registered; validation failures are generic; not logged in raw form.
+**Client-evidence limits (explicit):** submitting the active `notice_version`/`locale` proves the client **claimed** presentation and that the server **accepted** a catalog match at start. It does **not** cryptographically prove the UI rendered the full notice. Stronger attestation (e.g. opaque presentation tokens) is a **future enhancement only** — **not** normative V1 and **not** a reason to add a public notice-token endpoint now.
 
+**Not consent:** challenge-bound notice evidence is transparency/presentation record — never `accepted_privacy=true` and never optional-processing consent.
 ### 6.5 Existing parents
 
 Sign-in must **not** force a new registration flow or unnecessary repeated “consent.” If the published notice version changes, define a **version-update presentation** policy later — notice remains transparency, not an optional-consent gate.
@@ -204,7 +203,7 @@ Phone OTP verifies control of a number and (under U7) may create a **parent acco
 |---|---|---|---|
 | **U7** | New parent | **SELECTED** | Option A — create parent + phone identity on first successful verify |
 | **Arch** | OTP ownership / SMS role | **SELECTED** | LM-owned OTP; SMS delivery-only; no Firebase Phone Auth / Twilio Verify SoR |
-| **Privacy** | KVKK notice design (§6) | **Recommended proposal** | Notice≠ToS≠optional consent; present before/at phone collect; server catalog; challenge-bound evidence; uniform verify |
+| **Privacy** | KVKK notice design (§6) | **Recommended proposal** | Notice≠ToS≠optional consent; present before phone submit; **V1 Option A** `notice_version`+`notice_locale` on start; challenge-bound; uniform verify; token = future only |
 | **U1** | OTP format | **Recommended proposal** | 6-digit numeric, CSPRNG |
 | **U2** | OTP TTL | **Recommended proposal** | **300 seconds** absolute |
 | **U3** | Supersede | **Recommended proposal** | One active pending challenge per subject; new issued challenge supersedes previous |
@@ -219,7 +218,7 @@ Phone OTP verifies control of a number and (under U7) may create a **parent acco
 | **U13** | Consume/mint txn | **Recommended proposal** + **impl prerequisite** | Atomic consume + identity + notice evidence + session via `mintSessionTx`; see §9–§10 |
 | **U14** | OpenAPI | **Recommended proposal** | Live **`0.5.0`** only in implementation PR |
 | **U15** | Enums / errors | **Recommended proposal** | Explicit challenge/delivery states + generic `otp_invalid` / `otp_cooldown` / `sms_unavailable` |
-| **U16** | Retention | **Recommended proposal** | Challenges purge **24h**; minimized delivery attempts purge **7 days** |
+| **U16** | Retention | **Recommended proposal** | Challenges scrub/purge **24h**; delivery attempts **7 days** — see §13 FK-safe design (no CASCADE wipe) |
 | **U17** | Fake OTP retrieval | **Recommended proposal** | Test harness/inbox only; inaccessible staging/production |
 | **U18** | Phone change / recovery | **Deferred** | Out of LMP-34 Day-1 |
 | **U19** | Staging real SMS | **Production / staging gate** | Disabled until separately approved |
@@ -292,7 +291,24 @@ Inspected `src/modules/identity/session/session-issuer.service.ts`:
 4. On `session_limit_exceeded` or other mint failure → whole txn rolls back (OTP remains usable until TTL/attempts).
 5. Tests: Postgres concurrent verify; forced mint failure does not leave consumed OTP / orphan parent / orphan notice row; unique identity race; lock ordering (challenge then parent); txn timeouts; SMS failures outside txn.
 
-**Retry note:** clients may retry verify with the same code if the HTTP outcome is ambiguous **only while** the challenge is still pending (not consumed). After successful consume+commit, standard ADR-019 token handling applies.
+**Retry note (pre-commit / still-pending challenge):** clients may retry verify with the same code if the HTTP outcome is ambiguous **only while** the challenge is still pending (not consumed).
+
+### 9.4 Post-commit JWT / HTTP failure (ADR-019 reality — no runtime change)
+
+ADR-019 `mintSession` (and the proposed outer verify txn) **commits DB state first**, then signs the access JWT and returns the HTTP body. Therefore:
+
+| Phase | Failure | Rollback of consume / new parent / session row? |
+|---|---|---|
+| Inside DB transaction (validate, U7 create, consume, `mintSessionTx`) | Error / `session_limit_exceeded` | **Yes** — full txn rollback |
+| **After** successful commit, during JWT sign or response write | Process crash, sign error, client timeout | **No** — DB commit is durable; there is **no** rollback promise |
+
+**Client / product policy (document for Accept):**
+
+1. If verify returns a clear **success** body → persist token pair; do not retry the same OTP.
+2. If verify returns a clear **4xx/5xx** before success → follow that error; retry OTP only while challenge remains pending (server still has unconsumed challenge).
+3. If the outcome is **ambiguous** (timeout / connection drop after send): treat like ADR-019 lost refresh — **do not** blindly resubmit the same OTP assuming it was not consumed. Preferred recovery: call verify at most with idempotent awareness **or** re-enter auth via a **new** `start` (new challenge) rather than risking double-submit races; if the first attempt actually committed, a second successful path must not create an unbounded duplicate-session storm.
+4. **Duplicate-session prevention:** session mint remains subject to the ADR-019 **20 active session** cap (`FOR UPDATE` + count). A committed-but-unobserved success still counts as an active session. Clients that re-auth after ambiguity may hit `403 session_limit_exceeded` and must logout/logout-all. Implementation MAY optionally detect a very recent pending challenge already `consumed` for the same subject and return a controlled generic auth error rather than minting again — **Accept may require** this hardening; V1 minimum is cap enforcement + client re-auth guidance.
+5. This docs PR does **not** change SessionIssuer runtime behavior.
 
 ---
 
@@ -314,9 +330,9 @@ Inspected `src/modules/identity/session/session-issuer.service.ts`:
 | Code | 6-digit CSPRNG (**U1**) |
 | Hash | `HMAC-SHA256(OTP_PEPPER, challenge_id \|\| ":" \|\| subject_key \|\| ":" \|\| code)` — binds challenge + subject (anti cross-challenge replay) |
 | Subject | `hex(HMAC-SHA256(PHONE_SUBJECT_PEPPER, e164))` (**U8**) |
-| Peppers | Distinct from `REFRESH_TOKEN_PEPPER`; optional `NOTICE_PRESENTATION_PEPPER` for presentation tokens |
+| Peppers | Distinct from `REFRESH_TOKEN_PEPPER` (OTP + phone-subject peppers). Presentation-token pepper = **future only** |
 | Delivery state | `pending_send` / `sent` / `failed` / `superseded` — start/resend must not invalidate a just-delivered code without cooldown/idempotency rules |
-| Notice binding | Challenge stores server-validated `notice_version` / locale / `presented_at` / surface (§6.4) |
+| Notice binding | Challenge stores server-validated `notice_version` + `notice_locale` + `presented_at` + surface (**V1 Option A**, §6.4) |
 | Expiry checks | After row lock, use PostgreSQL `clock_timestamp()` |
 | Attempts | Atomic increment on failed verify |
 
@@ -326,7 +342,7 @@ Inspected `src/modules/identity/session/session-issuer.service.ts`:
 
 | Method | Path | Notes |
 |---|---|---|
-| `POST` | `/v1/auth/phone/start` | Rate-limited; **uniform** `notice_presentation` for all callers; returns `challenge_id`, proposed `expires_in=300`, `resend_after=60` |
+| `POST` | `/v1/auth/phone/start` | Rate-limited; **uniform** `notice_version` + `notice_locale` (V1 Option A); returns `challenge_id`, proposed `expires_in=300`, `resend_after=60` |
 | `POST` | `/v1/auth/phone/verify` | `challenge_id` + `code` only (+ optional device/surface); **no** privacy fields; U7 Option A; `TokenPairResponse` |
 
 Anti-enumeration (**U12**): uniform responses; no account-existence oracle via start/verify/privacy/cooldown/spend/`503`.
@@ -337,7 +353,23 @@ Anti-enumeration (**U12**): uniform responses; no account-existence oracle via s
 
 Proposed tables (names illustrative): `otp_challenges` (incl. notice-binding columns), `otp_delivery_attempts`, optional `otp_send_outbox`, durable `otp_abuse_counters`; reuse/extend `privacy_notice_acknowledgments` for post-verify parent association. No plaintext OTP/E.164. No migrations in this docs PR.
 
-Retention (**U16** proposal): challenges **24h**; delivery attempts **7 days**; scheduled purge.
+### 13.1 Retention vs FK (U16) — fix CASCADE conflict
+
+**Problem:** If `otp_delivery_attempts.challenge_id` uses `ON DELETE CASCADE` and challenges are purged at **24h**, delivery rows intended to live **7 days** are wiped early.
+
+**Recommended relational design:**
+
+1. **Do not** use `ON DELETE CASCADE` from challenges → delivery attempts for V1.
+2. Prefer one of:
+   - **A (preferred):** `challenge_id UUID NULL` with `ON DELETE SET NULL`, plus a non-PII `challenge_id_snapshot UUID NOT NULL` copied at insert time for correlation after parent row scrub/delete; **or**
+   - **B:** no FK; store `challenge_id` as an indexed UUID soft-reference only (document referential integrity in app/jobs).
+3. Delivery rows store **minimized** fields only: adapter name class (`fake`/`production`), result enum, optional opaque `provider_message_id`, timestamps — **no** E.164, OTP, or notice body.
+4. **Cleanup order (scheduled job):**
+   1. At **~24h:** scrub and/or delete `otp_challenges` (clear `code_hash`, `sealed_destination`, notice columns; delete row if SET NULL/soft-ref allows).
+   2. At **~7d:** delete `otp_delivery_attempts` (and any challenge stubs if using delayed hard-delete).
+5. **Future tests (implementation PR):** assert 24h challenge purge does **not** delete delivery attempts still inside 7d window; assert scrub removes secrets/PII from challenges; assert no CASCADE surprise.
+
+Retention (**U16** proposal): challenges scrub/purge **24h**; minimized delivery attempts purge **7 days** — FK-safe as above.
 
 ---
 
@@ -349,7 +381,6 @@ Retention (**U16** proposal): challenges **24h**; delivery attempts **7 days**; 
 | `OTP_PEPPER` | Secret | Code hashing |
 | `PHONE_SUBJECT_PEPPER` | Secret | E.164 → subject |
 | `OTP_DESTINATION_KEY` | Secret | Optional sealed destination |
-| `NOTICE_PRESENTATION_PEPPER` | Secret | Optional presentation-token integrity |
 | Budget thresholds | Config | Deny-on-unavailable in staging/prod when real send enabled |
 | Vendor credentials | Secret | **None in this PR** |
 
@@ -358,9 +389,9 @@ Retention (**U16** proposal): challenges **24h**; delivery attempts **7 days**; 
 ## 15. Test plan (implementation PR after Accept)
 
 Unit: E.164 TR allow/deny; hash binding; cooldown; attempts; adapter env matrix; budget deny; notice presentation validation (uniform).  
-API: start→verify; wrong/expired/reused; anti-enum (incl. notice failures); U7 create vs sign-in without client branching.  
-Postgres: concurrent verify; mint failure rollback (OTP + parent + notice evidence); identity unique race; attempt races; lock-wait expiry.  
-Security: fake sender fail-closed outside dev/test; no OTP/E.164/raw presentation tokens in logs; no public fake inbox.  
+API: start→verify; wrong/expired/reused; anti-enum (incl. uniform notice failures); U7 create vs sign-in without client branching; ambiguous-verify client guidance.  
+Postgres: concurrent verify; mint failure rollback (OTP + parent + notice evidence); identity unique race; attempt races; lock-wait expiry; **24h challenge purge preserves 7d delivery rows**.  
+Security: fake sender fail-closed outside dev/test; no OTP/E.164 in logs; no public fake inbox / no notice-token endpoint.  
 Regression: LMP-33 refresh/logout/bootstrap unchanged.
 
 ---
@@ -375,7 +406,10 @@ Regression: LMP-33 refresh/logout/bootstrap unchanged.
 | Calling public `mintSession` inside outer txn without refactor | Not transactional with Prisma interactive txns |
 | Silent merge by phone onto other providers | Forbidden |
 | Conditional `privacy_notice_version` on verify for new parents only | Account-existence oracle / U12 break; notice≠consent confusion |
+| Normative V1 opaque notice-presentation tokens / mint endpoint | Deferred future enhancement; V1 = Option A version+locale |
+| `ON DELETE CASCADE` challenges → delivery attempts | Conflicts with 24h vs 7d retention |
 | Bundled “I accept privacy + marketing” auth checkbox | Conflicts with notice/consent separation |
+| Promising DB rollback after JWT/HTTP post-commit failure | Impossible once commit succeeded (ADR-019 mint order) |
 
 ---
 

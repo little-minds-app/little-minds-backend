@@ -58,7 +58,7 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 
 | ADR | Title | Jira | Notes |
 |---|---|---|---|
-| **ADR-020 (Proposed)** | GSM OTP sign-in — LM-owned OTP + delivery-only SMS adapters | [LMP-34](https://little-minds-app.atlassian.net/browse/LMP-34) | **Selected:** LM-owned OTP; delivery-only SMS; **U7 Option A**. **Recommended:** KVKK notice≠consent; challenge-bound notice at start; uniform verify (no existence oracle). **Proposed/deferred:** U1–U6, U8–U20. [Decision](./ADR-020-gsm-otp-sign-in.md) · [Sketch](./lmp-34-otp-api-contract-sketch.md). Docs-only; OpenAPI `0.4.0`. |
+| **ADR-020 (Proposed)** | GSM OTP sign-in — LM-owned OTP + delivery-only SMS adapters | [LMP-34](https://little-minds-app.atlassian.net/browse/LMP-34) | **Selected:** LM-owned OTP; delivery-only SMS; **U7 Option A**. **Recommended:** V1 notice Option A (`notice_version`+`locale` on start); FK-safe 24h/7d retention; post-commit JWT ambiguity documented. **Proposed/deferred:** U1–U6, U8–U20. [Decision](./ADR-020-gsm-otp-sign-in.md) · [Sketch](./lmp-34-otp-api-contract-sketch.md). Docs-only; OpenAPI `0.4.0`. |
 
 ---
 

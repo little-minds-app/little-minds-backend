@@ -23,9 +23,11 @@
 ## Privacy notice binding (recommended — ADR-020 §6)
 
 - Notice ≠ ToS ≠ optional consent.
-- Present notice **before/at** phone collection; bind evidence at **start**.
+- Present notice **before** phone submit; bind evidence at **start**.
 - Server owns active notice catalog; clients do not invent authoritative versions.
+- **V1 Option A (normative proposal):** uniform `notice_version` + `notice_locale` on start (must match active catalog). Opaque presentation tokens / notice-token endpoints = **future only**.
 - **Verify has no privacy fields** — avoids new-vs-existing client branching and account-existence oracles (**U12**).
+- Client-submitted version/locale proves catalog match claim, **not** cryptographic UI-render proof.
 
 ---
 
@@ -61,23 +63,20 @@ Unauthenticated; rate-limited (durable IP + subject + global). TR-only Day-1 (**
 PhoneOtpStartRequest:
   type: object
   additionalProperties: false
-  required: [phone, notice_presentation]
+  required: [phone, notice_version, notice_locale]
   properties:
     phone: { type: string, minLength: 5, maxLength: 32 }
     country_code: { type: string, maxLength: 8 }
-    notice_presentation:
-      type: object
-      additionalProperties: false
+    notice_version:
+      type: string
+      maxLength: 64
       description: |
-        Uniform for ALL callers (existing and new). Server validates against
-        owned notice catalog. Preferred shapes (Accept picks one):
-        (A) notice_version + notice_locale matching active published pair, or
-        (B) opaque short-lived notice_presentation_token minted by server.
-      properties:
-        notice_version: { type: string, maxLength: 64 }
-        notice_locale: { type: string, maxLength: 16 }
-        notice_presentation_token: { type: string, maxLength: 512 }
-      # Exactly one Accept-approved shape required at implementation time
+        V1 Option A — uniform for ALL callers. Must equal server active
+        published notice version. Not consent. Not required on verify.
+    notice_locale:
+      type: string
+      maxLength: 16
+      description: Locale of the presented notice; must match catalog active pair
     client_surface: { type: string, maxLength: 32 }
     device_id: { $ref: '#/components/schemas/UuidV4OrV7' }
 ```
@@ -109,7 +108,7 @@ PhoneOtpVerifyRequest:
     code: { type: string, pattern: '^[0-9]{6}$' }   # U1 proposal
     client_surface: { type: string, maxLength: 32 }
     device_id: { $ref: '#/components/schemas/UuidV4OrV7' }
-    # Intentionally NO privacy_notice_version — bound at start (ADR-020 §6.4)
+    # Intentionally NO privacy fields — notice bound at start (V1 Option A)
 ```
 
 ### AuthError extensions (U15 proposal)
@@ -159,12 +158,16 @@ CREATE UNIQUE INDEX otp_challenges_one_pending_per_subject
 
 CREATE TABLE otp_delivery_attempts (
   id uuid PRIMARY KEY,
-  challenge_id uuid NOT NULL REFERENCES otp_challenges(id) ON DELETE CASCADE,
+  -- FK-safe retention (ADR-020 §13.1): NO ON DELETE CASCADE.
+  -- Prefer ON DELETE SET NULL + challenge_id_snapshot, or soft UUID ref only.
+  challenge_id uuid NULL REFERENCES otp_challenges(id) ON DELETE SET NULL,
+  challenge_id_snapshot uuid NOT NULL,
   adapter text NOT NULL,
   result text NOT NULL,
   provider_message_id text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+-- Purge: scrub/delete challenges ~24h; delete delivery_attempts ~7d.
 
 CREATE TABLE otp_abuse_counters (
   bucket_type text NOT NULL,
