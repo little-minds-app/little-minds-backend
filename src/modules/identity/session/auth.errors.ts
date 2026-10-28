@@ -16,7 +16,10 @@ export type AuthErrorCode =
   | 'rate_limited'
   | 'session_limit_exceeded'
   | 'bootstrap_disabled'
-  | 'database_unavailable';
+  | 'database_unavailable'
+  | 'otp_invalid'
+  | 'otp_cooldown'
+  | 'sms_unavailable';
 
 export function authErrorBody(
   error: AuthErrorCode,
@@ -57,5 +60,23 @@ export function throwRateLimited(): never {
   throw new HttpException(
     authErrorBody('rate_limited', 'Too many requests'),
     HttpStatus.TOO_MANY_REQUESTS,
+  );
+}
+
+export function throwOtpInvalid(message = 'Invalid or expired code'): never {
+  throw new UnauthorizedException(authErrorBody('otp_invalid', message));
+}
+
+export function throwOtpCooldown(message = 'Please wait before requesting another code'): never {
+  throw new HttpException(
+    authErrorBody('otp_cooldown', message),
+    HttpStatus.TOO_MANY_REQUESTS,
+  );
+}
+
+export function throwSmsUnavailable(message = 'SMS temporarily unavailable'): never {
+  throw new HttpException(
+    authErrorBody('sms_unavailable', message),
+    HttpStatus.SERVICE_UNAVAILABLE,
   );
 }

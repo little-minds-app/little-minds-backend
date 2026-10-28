@@ -147,6 +147,10 @@ jobs:
       # LMP-33 session DB integration tests (ADR-019 signing + pepper).
       REFRESH_TOKEN_PEPPER: "ci-refresh-pepper-not-for-prod!!"
       AUTH_DEV_BOOTSTRAP_ENABLED: "false"
+      # LMP-34 GSM OTP DB tests (ADR-020).
+      SMS_SENDER: "fake"
+      OTP_PEPPER: "ci-otp-pepper-not-for-prod!!!!!!"
+      PHONE_SUBJECT_PEPPER: "ci-phone-subject-pepper!!!!!"
 
     steps:
       - name: Checkout repository

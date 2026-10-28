@@ -215,6 +215,12 @@ class ApiClient {
           return ParentSessionListResponse.fromJson(value);
         case 'ParentSessionSummary':
           return ParentSessionSummary.fromJson(value);
+        case 'PhoneOtpStartRequest':
+          return PhoneOtpStartRequest.fromJson(value);
+        case 'PhoneOtpStartResponse':
+          return PhoneOtpStartResponse.fromJson(value);
+        case 'PhoneOtpVerifyRequest':
+          return PhoneOtpVerifyRequest.fromJson(value);
         case 'ReadinessStatus':
           return ReadinessStatus.fromJson(value);
         case 'ReadinessStatusChecks':

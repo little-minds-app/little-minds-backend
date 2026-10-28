@@ -15,6 +15,8 @@ Method | HTTP request | Description
 [**logoutParentSession**](AuthApi.md#logoutparentsession) | **POST** /v1/auth/logout | Revoke the current parent session
 [**refreshParentSession**](AuthApi.md#refreshparentsession) | **POST** /v1/auth/token/refresh | Rotate parent access and refresh tokens
 [**revokeParentSession**](AuthApi.md#revokeparentsession) | **DELETE** /v1/auth/sessions/{sessionId} | Revoke one owned session
+[**startPhoneOtp**](AuthApi.md#startphoneotp) | **POST** /v1/auth/phone/start | Start GSM OTP challenge (ADR-020)
+[**verifyPhoneOtp**](AuthApi.md#verifyphoneotp) | **POST** /v1/auth/phone/verify | Verify GSM OTP and mint parent session (ADR-020)
 
 
 # **createDevParentSession**
@@ -273,6 +275,92 @@ void (empty response body)
 ### HTTP request headers
 
  - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **startPhoneOtp**
+> PhoneOtpStartResponse startPhoneOtp(phoneOtpStartRequest)
+
+Start GSM OTP challenge (ADR-020)
+
+Unauthenticated. Türkiye (+90) only Day-1. Requires uniform `notice_version` + `notice_locale` (KVKK Option A). Never returns OTP. Anti-enumeration: response shape identical for existing vs new parents. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final phoneOtpStartRequest = PhoneOtpStartRequest(); // PhoneOtpStartRequest | 
+
+try {
+    final result = api_instance.startPhoneOtp(phoneOtpStartRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->startPhoneOtp: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **phoneOtpStartRequest** | [**PhoneOtpStartRequest**](PhoneOtpStartRequest.md)|  | 
+
+### Return type
+
+[**PhoneOtpStartResponse**](PhoneOtpStartResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **verifyPhoneOtp**
+> TokenPairResponse verifyPhoneOtp(phoneOtpVerifyRequest)
+
+Verify GSM OTP and mint parent session (ADR-020)
+
+Uniform for existing and new parents (U7 Option A creates parent on first success). No privacy fields on verify — notice bound at start. Returns ADR-019 TokenPairResponse via SessionIssuerService.mintSessionTx. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final phoneOtpVerifyRequest = PhoneOtpVerifyRequest(); // PhoneOtpVerifyRequest | 
+
+try {
+    final result = api_instance.verifyPhoneOtp(phoneOtpVerifyRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->verifyPhoneOtp: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **phoneOtpVerifyRequest** | [**PhoneOtpVerifyRequest**](PhoneOtpVerifyRequest.md)|  | 
+
+### Return type
+
+[**TokenPairResponse**](TokenPairResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
  - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

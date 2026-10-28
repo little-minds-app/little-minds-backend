@@ -9,6 +9,7 @@ const config: Config = {
     '/dist/',
     '<rootDir>/test/prisma-integrity\\.spec\\.ts$',
     '<rootDir>/test/identity-session\\.db\\.spec\\.ts$',
+    '<rootDir>/test/phone-otp\\.db\\.spec\\.ts$',
   ],
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',

@@ -22,6 +22,9 @@ doc/ParentApi.md
 doc/ParentMeResponse.md
 doc/ParentSessionListResponse.md
 doc/ParentSessionSummary.md
+doc/PhoneOtpStartRequest.md
+doc/PhoneOtpStartResponse.md
+doc/PhoneOtpVerifyRequest.md
 doc/ReadinessStatus.md
 doc/ReadinessStatusChecks.md
 doc/RefreshTokenRequest.md
@@ -55,6 +58,9 @@ lib/model/logout_request.dart
 lib/model/parent_me_response.dart
 lib/model/parent_session_list_response.dart
 lib/model/parent_session_summary.dart
+lib/model/phone_otp_start_request.dart
+lib/model/phone_otp_start_response.dart
+lib/model/phone_otp_verify_request.dart
 lib/model/readiness_status.dart
 lib/model/readiness_status_checks.dart
 lib/model/refresh_token_request.dart
@@ -79,6 +85,9 @@ test/parent_api_test.dart
 test/parent_me_response_test.dart
 test/parent_session_list_response_test.dart
 test/parent_session_summary_test.dart
+test/phone_otp_start_request_test.dart
+test/phone_otp_start_response_test.dart
+test/phone_otp_verify_request_test.dart
 test/readiness_status_checks_test.dart
 test/readiness_status_test.dart
 test/refresh_token_request_test.dart

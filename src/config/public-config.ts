@@ -10,13 +10,14 @@ export type PublicAppConfig = Pick<
   | 'RELEASE'
   | 'LISTEN_HOST'
   | 'AUTH_DEV_BOOTSTRAP_ENABLED'
+  | 'SMS_SENDER'
 >;
 
 /**
  * Strip secrets from validated env for startup logs and diagnostics.
  */
 export function toPublicConfig(env: AppEnv): PublicAppConfig {
-  // Intentionally omit REFRESH_TOKEN_PEPPER, private PEMs, DATABASE_URL, etc.
+  // Intentionally omit REFRESH_TOKEN_PEPPER, OTP peppers, private PEMs, DATABASE_URL, etc.
   return {
     APP_ENV: env.APP_ENV,
     NODE_ENV: env.NODE_ENV,
@@ -25,6 +26,7 @@ export function toPublicConfig(env: AppEnv): PublicAppConfig {
     RELEASE: env.RELEASE,
     LISTEN_HOST: env.LISTEN_HOST,
     AUTH_DEV_BOOTSTRAP_ENABLED: env.AUTH_DEV_BOOTSTRAP_ENABLED,
+    SMS_SENDER: env.SMS_SENDER,
   };
 }
 

@@ -18,6 +18,8 @@ const nodeEnvSchema = z.enum(['development', 'test', 'production']);
 const appEnvSchema = z.enum(APP_ENV_VALUES);
 
 const LOCAL_REFRESH_PEPPER = 'local-dev-refresh-pepper-not-for-prod';
+const LOCAL_OTP_PEPPER = 'local-dev-otp-pepper-not-for-prod!!';
+const LOCAL_PHONE_SUBJECT_PEPPER = 'local-dev-phone-subject-pepper!!';
 
 const baseSchema = z.object({
   APP_ENV: appEnvSchema.optional(),
@@ -54,6 +56,12 @@ const baseSchema = z.object({
   AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST: z.string().optional(),
   /** Nest listen bind host. Required to be loopback when AUTH_DEV_BOOTSTRAP_ENABLED. */
   LISTEN_HOST: z.string().trim().min(1).max(253).optional(),
+  // LMP-34 / ADR-020 GSM OTP
+  SMS_SENDER: z.enum(['fake', 'production']).optional(),
+  OTP_PEPPER: z.string().optional(),
+  PHONE_SUBJECT_PEPPER: z.string().optional(),
+  /** Optional sealed-destination key (U9); unused when destinations stay null. */
+  OTP_DESTINATION_KEY: z.string().optional(),
 });
 
 export type AppEnv = {
@@ -77,6 +85,10 @@ export type AppEnv = {
   AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST?: string;
   /** Bind address for `app.listen` — loopback-only when bootstrap is enabled. */
   LISTEN_HOST: string;
+  SMS_SENDER: 'fake' | 'production';
+  OTP_PEPPER: string;
+  PHONE_SUBJECT_PEPPER: string;
+  OTP_DESTINATION_KEY?: string;
 };
 
 function fail(details: string): never {
@@ -231,6 +243,76 @@ function assertAuthSecrets(
   return LOCAL_REFRESH_PEPPER;
 }
 
+function assertOtpSecrets(
+  appEnv: AppEnvironment,
+  config: {
+    SMS_SENDER?: 'fake' | 'production';
+    OTP_PEPPER?: string;
+    PHONE_SUBJECT_PEPPER?: string;
+  },
+): {
+  SMS_SENDER: 'fake' | 'production';
+  OTP_PEPPER: string;
+  PHONE_SUBJECT_PEPPER: string;
+} {
+  const smsSender =
+    config.SMS_SENDER ??
+    (appEnv === 'development' ? 'fake' : 'production');
+
+  if (
+    (appEnv === 'staging' || appEnv === 'production') &&
+    smsSender === 'fake'
+  ) {
+    fail(`SMS_SENDER=fake is forbidden when APP_ENV=${appEnv}`);
+  }
+
+  if (appEnv === 'staging' || appEnv === 'production') {
+    if (
+      !config.OTP_PEPPER ||
+      config.OTP_PEPPER.length < 16 ||
+      config.OTP_PEPPER === LOCAL_OTP_PEPPER
+    ) {
+      fail(`OTP_PEPPER must be a strong non-local secret when APP_ENV=${appEnv}`);
+    }
+    if (
+      !config.PHONE_SUBJECT_PEPPER ||
+      config.PHONE_SUBJECT_PEPPER.length < 16 ||
+      config.PHONE_SUBJECT_PEPPER === LOCAL_PHONE_SUBJECT_PEPPER
+    ) {
+      fail(
+        `PHONE_SUBJECT_PEPPER must be a strong non-local secret when APP_ENV=${appEnv}`,
+      );
+    }
+    if (
+      config.OTP_PEPPER === config.PHONE_SUBJECT_PEPPER ||
+      config.OTP_PEPPER === LOCAL_REFRESH_PEPPER
+    ) {
+      fail('OTP_PEPPER must be distinct from PHONE_SUBJECT_PEPPER / refresh pepper');
+    }
+    return {
+      SMS_SENDER: smsSender,
+      OTP_PEPPER: config.OTP_PEPPER,
+      PHONE_SUBJECT_PEPPER: config.PHONE_SUBJECT_PEPPER,
+    };
+  }
+
+  const otpPepper =
+    config.OTP_PEPPER && config.OTP_PEPPER.trim().length >= 16
+      ? config.OTP_PEPPER.trim()
+      : LOCAL_OTP_PEPPER;
+  const phonePepper =
+    config.PHONE_SUBJECT_PEPPER &&
+    config.PHONE_SUBJECT_PEPPER.trim().length >= 16
+      ? config.PHONE_SUBJECT_PEPPER.trim()
+      : LOCAL_PHONE_SUBJECT_PEPPER;
+
+  return {
+    SMS_SENDER: smsSender,
+    OTP_PEPPER: otpPepper,
+    PHONE_SUBJECT_PEPPER: phonePepper,
+  };
+}
+
 /**
  * Fail-closed bind + advertising gates when local session bootstrap is enabled
  * (ADR-019 §8 / LMP-33 re-review): prevent public ingress → loopback reverse-proxy
@@ -311,6 +393,12 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     parsed.data.LISTEN_HOST,
   );
 
+  const otpSecrets = assertOtpSecrets(appEnv, {
+    SMS_SENDER: parsed.data.SMS_SENDER,
+    OTP_PEPPER: parsed.data.OTP_PEPPER,
+    PHONE_SUBJECT_PEPPER: parsed.data.PHONE_SUBJECT_PEPPER,
+  });
+
   const result: AppEnv = {
     APP_ENV: appEnv,
     NODE_ENV: nodeEnv,
@@ -329,6 +417,10 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST:
       parsed.data.AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST,
     LISTEN_HOST: listenHost,
+    SMS_SENDER: otpSecrets.SMS_SENDER,
+    OTP_PEPPER: otpSecrets.OTP_PEPPER,
+    PHONE_SUBJECT_PEPPER: otpSecrets.PHONE_SUBJECT_PEPPER,
+    OTP_DESTINATION_KEY: parsed.data.OTP_DESTINATION_KEY,
   };
 
   if (appEnv === 'staging' || appEnv === 'production') {

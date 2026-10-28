@@ -81,6 +81,23 @@ enum ParentSessionRevokeReason {
   session_limit
 }
 
+/// LMP-34 / ADR-020 — OTP challenge lifecycle
+enum OtpChallengeStatus {
+  pending
+  consumed
+  expired
+  locked
+  superseded
+}
+
+/// LMP-34 / ADR-020 — SMS delivery state (adapter result tracking)
+enum OtpDeliveryState {
+  pending_send
+  sent
+  failed
+  superseded
+}
+
 // ===========================================================================
 // 13.1 / 38.2 — Identity, consent, profile
 // ===========================================================================
@@ -153,6 +170,66 @@ model ParentSessionRefreshHashLookup {
 
   @@index([sessionId], map: "parent_session_refresh_hash_lookups_session_idx")
   @@map("parent_session_refresh_hash_lookups")
+}
+
+/// LMP-34 / ADR-020 — LM-owned OTP challenges (no plaintext OTP / E.164 at rest).
+model OtpChallenge {
+  id                   String             @id @default(uuid()) @db.Uuid
+  provider             String
+  subjectKey           String             @map("subject_key")
+  codeHash             String             @map("code_hash")
+  status               OtpChallengeStatus @default(pending)
+  deliveryState        OtpDeliveryState   @default(pending_send) @map("delivery_state")
+  attemptCount         Int                @default(0) @map("attempt_count")
+  sendCount            Int                @default(0) @map("send_count")
+  expiresAt            DateTime           @map("expires_at") @db.Timestamptz(6)
+  consumedAt           DateTime?          @map("consumed_at") @db.Timestamptz(6)
+  lastSentAt           DateTime?          @map("last_sent_at") @db.Timestamptz(6)
+  /// Optional short-lived sealed destination; null by default (ADR-020 U9).
+  sealedDestination    String?            @map("sealed_destination")
+  noticeVersion        String             @map("notice_version")
+  noticeLocale         String             @map("notice_locale")
+  noticePresentedAt    DateTime           @map("notice_presented_at") @db.Timestamptz(6)
+  presentationSurface  String?            @map("presentation_surface")
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  deliveryAttempts OtpDeliveryAttempt[]
+
+  @@index([provider, subjectKey], map: "otp_challenges_provider_subject_idx")
+  @@index([expiresAt], map: "otp_challenges_expires_at_idx")
+  @@index([createdAt], map: "otp_challenges_created_at_idx")
+  @@map("otp_challenges")
+}
+
+/// FK-safe delivery evidence (ADR-020 §13.1): ON DELETE SET NULL + snapshot; no CASCADE.
+model OtpDeliveryAttempt {
+  id                  String        @id @default(uuid()) @db.Uuid
+  challengeId         String?       @map("challenge_id") @db.Uuid
+  challengeIdSnapshot String        @map("challenge_id_snapshot") @db.Uuid
+  adapter             String
+  result              String
+  providerMessageId   String?       @map("provider_message_id")
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  challenge OtpChallenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+
+  @@index([challengeId], map: "otp_delivery_attempts_challenge_idx")
+  @@index([challengeIdSnapshot], map: "otp_delivery_attempts_challenge_snapshot_idx")
+  @@index([createdAt], map: "otp_delivery_attempts_created_at_idx")
+  @@map("otp_delivery_attempts")
+}
+
+/// Durable multi-replica SMS/verify abuse counters (ADR-020 §8.1).
+model OtpAbuseCounter {
+  bucketType  String   @map("bucket_type")
+  bucketKey   String   @map("bucket_key")
+  windowStart DateTime @map("window_start") @db.Timestamptz(6)
+  sendCount   Int      @default(0) @map("send_count")
+  verifyCount Int      @default(0) @map("verify_count")
+
+  @@id([bucketType, bucketKey, windowStart], map: "otp_abuse_counters_pkey")
+  @@map("otp_abuse_counters")
 }
 
 /// Provider-linked identity. Unique active (provider, provider_subject).

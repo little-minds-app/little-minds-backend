@@ -65,5 +65,23 @@ void main() {
       // TODO
     });
 
+    // Start GSM OTP challenge (ADR-020)
+    //
+    // Unauthenticated. Türkiye (+90) only Day-1. Requires uniform `notice_version` + `notice_locale` (KVKK Option A). Never returns OTP. Anti-enumeration: response shape identical for existing vs new parents. 
+    //
+    //Future<PhoneOtpStartResponse> startPhoneOtp(PhoneOtpStartRequest phoneOtpStartRequest) async
+    test('test startPhoneOtp', () async {
+      // TODO
+    });
+
+    // Verify GSM OTP and mint parent session (ADR-020)
+    //
+    // Uniform for existing and new parents (U7 Option A creates parent on first success). No privacy fields on verify — notice bound at start. Returns ADR-019 TokenPairResponse via SessionIssuerService.mintSessionTx. 
+    //
+    //Future<TokenPairResponse> verifyPhoneOtp(PhoneOtpVerifyRequest phoneOtpVerifyRequest) async
+    test('test verifyPhoneOtp', () async {
+      // TODO
+    });
+
   });
 }

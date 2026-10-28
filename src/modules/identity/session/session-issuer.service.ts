@@ -67,79 +67,99 @@ export class SessionIssuerService {
     return hashRefreshToken(refreshToken, this.pepper());
   }
 
-  async mintSession(input: MintSessionInput): Promise<TokenPair> {
-    const db = this.prisma.db;
+  /**
+   * DB-only mint on a supplied transaction (ADR-020 U13 / LMP-34).
+   * Callers that need atomic consume+identity+session must use this inside
+   * their outer `$transaction`, then {@link signTokenPair} after commit.
+   */
+  async mintSessionTx(
+    tx: TxClient,
+    input: MintSessionInput,
+  ): Promise<{ sessionId: string; parentId: string; refreshToken: string }> {
     const refreshToken = generateRefreshToken();
     const refreshTokenHash = hashRefreshToken(refreshToken, this.pepper());
     const sessionId = randomUUID();
     const tokenFamilyId = randomUUID();
 
-    await db.$transaction(async (tx) => {
-      // Serialize mint per parent so the 20-session cap is concurrency-safe.
-      const locked = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM parent_accounts
-        WHERE id = ${input.parentId}::uuid
-        FOR UPDATE
-      `;
-      if (locked.length === 0) {
-        throwUnauthorized('invalid_token', 'Parent account is not active');
-      }
+    // Serialize mint per parent so the 20-session cap is concurrency-safe.
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM parent_accounts
+      WHERE id = ${input.parentId}::uuid
+      FOR UPDATE
+    `;
+    if (locked.length === 0) {
+      throwUnauthorized('invalid_token', 'Parent account is not active');
+    }
 
-      const parent = await tx.parentAccount.findUnique({
-        where: { id: input.parentId },
-      });
-      if (
-        !parent ||
-        parent.deletedAt ||
-        parent.lifecycle !== ParentAccountLifecycle.active
-      ) {
-        throwUnauthorized('invalid_token', 'Parent account is not active');
-      }
+    const parent = await tx.parentAccount.findUnique({
+      where: { id: input.parentId },
+    });
+    if (
+      !parent ||
+      parent.deletedAt ||
+      parent.lifecycle !== ParentAccountLifecycle.active
+    ) {
+      throwUnauthorized('invalid_token', 'Parent account is not active');
+    }
 
-      const now = new Date();
-      const activeCount = await tx.parentSession.count({
-        where: {
-          parentId: input.parentId,
-          revokedAt: null,
-          expiresAt: { gt: now },
-        },
-      });
-      if (activeCount >= MAX_ACTIVE_SESSIONS_PER_PARENT) {
-        throwForbidden(
-          'session_limit_exceeded',
-          'Maximum active sessions reached',
-        );
-      }
+    const now = new Date();
+    const activeCount = await tx.parentSession.count({
+      where: {
+        parentId: input.parentId,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+    });
+    if (activeCount >= MAX_ACTIVE_SESSIONS_PER_PARENT) {
+      throwForbidden(
+        'session_limit_exceeded',
+        'Maximum active sessions reached',
+      );
+    }
 
-      await tx.parentSession.create({
-        data: {
-          id: sessionId,
-          parentId: input.parentId,
-          tokenFamilyId,
-          refreshTokenHash,
-          refreshTokenHashHistory: [],
-          refreshGeneration: 0,
-          expiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_TTL_MS),
-          deviceId: input.deviceId ?? null,
-          clientSurface: input.clientSurface ?? null,
-          userAgentSummary: input.userAgentSummary ?? null,
-        },
-      });
+    await tx.parentSession.create({
+      data: {
+        id: sessionId,
+        parentId: input.parentId,
+        tokenFamilyId,
+        refreshTokenHash,
+        refreshTokenHashHistory: [],
+        refreshGeneration: 0,
+        expiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_TTL_MS),
+        deviceId: input.deviceId ?? null,
+        clientSurface: input.clientSurface ?? null,
+        userAgentSummary: input.userAgentSummary ?? null,
+      },
     });
 
+    return { sessionId, parentId: input.parentId, refreshToken };
+  }
+
+  /** Sign access JWT after a successful mint DB commit (post-commit; no rollback). */
+  async signTokenPair(minted: {
+    sessionId: string;
+    parentId: string;
+    refreshToken: string;
+  }): Promise<TokenPair> {
     const accessToken = await this.jwt.signAccessToken({
-      parentId: input.parentId,
-      sessionId,
+      parentId: minted.parentId,
+      sessionId: minted.sessionId,
     });
-
     return {
       access_token: accessToken,
-      refresh_token: refreshToken,
+      refresh_token: minted.refreshToken,
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
-      session_id: sessionId,
-      parent_id: input.parentId,
+      session_id: minted.sessionId,
+      parent_id: minted.parentId,
     };
+  }
+
+  async mintSession(input: MintSessionInput): Promise<TokenPair> {
+    const minted = await this.prisma.db.$transaction((tx) =>
+      this.mintSessionTx(tx, input),
+    );
+    return this.signTokenPair(minted);
   }
 
   async refresh(refreshToken: string): Promise<TokenPair> {

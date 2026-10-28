@@ -3,14 +3,14 @@ info:
   title: Little Minds Backend API
   description: |
     Authoritative OpenAPI contract for little-minds-backend (ADR-014).
-    Paths: health/readiness plus LMP-33 parent session lifecycle (`/v1/auth/*`, `/v1/parent/me`).
+    Paths: health/readiness, LMP-33 parent session lifecycle, and LMP-34 GSM OTP
+    (`POST /v1/auth/phone/start|verify` per ADR-020).
     LMP-32 adds structured logging / correlation (not path surface) plus readiness.
     LMP-50 adds ActivitySessionV1 / ActivityEventV1 **components** for versioned
     event contracts. Live `POST /v1/events/batch` is intentionally **not** published
     here — ingest lands in a later Jira task. Authoritative Ajv JSON Schemas live under
     `contracts/schemas/activity/` (`schema_version` 1.0.0, independent of this info.version).
-    GSM OTP routes are LMP-34 and are not published here.
-  version: 0.4.0
+  version: 0.5.0
   contact:
     name: Little Minds
 servers:
@@ -20,7 +20,7 @@ tags:
   - name: Health
     description: Unauthenticated liveness and readiness (alert-ready signals; no paid vendors)
   - name: Auth
-    description: Parent session lifecycle (ADR-019 / LMP-33)
+    description: Parent session lifecycle (ADR-019 / LMP-33) and GSM OTP (ADR-020 / LMP-34)
   - name: Parent
     description: Authenticated parent identity probe
 paths:
@@ -232,6 +232,92 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthError'
+  /v1/auth/phone/start:
+    post:
+      operationId: startPhoneOtp
+      tags: [Auth]
+      summary: Start GSM OTP challenge (ADR-020)
+      description: |
+        Unauthenticated. Türkiye (+90) only Day-1. Requires uniform
+        `notice_version` + `notice_locale` (KVKK Option A). Never returns OTP.
+        Anti-enumeration: response shape identical for existing vs new parents.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneOtpStartRequest'
+      responses:
+        '200':
+          description: Challenge issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhoneOtpStartResponse'
+        '400':
+          description: Malformed phone or invalid notice presentation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '429':
+          description: Cooldown or rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '503':
+          description: SMS unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+  /v1/auth/phone/verify:
+    post:
+      operationId: verifyPhoneOtp
+      tags: [Auth]
+      summary: Verify GSM OTP and mint parent session (ADR-020)
+      description: |
+        Uniform for existing and new parents (U7 Option A creates parent on first
+        success). No privacy fields on verify — notice bound at start. Returns
+        ADR-019 TokenPairResponse via SessionIssuerService.mintSessionTx.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneOtpVerifyRequest'
+      responses:
+        '200':
+          description: Token pair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPairResponse'
+        '400':
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '401':
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '403':
+          description: Session limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
   /v1/auth/dev/session:
     post:
       operationId: createDevParentSession
@@ -408,8 +494,65 @@ components:
             - rate_limited
             - session_limit_exceeded
             - bootstrap_disabled
+            - otp_invalid
+            - otp_cooldown
+            - sms_unavailable
         message:
           type: string
+    PhoneOtpStartRequest:
+      type: object
+      additionalProperties: false
+      required: [phone, notice_version, notice_locale]
+      properties:
+        phone:
+          type: string
+          minLength: 5
+          maxLength: 32
+        country_code:
+          type: string
+          maxLength: 8
+        notice_version:
+          type: string
+          maxLength: 64
+          description: |
+            KVKK Option A — uniform for ALL callers. Must equal server active
+            published notice version. Not consent. Not required on verify.
+        notice_locale:
+          type: string
+          maxLength: 16
+        client_surface:
+          type: string
+          maxLength: 32
+        device_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+    PhoneOtpStartResponse:
+      type: object
+      additionalProperties: false
+      required: [challenge_id, expires_in, resend_after]
+      properties:
+        challenge_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        expires_in:
+          type: integer
+          enum: [300]
+        resend_after:
+          type: integer
+          enum: [60]
+    PhoneOtpVerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [challenge_id, code]
+      properties:
+        challenge_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+        client_surface:
+          type: string
+          maxLength: 32
+        device_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
     ParentSessionSummary:
       type: object
       additionalProperties: false

@@ -52,4 +52,4 @@ Owned by **LMP-34**. Design ADR (**Accepted** 2026-10-28): [`docs/adr/ADR-020-gs
 - **U7 Option A (Accepted):** first successful verify may create parent + phone identity (no silent cross-provider merge).
 - Privacy notice **Option A (Accepted):** present notice before phone submit; uniform `notice_version`+`notice_locale` on **start**; **verify** has no privacy fields; notice ≠ optional consent; legal review before production.
 - Implementation (Phase B) must call ADR-019 `SessionIssuerService` via `mintSessionTx` (ADR-020 §9). Post-commit JWT/HTTP failures are not rolled back — clients must handle ambiguous verify carefully. Do not invent a second session store.
-- Live OpenAPI phone routes land only in the LMP-34 **implementation** PR (`0.5.0`); docs Accept PR keeps **`0.4.0`**.
+- Live OpenAPI phone routes: **`0.5.0`** (`POST /v1/auth/phone/start|verify`) in the LMP-34 implementation PR. FakeSmsSender only in development/test; paid SMS unapproved.

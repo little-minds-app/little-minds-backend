@@ -22,6 +22,9 @@ async function bootstrap(): Promise<void> {
       infer: true,
     }),
     LISTEN_HOST: listenHost,
+    SMS_SENDER: config.get('SMS_SENDER', { infer: true }),
+    OTP_PEPPER: config.get('OTP_PEPPER', { infer: true }),
+    PHONE_SUBJECT_PEPPER: config.get('PHONE_SUBJECT_PEPPER', { infer: true }),
   });
 
   const logger = new Logger('Bootstrap');
