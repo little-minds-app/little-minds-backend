@@ -437,4 +437,25 @@ describe('SessionIssuerService (LMP-33)', () => {
       issuer.logout({ sessionId: pair.session_id, parentId }),
     ).resolves.toBeUndefined();
   });
+
+  it('refreshRateLimitKey is a peppered hash, not a token prefix', async () => {
+    const { issuer } = await build();
+    const token = `lmrt_${'a'.repeat(48)}`;
+    const key = issuer.refreshRateLimitKey(token);
+    expect(key).toMatch(/^[0-9a-f]{64}$/);
+    expect(key.includes(token.slice(0, 24))).toBe(false);
+    expect(key.startsWith('lmrt_')).toBe(false);
+  });
+
+  it('rejects refresh when parent lifecycle is no longer active', async () => {
+    const { issuer, mem } = await build();
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const pair = await issuer.mintSession({ parentId });
+    const parent = mem.parents.get(parentId)!;
+    parent.lifecycle = ParentAccountLifecycle.deleted;
+    mem.parents.set(parentId, parent);
+    await expect(issuer.refresh(pair.refresh_token)).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'invalid_token' }),
+    });
+  });
 });
