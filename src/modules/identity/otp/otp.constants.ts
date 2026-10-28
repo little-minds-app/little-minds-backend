@@ -27,10 +27,16 @@ export const WINDOW_1M_MS = 60 * 1000;
 export const CHALLENGE_RETENTION_MS = 24 * 60 * 60 * 1000;
 /** Delivery attempt retention (U16). */
 export const DELIVERY_ATTEMPT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+/** Abuse counter rows older than this are purged with retention. */
+export const ABUSE_COUNTER_RETENTION_MS = 48 * 60 * 60 * 1000;
 
-/** Server-owned V1 privacy notice catalog (Option A). */
-export const ACTIVE_PRIVACY_NOTICE_VERSION = 'v1-tr-2026-10';
-export const ACTIVE_PRIVACY_NOTICE_LOCALE = 'tr-TR';
+/** Retention tick interval (dev/test friendly; production still fail-closed SMS). */
+export const OTP_RETENTION_INTERVAL_MS = 15 * 60 * 1000;
+
+export {
+  ACTIVE_PRIVACY_NOTICE_VERSION,
+  ACTIVE_PRIVACY_NOTICE_LOCALE,
+} from './privacy-notice.catalog';
 
 export const SMS_ADAPTER_FAKE = 'fake' as const;
 export const SMS_ADAPTER_PRODUCTION = 'production' as const;

@@ -1,7 +1,8 @@
 import { Body, Controller, HttpCode, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
-import { throwInvalidRequest } from '../session/auth.errors';
+import { throwInvalidRequest, throwOtpInvalid } from '../session/auth.errors';
 import { PhoneOtpService } from '../otp/phone-otp.service';
+import { isUuidV4OrV7 } from '../otp/otp-uuid';
 
 @Controller()
 export class PhoneAuthController {
@@ -59,6 +60,10 @@ export class PhoneAuthController {
       typeof body?.code !== 'string'
     ) {
       throwInvalidRequest('Invalid request');
+    }
+    // Malformed UUID → generic otp_invalid (no Postgres cast 500 / no enum leak).
+    if (!isUuidV4OrV7(body.challenge_id)) {
+      throwOtpInvalid();
     }
     const ua =
       typeof req.headers['user-agent'] === 'string'

@@ -7,6 +7,7 @@ import { ParentController } from './controllers/parent.controller';
 import { PhoneAuthController } from './controllers/phone-auth.controller';
 import { ParentAuthGuard } from './auth/parent-auth.guard';
 import { OtpAbuseService } from './otp/otp-abuse.service';
+import { OtpRetentionService } from './otp/otp-retention.service';
 import { PhoneOtpService } from './otp/phone-otp.service';
 import { AuthRateLimitService } from './session/auth-rate-limit.service';
 import { JwtAccessService } from './session/jwt-access.service';
@@ -31,6 +32,7 @@ import { SMS_SENDER } from './sms/sms-sender';
     AuthRateLimitService,
     ParentAuthGuard,
     OtpAbuseService,
+    OtpRetentionService,
     PhoneOtpService,
     FakeSmsSender,
     DisabledProductionSmsSender,

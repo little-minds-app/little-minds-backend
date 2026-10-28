@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   OtpChallengeStatus,
@@ -6,11 +6,11 @@ import {
   ParentAccountLifecycle,
   type Prisma,
 } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import type { Request } from 'express';
 import type { AppEnv } from '../../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { clientIp } from '../auth/client-ip';
-import type { Request } from 'express';
 import {
   throwInvalidRequest,
   throwOtpInvalid,
@@ -21,7 +21,11 @@ import {
   SessionIssuerService,
   type TokenPair,
 } from '../session/session-issuer.service';
-import { SMS_SENDER, type SmsSender } from '../sms/sms-sender';
+import {
+  SMS_SENDER,
+  type SmsSendResult,
+  type SmsSender,
+} from '../sms/sms-sender';
 import { OtpAbuseService } from './otp-abuse.service';
 import {
   generateOtpCode,
@@ -30,9 +34,9 @@ import {
   verifyOtpCode,
 } from './otp-crypto';
 import { normalizeTrMobileE164 } from './phone-normalize';
+import { isActivePrivacyNoticePair } from './privacy-notice.catalog';
+import { isUuidV4OrV7 } from './otp-uuid';
 import {
-  ACTIVE_PRIVACY_NOTICE_LOCALE,
-  ACTIVE_PRIVACY_NOTICE_VERSION,
   OTP_MAX_WRONG_ATTEMPTS,
   OTP_RESEND_COOLDOWN_SECONDS,
   OTP_TTL_SECONDS,
@@ -64,8 +68,19 @@ export type PhoneVerifyInput = {
 
 type TxClient = Prisma.TransactionClient;
 
+/**
+ * Ambiguous SMS send policy (ADR-020):
+ * - Challenge is committed **before** SMS (locks not held during send).
+ * - If the adapter throws or returns failure → delivery_attempt=failed,
+ *   challenge delivery_state=failed, HTTP `503 sms_unavailable`.
+ * - If send succeeds but the HTTP response is lost, the challenge may still
+ *   be pending/sent; clients must honor cooldown / start a new challenge
+ *   rather than assuming the code was never issued.
+ */
 @Injectable()
 export class PhoneOtpService {
+  private readonly logger = new Logger(PhoneOtpService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessions: SessionIssuerService,
@@ -91,18 +106,24 @@ export class PhoneOtpService {
   }
 
   private assertNotice(version: string, locale: string): void {
-    if (
-      version !== ACTIVE_PRIVACY_NOTICE_VERSION ||
-      locale !== ACTIVE_PRIVACY_NOTICE_LOCALE
-    ) {
+    if (!isActivePrivacyNoticePair(version, locale)) {
       // Uniform invalid_request — same shape for all callers (U12 / Option A).
       throwInvalidRequest('Invalid request');
     }
   }
 
   private renderTrSmsBody(code: string): string {
-    // Vendor-neutral TR template (U11). Never log the body with code in prod logs.
+    // Vendor-neutral TR template (U11). Never log the body with code.
     return `Little Minds dogrulama kodu: ${code}. ${OTP_TTL_SECONDS / 60} dk gecerli.`;
+  }
+
+  /** Stable advisory lock key for (provider, subject) — replica-safe via PG. */
+  private subjectLockKey(subjectKey: string): number {
+    const digest = createHash('sha256')
+      .update(`${PHONE_PROVIDER}:${subjectKey}`)
+      .digest();
+    // Signed 32-bit int for pg_advisory_xact_lock(int4)
+    return digest.readInt32BE(0);
   }
 
   async start(req: Request, input: PhoneStartInput): Promise<PhoneStartResult> {
@@ -125,9 +146,12 @@ export class PhoneOtpService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + OTP_TTL_SECONDS * 1000);
     const noticePresentedAt = now;
+    const lockKey = this.subjectLockKey(subjectKey);
 
-    // Persist challenge + abuse counters; SMS outside locks (ADR-020 §9).
+    // Persist challenge + abuse counters under advisory lock; SMS outside txn.
     await this.prisma.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
+
       await this.abuse.assertAndIncrementSms({ subjectKey, ip, tx });
 
       const pending = await tx.otpChallenge.findFirst({
@@ -137,13 +161,20 @@ export class PhoneOtpService {
           status: OtpChallengeStatus.pending,
         },
       });
-      if (pending?.lastSentAt) {
-        const elapsed = now.getTime() - pending.lastSentAt.getTime();
+      if (pending) {
+        // In-flight send (no lastSentAt yet) or within cooldown → otp_cooldown.
+        // Prevents concurrent starts from superseding mid-SMS outside the txn.
+        if (!pending.lastSentAt) {
+          throwOtpCooldown();
+        }
+        const clock = await tx.$queryRaw<Array<{ now: Date }>>`
+          SELECT clock_timestamp() AS now
+        `;
+        const dbNow = clock[0]?.now ?? now;
+        const elapsed = dbNow.getTime() - pending.lastSentAt.getTime();
         if (elapsed < OTP_RESEND_COOLDOWN_SECONDS * 1000) {
           throwOtpCooldown();
         }
-      }
-      if (pending) {
         await tx.otpChallenge.update({
           where: { id: pending.id },
           data: {
@@ -153,26 +184,39 @@ export class PhoneOtpService {
         });
       }
 
-      await tx.otpChallenge.create({
-        data: {
-          id: challengeId,
-          provider: PHONE_PROVIDER,
-          subjectKey,
-          codeHash,
-          status: OtpChallengeStatus.pending,
-          deliveryState: OtpDeliveryState.pending_send,
-          attemptCount: 0,
-          sendCount: 0,
-          expiresAt,
-          noticeVersion: input.noticeVersion,
-          noticeLocale: input.noticeLocale,
-          noticePresentedAt,
-          presentationSurface: input.clientSurface ?? null,
-        },
-      });
+      try {
+        await tx.otpChallenge.create({
+          data: {
+            id: challengeId,
+            provider: PHONE_PROVIDER,
+            subjectKey,
+            codeHash,
+            status: OtpChallengeStatus.pending,
+            deliveryState: OtpDeliveryState.pending_send,
+            attemptCount: 0,
+            sendCount: 0,
+            expiresAt,
+            noticeVersion: input.noticeVersion,
+            noticeLocale: input.noticeLocale,
+            noticePresentedAt,
+            presentationSurface: input.clientSurface ?? null,
+          },
+        });
+      } catch (err) {
+        // Partial unique index race — treat as cooldown/conflict (generic).
+        if (
+          err &&
+          typeof err === 'object' &&
+          'code' in err &&
+          (err as { code?: string }).code === 'P2002'
+        ) {
+          throwOtpCooldown();
+        }
+        throw err;
+      }
     });
 
-    const sendResult = await this.sms.send({
+    const sendResult = await this.safeSendSms({
       e164: normalized.e164,
       body: this.renderTrSmsBody(code),
       challengeId,
@@ -190,15 +234,20 @@ export class PhoneOtpService {
     });
 
     if (!sendResult.ok) {
+      // Free the pending unique slot so callers may retry after sms_unavailable
+      // (abuse counters still apply). Do not leave a forever-pending row.
       await this.prisma.db.otpChallenge.update({
         where: { id: challengeId },
-        data: { deliveryState: OtpDeliveryState.failed },
+        data: {
+          status: OtpChallengeStatus.superseded,
+          deliveryState: OtpDeliveryState.failed,
+        },
       });
       throwSmsUnavailable();
     }
 
-    await this.prisma.db.otpChallenge.update({
-      where: { id: challengeId },
+    await this.prisma.db.otpChallenge.updateMany({
+      where: { id: challengeId, status: OtpChallengeStatus.pending },
       data: {
         deliveryState: OtpDeliveryState.sent,
         lastSentAt: new Date(),
@@ -213,15 +262,47 @@ export class PhoneOtpService {
     };
   }
 
+  /**
+   * Never let adapter exceptions escape as 500s with stack/PII.
+   * Persist failure path is handled by the caller.
+   */
+  private async safeSendSms(input: {
+    e164: string;
+    body: string;
+    challengeId: string;
+  }): Promise<SmsSendResult> {
+    try {
+      return await this.sms.send(input);
+    } catch {
+      // Do not log e164, body, or exception message (may contain OTP).
+      this.logger.warn(
+        `sms_adapter_error adapter=${this.sms.adapterName} challenge=${input.challengeId}`,
+      );
+      return {
+        ok: false,
+        adapter: this.sms.adapterName,
+        errorCode: 'adapter_error',
+      };
+    }
+  }
+
   async verify(req: Request, input: PhoneVerifyInput): Promise<TokenPair> {
     if (!/^[0-9]{6}$/.test(input.code)) {
       throwInvalidRequest('Invalid request');
     }
+    // Validate UUID before `::uuid` cast — malformed → generic otp_invalid.
+    if (!isUuidV4OrV7(input.challengeId)) {
+      throwOtpInvalid();
+    }
+
     const ip = clientIp(req);
     await this.abuse.assertAndIncrementVerifyIp(ip);
 
     type VerifyOutcome =
-      | { kind: 'ok'; minted: { sessionId: string; parentId: string; refreshToken: string } }
+      | {
+          kind: 'ok';
+          minted: { sessionId: string; parentId: string; refreshToken: string };
+        }
       | { kind: 'invalid' }
       | { kind: 'locked' };
 
@@ -252,7 +333,6 @@ export class PhoneOtpService {
         }
         const row = locked[0];
 
-        // Authoritative time after lock (ADR-020 §11).
         const clock = await tx.$queryRaw<Array<{ now: Date }>>`
           SELECT clock_timestamp() AS now
         `;
@@ -307,7 +387,7 @@ export class PhoneOtpService {
           data: {
             status: OtpChallengeStatus.consumed,
             consumedAt: now,
-            codeHash: '', // scrub after consume
+            codeHash: '',
           },
         });
 
@@ -324,7 +404,6 @@ export class PhoneOtpService {
     if (outcome.kind !== 'ok') {
       throwOtpInvalid();
     }
-    // Post-commit JWT sign — no DB rollback if this fails (ADR-020 §9.4).
     return this.sessions.signTokenPair(outcome.minted);
   }
 
@@ -358,7 +437,6 @@ export class PhoneOtpService {
       return existing.parentId;
     }
 
-    // U7 Option A — create parent + phone identity + notice evidence.
     const parentId = randomUUID();
     await tx.parentAccount.create({
       data: {

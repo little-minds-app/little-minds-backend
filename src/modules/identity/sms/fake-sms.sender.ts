@@ -20,6 +20,10 @@ type InboxEntry = {
 export class FakeSmsSender implements SmsSender {
   readonly adapterName = SMS_ADAPTER_FAKE;
   private readonly inbox = new Map<string, InboxEntry>();
+  /** Test-only: next send returns ok:false without throwing. */
+  private failNext = false;
+  /** Test-only: next send throws (adapter crash / network). */
+  private throwNext = false;
 
   constructor(private readonly config: ConfigService<AppEnv, true>) {}
 
@@ -34,6 +38,19 @@ export class FakeSmsSender implements SmsSender {
   }
 
   async send(input: SmsSendInput): Promise<SmsSendResult> {
+    if (this.throwNext) {
+      this.throwNext = false;
+      throw new Error('injected sms adapter throw — must not leak to HTTP');
+    }
+    if (this.failNext) {
+      this.failNext = false;
+      return {
+        ok: false,
+        adapter: this.adapterName,
+        errorCode: 'injected_failure',
+      };
+    }
+
     const appEnv = this.config.get('APP_ENV', { infer: true });
     if (appEnv === 'staging' || appEnv === 'production') {
       return {
@@ -64,7 +81,19 @@ export class FakeSmsSender implements SmsSender {
     return this.inbox.get(challengeId)?.code;
   }
 
+  /** Test harness: next `send` returns structured failure. */
+  failNextSendForTests(): void {
+    this.failNext = true;
+  }
+
+  /** Test harness: next `send` throws (failure-injection). */
+  throwNextSendForTests(): void {
+    this.throwNext = true;
+  }
+
   clearInboxForTests(): void {
     this.inbox.clear();
+    this.failNext = false;
+    this.throwNext = false;
   }
 }

@@ -181,4 +181,28 @@ describePhone('POST /v1/auth/phone/* (LMP-34 e2e)', () => {
       .send({ challenge_id: start.body.challenge_id, code })
       .expect(200);
   });
+
+  it('malformed challenge_id returns otp_invalid (not 500)', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/v1/auth/phone/verify')
+      .send({ challenge_id: 'not-a-uuid', code: '123456' })
+      .expect(401);
+    expect(res.body.error).toBe('otp_invalid');
+    expect(res.body.message).toBeTruthy();
+  });
+
+  it('SMS adapter throw normalizes to sms_unavailable without leaking', async () => {
+    fakeSms.throwNextSendForTests();
+    const res = await request(app.getHttpServer())
+      .post('/v1/auth/phone/start')
+      .send({
+        phone: '+905556667788',
+        notice_version: ACTIVE_PRIVACY_NOTICE_VERSION,
+        notice_locale: ACTIVE_PRIVACY_NOTICE_LOCALE,
+      })
+      .expect(503);
+    expect(res.body.error).toBe('sms_unavailable');
+    expect(JSON.stringify(res.body)).not.toMatch(/injected sms/i);
+    expect(JSON.stringify(res.body)).not.toMatch(/\+905556667788/);
+  });
 });

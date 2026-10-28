@@ -25,3 +25,4 @@ Parent identity session lifecycle and GSM OTP sign-in inside the Nest modular mo
 
 - Sessions: `docs/adr/ADR-019-parent-identity-secure-session-lifecycle.md` (**Accepted**)
 - GSM OTP: `docs/adr/ADR-020-gsm-otp-sign-in.md` (**Accepted** 2026-10-28 — U7 Option A + notice Option A + U1–U17; U18–U20 deferred)
+- Privacy notice catalog (engineering placeholder / legal blocker): `docs/privacy-notice-catalog.md`
