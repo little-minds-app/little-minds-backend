@@ -8,6 +8,7 @@ const REQUIRED_MODELS = [
   'ParentAccount',
   'ParentIdentity',
   'ParentSession',
+  'ParentSessionRefreshHashLookup',
   'ParentProfile',
   'ProfileDraft',
   'ChildProfile',
