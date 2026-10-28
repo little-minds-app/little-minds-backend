@@ -50,5 +50,6 @@ Owned by **LMP-34**. Design ADR (**Proposed**): [`docs/adr/ADR-020-gsm-otp-sign-
 - Little Minds owns OTP generate/verify; SMS providers are **delivery-only** adapters (`FakeSmsSender` locally; commercial candidates gated).
 - **Not** Firebase Phone Auth / Twilio Verify as system of record.
 - Human-selected **U7 Option A:** first successful verify may create parent + phone identity (no silent cross-provider merge).
-- After Accept, verify must call ADR-019 `SessionIssuerService` (likely via a `mintSessionTx` refactor — see ADR-020 §8). Do not invent a second session store.
+- Recommended privacy: present notice before/at phone collect; bind server-owned notice evidence on **start**; **verify** stays uniform (no `privacy_notice_version`); notice ≠ optional consent.
+- After Accept, verify must call ADR-019 `SessionIssuerService` via `mintSessionTx` (ADR-020 §9). Do not invent a second session store.
 - Live OpenAPI phone routes land only in the LMP-34 implementation PR (`0.5.0`); this tree stays **`0.4.0`** until then.

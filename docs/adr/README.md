@@ -58,7 +58,7 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 
 | ADR | Title | Jira | Notes |
 |---|---|---|---|
-| **ADR-020 (Proposed)** | GSM OTP sign-in — LM-owned OTP + delivery-only SMS adapters | [LMP-34](https://little-minds-app.atlassian.net/browse/LMP-34) | **Selected:** LM-owned OTP (not Firebase Phone Auth / Twilio Verify SoR); SMS delivery-only; **U7 Option A**. **Proposed/deferred:** U1–U6, U8–U20 until Accept. Netgsm/Twilio/Plivo = future candidates only. [Decision](./ADR-020-gsm-otp-sign-in.md) · [Sketch](./lmp-34-otp-api-contract-sketch.md). Docs-only; live OpenAPI `0.4.0`. |
+| **ADR-020 (Proposed)** | GSM OTP sign-in — LM-owned OTP + delivery-only SMS adapters | [LMP-34](https://little-minds-app.atlassian.net/browse/LMP-34) | **Selected:** LM-owned OTP; delivery-only SMS; **U7 Option A**. **Recommended:** KVKK notice≠consent; challenge-bound notice at start; uniform verify (no existence oracle). **Proposed/deferred:** U1–U6, U8–U20. [Decision](./ADR-020-gsm-otp-sign-in.md) · [Sketch](./lmp-34-otp-api-contract-sketch.md). Docs-only; OpenAPI `0.4.0`. |
 
 ---
 
