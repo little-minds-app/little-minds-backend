@@ -213,6 +213,10 @@ class ApiClient {
           return EmailOtpVerifyRequest.fromJson(value);
         case 'GoogleAuthRequest':
           return GoogleAuthRequest.fromJson(value);
+        case 'GooglePkceStartRequest':
+          return GooglePkceStartRequest.fromJson(value);
+        case 'GooglePkceStartResponse':
+          return GooglePkceStartResponse.fromJson(value);
         case 'HealthStatus':
           return HealthStatus.fromJson(value);
         case 'LogoutAllResponse':

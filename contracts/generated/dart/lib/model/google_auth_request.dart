@@ -18,6 +18,7 @@ class GoogleAuthRequest {
     this.authorizationCode,
     this.codeVerifier,
     this.redirectUri,
+    this.oauthState,
     required this.noticeVersion,
     required this.noticeLocale,
     this.clientSurface,
@@ -64,6 +65,15 @@ class GoogleAuthRequest {
   ///
   String? redirectUri;
 
+  /// Server-issued state from POST /v1/auth/google/pkce/start
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  String? oauthState;
+
   String noticeVersion;
 
   String noticeLocale;
@@ -92,6 +102,7 @@ class GoogleAuthRequest {
     other.authorizationCode == authorizationCode &&
     other.codeVerifier == codeVerifier &&
     other.redirectUri == redirectUri &&
+    other.oauthState == oauthState &&
     other.noticeVersion == noticeVersion &&
     other.noticeLocale == noticeLocale &&
     other.clientSurface == clientSurface &&
@@ -105,13 +116,14 @@ class GoogleAuthRequest {
     (authorizationCode == null ? 0 : authorizationCode!.hashCode) +
     (codeVerifier == null ? 0 : codeVerifier!.hashCode) +
     (redirectUri == null ? 0 : redirectUri!.hashCode) +
+    (oauthState == null ? 0 : oauthState!.hashCode) +
     (noticeVersion.hashCode) +
     (noticeLocale.hashCode) +
     (clientSurface == null ? 0 : clientSurface!.hashCode) +
     (deviceId == null ? 0 : deviceId!.hashCode);
 
   @override
-  String toString() => 'GoogleAuthRequest[idToken=$idToken, nonce=$nonce, authorizationCode=$authorizationCode, codeVerifier=$codeVerifier, redirectUri=$redirectUri, noticeVersion=$noticeVersion, noticeLocale=$noticeLocale, clientSurface=$clientSurface, deviceId=$deviceId]';
+  String toString() => 'GoogleAuthRequest[idToken=$idToken, nonce=$nonce, authorizationCode=$authorizationCode, codeVerifier=$codeVerifier, redirectUri=$redirectUri, oauthState=$oauthState, noticeVersion=$noticeVersion, noticeLocale=$noticeLocale, clientSurface=$clientSurface, deviceId=$deviceId]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -139,6 +151,11 @@ class GoogleAuthRequest {
       json[r'redirect_uri'] = this.redirectUri;
     } else {
       json[r'redirect_uri'] = null;
+    }
+    if (this.oauthState != null) {
+      json[r'oauth_state'] = this.oauthState;
+    } else {
+      json[r'oauth_state'] = null;
     }
       json[r'notice_version'] = this.noticeVersion;
       json[r'notice_locale'] = this.noticeLocale;
@@ -179,6 +196,7 @@ class GoogleAuthRequest {
         authorizationCode: mapValueOfType<String>(json, r'authorization_code'),
         codeVerifier: mapValueOfType<String>(json, r'code_verifier'),
         redirectUri: mapValueOfType<String>(json, r'redirect_uri'),
+        oauthState: mapValueOfType<String>(json, r'oauth_state'),
         noticeVersion: mapValueOfType<String>(json, r'notice_version')!,
         noticeLocale: mapValueOfType<String>(json, r'notice_locale')!,
         clientSurface: mapValueOfType<String>(json, r'client_surface'),

@@ -28,7 +28,7 @@ void main() {
 
     // Google Sign-In nonce or auth-code+PKCE (ADR-021)
     //
-    // Prefer ID token + mandatory nonce. Else authorization_code + code_verifier (PKCE) with server-side token exchange then JWKS verify. Never accepts ID-token-without-nonce. Fail-closed when Google config / PKCE disabled. 
+    // Prefer ID token + mandatory nonce. Else authorization_code + code_verifier + redirect_uri + **oauth_state** (from `POST /v1/auth/google/pkce/start`) — server atomically consumes the PKCE transaction, exchanges the code, then JWKS-verifies. Never accepts ID-token-without-nonce or unbound auth-code exchange. Fail-closed when Google config / PKCE disabled. 
     //
     //Future<TokenPairResponse> authenticateGoogle(GoogleAuthRequest googleAuthRequest) async
     test('test authenticateGoogle', () async {
@@ -46,9 +46,9 @@ void main() {
 
     // Issue short-lived OIDC nonce (ADR-021)
     //
-    // Unauthenticated. Returns a server-issued nonce for Apple / Google ID-token paths. Single-use; TTL 600s. Rate-limited per IP. 
+    // Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple or Google ID-token paths (`provider` required: apple|google). Single-use; TTL 600s. Rate-limited per IP. Cross-provider consume is rejected. 
     //
-    //Future<OidcNonceResponse> issueOidcNonce({ OidcNonceRequest oidcNonceRequest }) async
+    //Future<OidcNonceResponse> issueOidcNonce(OidcNonceRequest oidcNonceRequest) async
     test('test issueOidcNonce', () async {
       // TODO
     });
@@ -98,6 +98,15 @@ void main() {
     //
     //Future<EmailOtpStartResponse> startEmailOtp(EmailOtpStartRequest emailOtpStartRequest) async
     test('test startEmailOtp', () async {
+      // TODO
+    });
+
+    // Issue one-time Google PKCE OAuth transaction/state (ADR-021)
+    //
+    // Unauthenticated. Returns a server-issued opaque `state` bound to allowlisted `client_id`, `redirect_uri`, and PKCE `code_challenge` (S256). Single-use; TTL 600s. Required before `POST /v1/auth/google` authorization-code path (`oauth_state`). Fail-closed when PKCE disabled / Google misconfigured. Rate-limited per IP. 
+    //
+    //Future<GooglePkceStartResponse> startGooglePkce(GooglePkceStartRequest googlePkceStartRequest) async
+    test('test startGooglePkce', () async {
       // TODO
     });
 

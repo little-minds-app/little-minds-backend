@@ -15,6 +15,7 @@
     "/v1/auth/phone/start",
     "/v1/auth/phone/verify",
     "/v1/auth/oidc/nonce",
+    "/v1/auth/google/pkce/start",
     "/v1/auth/apple",
     "/v1/auth/google",
     "/v1/auth/email/start",

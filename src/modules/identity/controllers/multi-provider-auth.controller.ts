@@ -4,6 +4,7 @@ import { isUuidV4OrV7 } from '../otp/otp-uuid';
 import { EmailOtpService } from '../otp/email-otp.service';
 import { AppleIdentityService } from '../providers/apple-identity.service';
 import { GoogleIdentityService } from '../providers/google-identity.service';
+import { GooglePkceTransactionService } from '../providers/google-pkce-transaction.service';
 import { OidcNonceService } from '../providers/oidc-nonce.service';
 import {
   throwInvalidRequest,
@@ -17,6 +18,7 @@ export class MultiProviderAuthController {
     private readonly google: GoogleIdentityService,
     private readonly emailOtp: EmailOtpService,
     private readonly nonces: OidcNonceService,
+    private readonly googlePkce: GooglePkceTransactionService,
   ) {}
 
   @Post('v1/auth/oidc/nonce')
@@ -28,13 +30,39 @@ export class MultiProviderAuthController {
       provider?: unknown;
     },
   ) {
-    const providerRaw =
-      typeof body?.provider === 'string' ? body.provider : 'shared';
-    const provider =
-      providerRaw === 'apple' || providerRaw === 'google'
-        ? providerRaw
-        : 'shared';
-    return this.nonces.issue(req, provider);
+    if (body?.provider !== 'apple' && body?.provider !== 'google') {
+      throwInvalidRequest('Invalid request');
+    }
+    return this.nonces.issue(req, body.provider);
+  }
+
+  @Post('v1/auth/google/pkce/start')
+  @HttpCode(200)
+  async googlePkceStart(
+    @Req() req: Request,
+    @Body()
+    body: {
+      redirect_uri?: unknown;
+      code_challenge?: unknown;
+      code_challenge_method?: unknown;
+      client_id?: unknown;
+    },
+  ) {
+    if (
+      typeof body?.redirect_uri !== 'string' ||
+      typeof body?.code_challenge !== 'string'
+    ) {
+      throwInvalidRequest('Invalid request');
+    }
+    return this.googlePkce.start(req, {
+      redirectUri: body.redirect_uri,
+      codeChallenge: body.code_challenge,
+      codeChallengeMethod:
+        typeof body.code_challenge_method === 'string'
+          ? body.code_challenge_method
+          : 'S256',
+      clientId: typeof body.client_id === 'string' ? body.client_id : null,
+    });
   }
 
   @Post('v1/auth/apple')
@@ -86,6 +114,7 @@ export class MultiProviderAuthController {
       authorization_code?: unknown;
       code_verifier?: unknown;
       redirect_uri?: unknown;
+      oauth_state?: unknown;
       notice_version?: unknown;
       notice_locale?: unknown;
       client_surface?: unknown;
@@ -113,6 +142,7 @@ export class MultiProviderAuthController {
         typeof body.code_verifier === 'string' ? body.code_verifier : null,
       redirectUri:
         typeof body.redirect_uri === 'string' ? body.redirect_uri : null,
+      oauthState: typeof body.oauth_state === 'string' ? body.oauth_state : null,
       noticeVersion: body.notice_version,
       noticeLocale: body.notice_locale,
       clientSurface:

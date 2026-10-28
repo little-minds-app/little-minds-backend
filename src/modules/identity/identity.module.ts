@@ -16,6 +16,7 @@ import { OtpRetentionService } from './otp/otp-retention.service';
 import { PhoneOtpService } from './otp/phone-otp.service';
 import { AppleIdentityService } from './providers/apple-identity.service';
 import { GoogleIdentityService } from './providers/google-identity.service';
+import { GooglePkceTransactionService } from './providers/google-pkce-transaction.service';
 import {
   GOOGLE_TOKEN_EXCHANGER,
   HttpGoogleTokenExchanger,
@@ -52,6 +53,7 @@ import { SMS_SENDER } from './sms/sms-sender';
     EmailOtpService,
     IdentityResolveService,
     OidcNonceService,
+    GooglePkceTransactionService,
     AppleIdentityService,
     GoogleIdentityService,
     HttpGoogleTokenExchanger,

@@ -75,7 +75,7 @@ class AuthApi {
 
   /// Google Sign-In nonce or auth-code+PKCE (ADR-021)
   ///
-  /// Prefer ID token + mandatory nonce. Else authorization_code + code_verifier (PKCE) with server-side token exchange then JWKS verify. Never accepts ID-token-without-nonce. Fail-closed when Google config / PKCE disabled. 
+  /// Prefer ID token + mandatory nonce. Else authorization_code + code_verifier + redirect_uri + **oauth_state** (from `POST /v1/auth/google/pkce/start`) — server atomically consumes the PKCE transaction, exchanges the code, then JWKS-verifies. Never accepts ID-token-without-nonce or unbound auth-code exchange. Fail-closed when Google config / PKCE disabled. 
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -110,7 +110,7 @@ class AuthApi {
 
   /// Google Sign-In nonce or auth-code+PKCE (ADR-021)
   ///
-  /// Prefer ID token + mandatory nonce. Else authorization_code + code_verifier (PKCE) with server-side token exchange then JWKS verify. Never accepts ID-token-without-nonce. Fail-closed when Google config / PKCE disabled. 
+  /// Prefer ID token + mandatory nonce. Else authorization_code + code_verifier + redirect_uri + **oauth_state** (from `POST /v1/auth/google/pkce/start`) — server atomically consumes the PKCE transaction, exchanges the code, then JWKS-verifies. Never accepts ID-token-without-nonce or unbound auth-code exchange. Fail-closed when Google config / PKCE disabled. 
   ///
   /// Parameters:
   ///
@@ -189,14 +189,14 @@ class AuthApi {
 
   /// Issue short-lived OIDC nonce (ADR-021)
   ///
-  /// Unauthenticated. Returns a server-issued nonce for Apple / Google ID-token paths. Single-use; TTL 600s. Rate-limited per IP. 
+  /// Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple or Google ID-token paths (`provider` required: apple|google). Single-use; TTL 600s. Rate-limited per IP. Cross-provider consume is rejected. 
   ///
   /// Note: This method returns the HTTP [Response].
   ///
   /// Parameters:
   ///
-  /// * [OidcNonceRequest] oidcNonceRequest:
-  Future<Response> issueOidcNonceWithHttpInfo({ OidcNonceRequest? oidcNonceRequest, Future<void>? abortTrigger, }) async {
+  /// * [OidcNonceRequest] oidcNonceRequest (required):
+  Future<Response> issueOidcNonceWithHttpInfo(OidcNonceRequest oidcNonceRequest, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/v1/auth/oidc/nonce';
 
@@ -224,13 +224,13 @@ class AuthApi {
 
   /// Issue short-lived OIDC nonce (ADR-021)
   ///
-  /// Unauthenticated. Returns a server-issued nonce for Apple / Google ID-token paths. Single-use; TTL 600s. Rate-limited per IP. 
+  /// Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple or Google ID-token paths (`provider` required: apple|google). Single-use; TTL 600s. Rate-limited per IP. Cross-provider consume is rejected. 
   ///
   /// Parameters:
   ///
-  /// * [OidcNonceRequest] oidcNonceRequest:
-  Future<OidcNonceResponse?> issueOidcNonce({ OidcNonceRequest? oidcNonceRequest, Future<void>? abortTrigger, }) async {
-    final response = await issueOidcNonceWithHttpInfo(oidcNonceRequest: oidcNonceRequest, abortTrigger: abortTrigger,);
+  /// * [OidcNonceRequest] oidcNonceRequest (required):
+  Future<OidcNonceResponse?> issueOidcNonce(OidcNonceRequest oidcNonceRequest, { Future<void>? abortTrigger, }) async {
+    final response = await issueOidcNonceWithHttpInfo(oidcNonceRequest, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -538,6 +538,63 @@ class AuthApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'EmailOtpStartResponse',) as EmailOtpStartResponse;
+    
+    }
+    return null;
+  }
+
+  /// Issue one-time Google PKCE OAuth transaction/state (ADR-021)
+  ///
+  /// Unauthenticated. Returns a server-issued opaque `state` bound to allowlisted `client_id`, `redirect_uri`, and PKCE `code_challenge` (S256). Single-use; TTL 600s. Required before `POST /v1/auth/google` authorization-code path (`oauth_state`). Fail-closed when PKCE disabled / Google misconfigured. Rate-limited per IP. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [GooglePkceStartRequest] googlePkceStartRequest (required):
+  Future<Response> startGooglePkceWithHttpInfo(GooglePkceStartRequest googlePkceStartRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/google/pkce/start';
+
+    // ignore: prefer_final_locals
+    Object? postBody = googlePkceStartRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Issue one-time Google PKCE OAuth transaction/state (ADR-021)
+  ///
+  /// Unauthenticated. Returns a server-issued opaque `state` bound to allowlisted `client_id`, `redirect_uri`, and PKCE `code_challenge` (S256). Single-use; TTL 600s. Required before `POST /v1/auth/google` authorization-code path (`oauth_state`). Fail-closed when PKCE disabled / Google misconfigured. Rate-limited per IP. 
+  ///
+  /// Parameters:
+  ///
+  /// * [GooglePkceStartRequest] googlePkceStartRequest (required):
+  Future<GooglePkceStartResponse?> startGooglePkce(GooglePkceStartRequest googlePkceStartRequest, { Future<void>? abortTrigger, }) async {
+    final response = await startGooglePkceWithHttpInfo(googlePkceStartRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'GooglePkceStartResponse',) as GooglePkceStartResponse;
     
     }
     return null;

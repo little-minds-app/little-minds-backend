@@ -21,6 +21,7 @@ import {
 } from '../session/auth.errors';
 import { verifyOidcIdToken } from './oidc-id-token';
 import { OidcNonceService } from './oidc-nonce.service';
+import { GooglePkceTransactionService } from './google-pkce-transaction.service';
 import {
   GOOGLE_TOKEN_EXCHANGER,
   type GoogleTokenExchanger,
@@ -30,10 +31,11 @@ export type GoogleAuthInput = {
   /** Nonce path */
   idToken?: string | null;
   nonce?: string | null;
-  /** PKCE path */
+  /** PKCE path — requires server-issued oauth_state from pkce/start */
   authorizationCode?: string | null;
   codeVerifier?: string | null;
   redirectUri?: string | null;
+  oauthState?: string | null;
   noticeVersion: string;
   noticeLocale: string;
   clientSurface?: string | null;
@@ -43,8 +45,9 @@ export type GoogleAuthInput = {
 
 /**
  * Google Sign-In (ADR-021 §5):
- * - Prefer ID token + mandatory nonce
- * - Else authorization-code + PKCE server exchange → JWKS-verify ID token
+ * - Prefer ID token + mandatory nonce (verify-before-consume)
+ * - Else authorization-code + PKCE with **server-issued** one-time OAuth
+ *   transaction/state bound to clientId+redirect+challenge
  * - Never accept ID-token-without-nonce (fail-closed)
  */
 @Injectable()
@@ -56,6 +59,7 @@ export class GoogleIdentityService {
     private readonly sessions: SessionIssuerService,
     private readonly resolve: IdentityResolveService,
     private readonly nonces: OidcNonceService,
+    private readonly pkceTx: GooglePkceTransactionService,
     private readonly config: ConfigService<AppEnv, true>,
     @Inject(GOOGLE_TOKEN_EXCHANGER)
     private readonly exchanger: GoogleTokenExchanger,
@@ -104,13 +108,10 @@ export class GoogleIdentityService {
     }
   }
 
-  private redirectAllowed(redirectUri: string): boolean {
-    const allow =
-      this.config.get('GOOGLE_REDIRECT_URIS', { infer: true }) ?? [];
-    return allow.includes(redirectUri);
-  }
-
-  async authenticate(_req: Request, input: GoogleAuthInput): Promise<TokenPair> {
+  async authenticate(
+    _req: Request,
+    input: GoogleAuthInput,
+  ): Promise<TokenPair> {
     this.assertNotice(input.noticeVersion, input.noticeLocale);
 
     const audiences = this.clientIds();
@@ -128,7 +129,11 @@ export class GoogleIdentityService {
       typeof input.authorizationCode === 'string' &&
       input.authorizationCode.length >= 8 &&
       typeof input.codeVerifier === 'string' &&
-      input.codeVerifier.length >= 43;
+      input.codeVerifier.length >= 43 &&
+      typeof input.oauthState === 'string' &&
+      input.oauthState.length >= 8 &&
+      typeof input.redirectUri === 'string' &&
+      input.redirectUri.length > 0;
 
     // Explicit reject: ID token without nonce (weak fallback forbidden).
     if (
@@ -136,6 +141,16 @@ export class GoogleIdentityService {
       input.idToken.length >= 20 &&
       !(typeof input.nonce === 'string' && input.nonce.length >= 8) &&
       !hasPkcePath
+    ) {
+      throwUnauthorized('invalid_token', 'Invalid token');
+    }
+
+    // PKCE without server-issued state → fail-closed (no unbound code exchange).
+    if (
+      typeof input.authorizationCode === 'string' &&
+      input.authorizationCode.length >= 8 &&
+      !(typeof input.oauthState === 'string' && input.oauthState.length >= 8) &&
+      !hasNoncePath
     ) {
       throwUnauthorized('invalid_token', 'Invalid token');
     }
@@ -149,32 +164,33 @@ export class GoogleIdentityService {
     let rawNonce: string | undefined;
 
     if (hasNoncePath) {
-      await this.nonces.consumeOrThrow(input.nonce!);
       idToken = input.idToken!;
       nonceMode = 'google';
       rawNonce = input.nonce!;
     } else {
-      // PKCE path — require redirect + secret config
-      const redirectUri = input.redirectUri;
-      if (typeof redirectUri !== 'string' || !this.redirectAllowed(redirectUri)) {
-        throwUnauthorized('invalid_token', 'Invalid token');
-      }
-      const clientSecret = this.config.get('GOOGLE_CLIENT_SECRET', {
-        infer: true,
-      });
       const pkceEnabled = this.config.get('GOOGLE_PKCE_ENABLED', {
         infer: true,
       });
+      const clientSecret = this.config.get('GOOGLE_CLIENT_SECRET', {
+        infer: true,
+      });
       if (!pkceEnabled || !clientSecret) {
-        // Fail-closed when PKCE path disabled / misconfigured.
         this.logger.warn('google_pkce_disabled_or_misconfigured');
         throwUnauthorized('invalid_token', 'Invalid token');
       }
+
+      // Consume validates redirect + PKCE + stored client_id allowlist atomically.
+      const bound = await this.pkceTx.consumeOrThrow({
+        state: input.oauthState!,
+        codeVerifier: input.codeVerifier!,
+        redirectUri: input.redirectUri!,
+      });
+
       const exchanged = await this.exchanger.exchange({
         authorizationCode: input.authorizationCode!,
         codeVerifier: input.codeVerifier!,
-        redirectUri,
-        clientId: audiences[0],
+        redirectUri: bound.redirectUri,
+        clientId: bound.clientId,
         clientSecret,
       });
       if (!exchanged.ok) {
@@ -194,6 +210,10 @@ export class GoogleIdentityService {
     if (!verified.ok) {
       this.logger.warn(`google_verify_failed reason=${verified.reason}`);
       throwUnauthorized('invalid_token', 'Invalid token');
+    }
+
+    if (hasNoncePath) {
+      await this.nonces.consumeAfterVerify(input.nonce!, 'google');
     }
 
     const verifiedContact =

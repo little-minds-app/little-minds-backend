@@ -29,4 +29,4 @@ sign-in inside the Nest modular monolith.
 - GSM OTP: `docs/adr/ADR-020-gsm-otp-sign-in.md` (**Accepted** 2026-10-28)
 - Multi-provider: `docs/adr/ADR-021-multi-provider-identity-adapters.md` (**Accepted** 2026-10-28) · sketch `docs/adr/lmp-35-multi-provider-api-contract-sketch.md`
 - Privacy notice catalog: `docs/privacy-notice-catalog.md`
-- Live OpenAPI: **`0.6.0`**
+- Live OpenAPI: **`0.6.1`** (`pkce/start` + provider-bound nonce)

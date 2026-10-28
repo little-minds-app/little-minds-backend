@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Normative companion to **Accepted** ADR-021. Live OpenAPI **`0.6.0`** published by LMP-35 Phase B implementation. |
+| **Status** | Normative companion to **Accepted** ADR-021. Live OpenAPI **`0.6.1`** (Phase B + PKCE transaction remediation). |
 | **Parent ADR** | [ADR-021](./ADR-021-multi-provider-identity-adapters.md) (**Accepted** 2026-10-28) |
 | **Jira** | LMP-35 |
 
@@ -31,28 +31,34 @@ Option A `notice_version` + `notice_locale` on email start and Apple/Google auth
 |---|---|
 | Docs Accept PR | Was **`0.5.0`** |
 | Phase B implementation | Live **`0.6.0`** |
+| Security remediation (PKCE tx + nonce binding) | Live **`0.6.1`** |
 
 ---
 
-## Paths (proposed for 0.6.0)
+## Paths (live `0.6.1`)
 
 ### `POST /v1/auth/apple`
 
 Required: `id_token`, `nonce`, `notice_version`, `notice_locale`.  
 **401** `invalid_token` on JWKS/claim/nonce/replay failure.
 
+### `POST /v1/auth/google/pkce/start`
+
+Required: `redirect_uri`, `code_challenge` (S256). Optional allowlisted `client_id`.  
+Returns server-issued one-time `state` + `client_id` + `expires_in: 600`.
+
 ### `POST /v1/auth/google`
 
 One of:
 
 - **Nonce path:** `id_token` + `nonce` + notice fields (preferred when platform supports nonce, e.g. iOS 9+).
-- **PKCE path:** `authorization_code` + `code_verifier` (+ redirect/client metadata as required) + notice fields — server exchanges with PKCE; verifies ID token via JWKS.
+- **PKCE path:** `authorization_code` + `code_verifier` + `redirect_uri` + **`oauth_state`** (from pkce/start) + notice fields — server atomically consumes the transaction, exchanges with PKCE, verifies ID token via JWKS.
 
-If neither path can be satisfied → **fail-closed** (`401` / `400`) — no weak ID-token-only acceptance.
+If neither path can be satisfied → **fail-closed** (`401` / `400`) — no weak ID-token-only acceptance / no unbound auth-code exchange.
 
-### `POST /v1/auth/oidc/nonce` (or equivalent)
+### `POST /v1/auth/oidc/nonce`
 
-Issues short-lived nonce for Apple / Google nonce path; rate-limited.
+Issues short-lived **provider-bound** nonce (`provider`: `apple`|`google` required); rate-limited. Cross-provider consume rejected.
 
 ### `POST /v1/auth/email/start`
 

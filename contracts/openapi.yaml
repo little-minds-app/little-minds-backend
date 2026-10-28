@@ -5,13 +5,14 @@ info:
     Authoritative OpenAPI contract for little-minds-backend (ADR-014).
     Paths: health/readiness, LMP-33 parent session lifecycle, LMP-34 GSM OTP
     (`POST /v1/auth/phone/start|verify` per ADR-020), and LMP-35 multi-provider
-    auth (`POST /v1/auth/apple|google|oidc/nonce|email/start|email/verify` per ADR-021).
-    LMP-32 adds structured logging / correlation (not path surface) plus readiness.
-    LMP-50 adds ActivitySessionV1 / ActivityEventV1 **components** for versioned
+    auth (`POST /v1/auth/apple|google|google/pkce/start|oidc/nonce|email/start|email/verify`
+    per ADR-021). LMP-32 adds structured logging / correlation (not path surface) plus
+    readiness. LMP-50 adds ActivitySessionV1 / ActivityEventV1 **components** for versioned
     event contracts. Live `POST /v1/events/batch` is intentionally **not** published
     here — ingest lands in a later Jira task. Authoritative Ajv JSON Schemas live under
     `contracts/schemas/activity/` (`schema_version` 1.0.0, independent of this info.version).
-  version: 0.6.0
+  version: 0.6.1
+
   contact:
     name: Little Minds
 servers:
@@ -327,10 +328,11 @@ paths:
       tags: [Auth]
       summary: Issue short-lived OIDC nonce (ADR-021)
       description: |
-        Unauthenticated. Returns a server-issued nonce for Apple / Google
-        ID-token paths. Single-use; TTL 600s. Rate-limited per IP.
+        Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple
+        or Google ID-token paths (`provider` required: apple|google). Single-use;
+        TTL 600s. Rate-limited per IP. Cross-provider consume is rejected.
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
@@ -342,6 +344,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OidcNonceResponse'
+        '400':
+          description: Missing or invalid provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+  /v1/auth/google/pkce/start:
+    post:
+      operationId: startGooglePkce
+      tags: [Auth]
+      summary: Issue one-time Google PKCE OAuth transaction/state (ADR-021)
+      description: |
+        Unauthenticated. Returns a server-issued opaque `state` bound to allowlisted
+        `client_id`, `redirect_uri`, and PKCE `code_challenge` (S256). Single-use;
+        TTL 600s. Required before `POST /v1/auth/google` authorization-code path
+        (`oauth_state`). Fail-closed when PKCE disabled / Google misconfigured.
+        Rate-limited per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GooglePkceStartRequest'
+      responses:
+        '200':
+          description: OAuth transaction started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GooglePkceStartResponse'
+        '400':
+          description: Invalid redirect / challenge / client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '401':
+          description: PKCE disabled or Google misconfigured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
         '429':
           description: Rate limited
           content:
@@ -395,8 +445,10 @@ paths:
       summary: Google Sign-In nonce or auth-code+PKCE (ADR-021)
       description: |
         Prefer ID token + mandatory nonce. Else authorization_code + code_verifier
-        (PKCE) with server-side token exchange then JWKS verify. Never accepts
-        ID-token-without-nonce. Fail-closed when Google config / PKCE disabled.
+        + redirect_uri + **oauth_state** (from `POST /v1/auth/google/pkce/start`) —
+        server atomically consumes the PKCE transaction, exchanges the code, then
+        JWKS-verifies. Never accepts ID-token-without-nonce or unbound auth-code
+        exchange. Fail-closed when Google config / PKCE disabled.
       requestBody:
         required: true
         content:
@@ -417,7 +469,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuthError'
         '401':
-          description: Invalid token / nonce / PKCE / replay
+          description: Invalid token / nonce / PKCE state / replay
           content:
             application/json:
               schema:
@@ -698,11 +750,12 @@ components:
     OidcNonceRequest:
       type: object
       additionalProperties: false
+      required: [provider]
       properties:
         provider:
           type: string
-          enum: [apple, google, shared]
-          description: Optional hint; default shared
+          enum: [apple, google]
+          description: Provider binding; cross-provider consume is rejected
     OidcNonceResponse:
       type: object
       additionalProperties: false
@@ -715,6 +768,44 @@ components:
         expires_in:
           type: integer
           enum: [600]
+    GooglePkceStartRequest:
+      type: object
+      additionalProperties: false
+      required: [redirect_uri, code_challenge]
+      properties:
+        redirect_uri:
+          type: string
+          maxLength: 2048
+          description: Must be in GOOGLE_REDIRECT_URIS allowlist
+        code_challenge:
+          type: string
+          minLength: 43
+          maxLength: 128
+          description: S256 code_challenge (base64url SHA-256 of verifier)
+        code_challenge_method:
+          type: string
+          enum: [S256]
+          description: Only S256 is accepted; defaults to S256
+        client_id:
+          type: string
+          maxLength: 256
+          description: Optional; must be in GOOGLE_CLIENT_IDS when provided
+    GooglePkceStartResponse:
+      type: object
+      additionalProperties: false
+      required: [state, expires_in, client_id]
+      properties:
+        state:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: Opaque one-time oauth_state for POST /v1/auth/google
+        expires_in:
+          type: integer
+          enum: [600]
+        client_id:
+          type: string
+          description: Bound Google OAuth client_id for this transaction
     AppleAuthRequest:
       type: object
       additionalProperties: false
@@ -745,7 +836,8 @@ components:
       required: [notice_version, notice_locale]
       description: |
         Provide either (id_token + nonce) OR (authorization_code + code_verifier
-        + redirect_uri). ID token without nonce is rejected.
+        + redirect_uri + oauth_state from pkce/start). ID token without nonce
+        and authorization_code without oauth_state are rejected.
       properties:
         id_token:
           type: string
@@ -766,6 +858,11 @@ components:
         redirect_uri:
           type: string
           maxLength: 2048
+        oauth_state:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: Server-issued state from POST /v1/auth/google/pkce/start
         notice_version:
           type: string
           maxLength: 64

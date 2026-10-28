@@ -34,7 +34,8 @@ export type AppleAuthInput = {
 
 /**
  * Apple Sign In — JWKS + mandatory nonce (ADR-021 §4).
- * Never binds client-supplied Apple user id / email / name.
+ * P1: verify ID token + nonce claim **before** consuming server nonce
+ * (invalid tokens do not burn a legitimate unused nonce).
  */
 @Injectable()
 export class AppleIdentityService {
@@ -92,9 +93,7 @@ export class AppleIdentityService {
       throwUnauthorized('invalid_token', 'Invalid token');
     }
 
-    // Consume server nonce first (single-use) — replay fails closed.
-    await this.nonces.consumeOrThrow(input.nonce);
-
+    // 1) Verify ID token + nonce claim first (does not consume server nonce).
     const verified = await verifyOidcIdToken({
       idToken: input.idToken,
       audiences,
@@ -109,6 +108,9 @@ export class AppleIdentityService {
       this.logger.warn(`apple_verify_failed reason=${verified.reason}`);
       throwUnauthorized('invalid_token', 'Invalid token');
     }
+
+    // 2) Atomically consume provider-bound nonce (single-use / cross-provider reject).
+    await this.nonces.consumeAfterVerify(input.nonce, 'apple');
 
     const noticePresentedAt = new Date();
     const outcome = await this.prisma.db.$transaction(async (tx) => {

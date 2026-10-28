@@ -216,10 +216,35 @@ export interface paths {
         put?: never;
         /**
          * Issue short-lived OIDC nonce (ADR-021)
-         * @description Unauthenticated. Returns a server-issued nonce for Apple / Google
-         *     ID-token paths. Single-use; TTL 600s. Rate-limited per IP.
+         * @description Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple
+         *     or Google ID-token paths (`provider` required: apple|google). Single-use;
+         *     TTL 600s. Rate-limited per IP. Cross-provider consume is rejected.
          */
         post: operations["issueOidcNonce"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/google/pkce/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue one-time Google PKCE OAuth transaction/state (ADR-021)
+         * @description Unauthenticated. Returns a server-issued opaque `state` bound to allowlisted
+         *     `client_id`, `redirect_uri`, and PKCE `code_challenge` (S256). Single-use;
+         *     TTL 600s. Required before `POST /v1/auth/google` authorization-code path
+         *     (`oauth_state`). Fail-closed when PKCE disabled / Google misconfigured.
+         *     Rate-limited per IP.
+         */
+        post: operations["startGooglePkce"];
         delete?: never;
         options?: never;
         head?: never;
@@ -260,8 +285,10 @@ export interface paths {
         /**
          * Google Sign-In nonce or auth-code+PKCE (ADR-021)
          * @description Prefer ID token + mandatory nonce. Else authorization_code + code_verifier
-         *     (PKCE) with server-side token exchange then JWKS verify. Never accepts
-         *     ID-token-without-nonce. Fail-closed when Google config / PKCE disabled.
+         *     + redirect_uri + **oauth_state** (from `POST /v1/auth/google/pkce/start`) —
+         *     server atomically consumes the PKCE transaction, exchanges the code, then
+         *     JWKS-verifies. Never accepts ID-token-without-nonce or unbound auth-code
+         *     exchange. Fail-closed when Google config / PKCE disabled.
          */
         post: operations["authenticateGoogle"];
         delete?: never;
@@ -408,15 +435,36 @@ export interface components {
         };
         OidcNonceRequest: {
             /**
-             * @description Optional hint; default shared
+             * @description Provider binding; cross-provider consume is rejected
              * @enum {string}
              */
-            provider?: "apple" | "google" | "shared";
+            provider: "apple" | "google";
         };
         OidcNonceResponse: {
             nonce: string;
             /** @enum {integer} */
             expires_in: 600;
+        };
+        GooglePkceStartRequest: {
+            /** @description Must be in GOOGLE_REDIRECT_URIS allowlist */
+            redirect_uri: string;
+            /** @description S256 code_challenge (base64url SHA-256 of verifier) */
+            code_challenge: string;
+            /**
+             * @description Only S256 is accepted; defaults to S256
+             * @enum {string}
+             */
+            code_challenge_method?: "S256";
+            /** @description Optional; must be in GOOGLE_CLIENT_IDS when provided */
+            client_id?: string;
+        };
+        GooglePkceStartResponse: {
+            /** @description Opaque one-time oauth_state for POST /v1/auth/google */
+            state: string;
+            /** @enum {integer} */
+            expires_in: 600;
+            /** @description Bound Google OAuth client_id for this transaction */
+            client_id: string;
         };
         AppleAuthRequest: {
             id_token: string;
@@ -428,7 +476,8 @@ export interface components {
         };
         /**
          * @description Provide either (id_token + nonce) OR (authorization_code + code_verifier
-         *     + redirect_uri). ID token without nonce is rejected.
+         *     + redirect_uri + oauth_state from pkce/start). ID token without nonce
+         *     and authorization_code without oauth_state are rejected.
          */
         GoogleAuthRequest: {
             id_token?: string;
@@ -436,6 +485,8 @@ export interface components {
             authorization_code?: string;
             code_verifier?: string;
             redirect_uri?: string;
+            /** @description Server-issued state from POST /v1/auth/google/pkce/start */
+            oauth_state?: string;
             notice_version: string;
             notice_locale: string;
             client_surface?: string;
@@ -1014,7 +1065,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
                 "application/json": components["schemas"]["OidcNonceRequest"];
             };
@@ -1027,6 +1078,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OidcNonceResponse"];
+                };
+            };
+            /** @description Missing or invalid provider */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    startGooglePkce: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GooglePkceStartRequest"];
+            };
+        };
+        responses: {
+            /** @description OAuth transaction started */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GooglePkceStartResponse"];
+                };
+            };
+            /** @description Invalid redirect / challenge / client_id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description PKCE disabled or Google misconfigured */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
                 };
             };
             /** @description Rate limited */
@@ -1122,7 +1233,7 @@ export interface operations {
                     "application/json": components["schemas"]["AuthError"];
                 };
             };
-            /** @description Invalid token / nonce / PKCE / replay */
+            /** @description Invalid token / nonce / PKCE state / replay */
             401: {
                 headers: {
                     [name: string]: unknown;

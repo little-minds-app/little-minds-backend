@@ -30,6 +30,10 @@ const describeOidc =
     ? describe
     : describe.skip;
 
+function s256Challenge(verifier: string): string {
+  return createHash('sha256').update(verifier, 'utf8').digest('base64url');
+}
+
 describeOidc('POST /v1/auth/apple|google (LMP-35 e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -56,8 +60,20 @@ describeOidc('POST /v1/auth/apple|google (LMP-35 e2e)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.db.authOauthTransaction.deleteMany({});
     await prisma.db.authOidcNonce.deleteMany({});
     await prisma.db.otpAbuseCounter.deleteMany({});
+  });
+
+  it('rejects shared / missing provider on nonce issue', async () => {
+    await request(app.getHttpServer())
+      .post('/v1/auth/oidc/nonce')
+      .send({ provider: 'shared' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/v1/auth/oidc/nonce')
+      .send({})
+      .expect(400);
   });
 
   it('Apple: nonce issue → ID token → U7 create session', async () => {
@@ -141,7 +157,71 @@ describeOidc('POST /v1/auth/apple|google (LMP-35 e2e)', () => {
     expect(weak.body.error).toBe('invalid_token');
   });
 
-  it('Google PKCE path exchanges code then JWKS-verifies', async () => {
+  it('rejects cross-provider nonce reuse (apple nonce on google)', async () => {
+    const nonceRes = await request(app.getHttpServer())
+      .post('/v1/auth/oidc/nonce')
+      .send({ provider: 'apple' })
+      .expect(200);
+
+    const idToken = await signTestIdToken({
+      sub: 'google-e2e-cross-1',
+      aud: TEST_OIDC_AUD_GOOGLE,
+      iss: TEST_OIDC_ISS_GOOGLE,
+      nonce: nonceRes.body.nonce,
+    });
+
+    const res = await request(app.getHttpServer())
+      .post('/v1/auth/google')
+      .send({
+        id_token: idToken,
+        nonce: nonceRes.body.nonce,
+        notice_version: ACTIVE_PRIVACY_NOTICE_VERSION,
+        notice_locale: ACTIVE_PRIVACY_NOTICE_LOCALE,
+      })
+      .expect(401);
+    expect(res.body.error).toBe('invalid_token');
+
+    // Apple-bound nonce must remain unconsumed after failed Google attempt.
+    const row = await prisma.db.authOidcNonce.findFirst({
+      where: {
+        nonceHash: createHash('sha256')
+          .update(nonceRes.body.nonce, 'utf8')
+          .digest('hex'),
+      },
+    });
+    expect(row?.consumedAt).toBeNull();
+  });
+
+  it('Google PKCE requires server-issued oauth_state; start→auth succeeds', async () => {
+    const verifier = `v${'a'.repeat(42)}`;
+    const challenge = s256Challenge(verifier);
+    const redirect = 'http://localhost/oauth/google/callback';
+
+    // Unbound auth-code (no oauth_state) must fail closed.
+    const unbound = await request(app.getHttpServer())
+      .post('/v1/auth/google')
+      .send({
+        authorization_code: 'test-auth-code-value',
+        code_verifier: verifier,
+        redirect_uri: redirect,
+        notice_version: ACTIVE_PRIVACY_NOTICE_VERSION,
+        notice_locale: ACTIVE_PRIVACY_NOTICE_LOCALE,
+      })
+      .expect(401);
+    expect(unbound.body.error).toBe('invalid_token');
+
+    const start = await request(app.getHttpServer())
+      .post('/v1/auth/google/pkce/start')
+      .send({
+        redirect_uri: redirect,
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+      })
+      .expect(200);
+    expect(start.body.state).toBeTruthy();
+    expect(start.body.expires_in).toBe(600);
+    expect(start.body.client_id).toBe(TEST_OIDC_AUD_GOOGLE);
+
     const idToken = await signTestIdToken({
       sub: 'google-e2e-pkce-1',
       aud: TEST_OIDC_AUD_GOOGLE,
@@ -153,12 +233,28 @@ describeOidc('POST /v1/auth/apple|google (LMP-35 e2e)', () => {
       .post('/v1/auth/google')
       .send({
         authorization_code: 'test-auth-code-value',
-        code_verifier: 'a'.repeat(43),
-        redirect_uri: 'http://localhost/oauth/google/callback',
+        code_verifier: verifier,
+        redirect_uri: redirect,
+        oauth_state: start.body.state,
         notice_version: ACTIVE_PRIVACY_NOTICE_VERSION,
         notice_locale: ACTIVE_PRIVACY_NOTICE_LOCALE,
       })
       .expect(200);
     expect(auth.body.access_token).toBeTruthy();
+
+    // Replay of consumed state fails closed.
+    fakeExchange.setNextIdTokenForTests(idToken);
+    const replay = await request(app.getHttpServer())
+      .post('/v1/auth/google')
+      .send({
+        authorization_code: 'test-auth-code-value-2',
+        code_verifier: verifier,
+        redirect_uri: redirect,
+        oauth_state: start.body.state,
+        notice_version: ACTIVE_PRIVACY_NOTICE_VERSION,
+        notice_locale: ACTIVE_PRIVACY_NOTICE_LOCALE,
+      })
+      .expect(401);
+    expect(replay.body.error).toBe('invalid_token');
   });
 });

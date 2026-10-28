@@ -41,6 +41,12 @@ void main() {
       // TODO
     });
 
+    // Server-issued state from POST /v1/auth/google/pkce/start
+    // String oauthState
+    test('to test the property `oauthState`', () async {
+      // TODO
+    });
+
     // String noticeVersion
     test('to test the property `noticeVersion`', () async {
       // TODO

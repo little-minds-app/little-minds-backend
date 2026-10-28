@@ -13,6 +13,7 @@ Name | Type | Description | Notes
 **authorizationCode** | **String** |  | [optional] 
 **codeVerifier** | **String** |  | [optional] 
 **redirectUri** | **String** |  | [optional] 
+**oauthState** | **String** | Server-issued state from POST /v1/auth/google/pkce/start | [optional] 
 **noticeVersion** | **String** |  | 
 **noticeLocale** | **String** |  | 
 **clientSurface** | **String** |  | [optional] 

@@ -13,11 +13,11 @@ part of openapi.api;
 class OidcNonceRequest {
   /// Returns a new [OidcNonceRequest] instance.
   OidcNonceRequest({
-    this.provider,
+    required this.provider,
   });
 
-  /// Optional hint; default shared
-  OidcNonceRequestProviderEnum? provider;
+  /// Provider binding; cross-provider consume is rejected
+  OidcNonceRequestProviderEnum provider;
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is OidcNonceRequest &&
@@ -26,18 +26,14 @@ class OidcNonceRequest {
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
-    (provider == null ? 0 : provider!.hashCode);
+    (provider.hashCode);
 
   @override
   String toString() => 'OidcNonceRequest[provider=$provider]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    if (this.provider != null) {
       json[r'provider'] = this.provider;
-    } else {
-      json[r'provider'] = null;
-    }
     return json;
   }
 
@@ -52,11 +48,13 @@ class OidcNonceRequest {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
+        assert(json.containsKey(r'provider'), 'Required key "OidcNonceRequest[provider]" is missing from JSON.');
+        assert(json[r'provider'] != null, 'Required key "OidcNonceRequest[provider]" has a null value in JSON.');
         return true;
       }());
 
       return OidcNonceRequest(
-        provider: OidcNonceRequestProviderEnum.fromJson(json[r'provider']),
+        provider: OidcNonceRequestProviderEnum.fromJson(json[r'provider'])!,
       );
     }
     return null;
@@ -104,14 +102,14 @@ class OidcNonceRequest {
 
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
+    'provider',
   };
 }
 
-/// Optional hint; default shared
+/// Provider binding; cross-provider consume is rejected
 enum OidcNonceRequestProviderEnum {
   apple._(r'apple'),
   google._(r'google'),
-  shared._(r'shared'),
   ;
 
   /// Instantiate a new enum with the provided value.
@@ -172,7 +170,6 @@ class OidcNonceRequestProviderEnumTypeTransformer {
       switch (data) {
         case r'apple': return OidcNonceRequestProviderEnum.apple;
         case r'google': return OidcNonceRequestProviderEnum.google;
-        case r'shared': return OidcNonceRequestProviderEnum.shared;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

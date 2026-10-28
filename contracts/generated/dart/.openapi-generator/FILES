@@ -19,6 +19,8 @@ doc/EmailOtpStartRequest.md
 doc/EmailOtpStartResponse.md
 doc/EmailOtpVerifyRequest.md
 doc/GoogleAuthRequest.md
+doc/GooglePkceStartRequest.md
+doc/GooglePkceStartResponse.md
 doc/HealthApi.md
 doc/HealthStatus.md
 doc/LogoutAllResponse.md
@@ -64,6 +66,8 @@ lib/model/email_otp_start_request.dart
 lib/model/email_otp_start_response.dart
 lib/model/email_otp_verify_request.dart
 lib/model/google_auth_request.dart
+lib/model/google_pkce_start_request.dart
+lib/model/google_pkce_start_response.dart
 lib/model/health_status.dart
 lib/model/logout_all_response.dart
 lib/model/logout_request.dart
@@ -96,6 +100,8 @@ test/email_otp_start_request_test.dart
 test/email_otp_start_response_test.dart
 test/email_otp_verify_request_test.dart
 test/google_auth_request_test.dart
+test/google_pkce_start_request_test.dart
+test/google_pkce_start_response_test.dart
 test/health_api_test.dart
 test/health_status_test.dart
 test/logout_all_response_test.dart

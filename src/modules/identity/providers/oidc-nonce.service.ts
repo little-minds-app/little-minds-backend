@@ -1,20 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { clientIp } from '../auth/client-ip';
-import { throwRateLimited, throwUnauthorized } from '../session/auth.errors';
+import { throwInvalidRequest, throwRateLimited, throwUnauthorized } from '../session/auth.errors';
 import { OIDC_NONCE_TTL_SECONDS } from '../otp/multi-provider.constants';
-import type { Request } from 'express';
 
 const NONCE_ISSUE_PER_IP_PER_MIN = 30;
+
+export type OidcNonceProvider = 'apple' | 'google';
 
 function floorWindow(nowMs: number, windowMs: number): Date {
   return new Date(Math.floor(nowMs / windowMs) * windowMs);
 }
 
 /**
- * Server-issued OIDC nonces (ADR-021 §4.3 / sketch POST /v1/auth/oidc/nonce).
- * Plaintext returned once; only SHA-256 hash stored for single-use consume.
+ * Server-issued OIDC nonces (ADR-021 §4.3).
+ *
+ * Security (P1):
+ * - Provider-bound at issue; cross-provider consume rejected.
+ * - Callers MUST verify ID token + nonce claim **before** {@link consumeAfterVerify}.
+ * - Invalid tokens therefore do not burn a legitimate unused nonce.
+ * - Concurrent consume is single-winner (atomic UPDATE).
  */
 @Injectable()
 export class OidcNonceService {
@@ -24,15 +31,13 @@ export class OidcNonceService {
     return createHash('sha256').update(plaintext, 'utf8').digest('hex');
   }
 
-  /** Apple stores SHA256(nonce) in the ID-token claim — hex digest lowercase. */
-  static appleNonceClaim(plaintext: string): string {
-    return createHash('sha256').update(plaintext, 'utf8').digest('hex');
-  }
-
   async issue(
     req: Request,
-    provider: 'apple' | 'google' | 'shared' = 'shared',
+    provider: OidcNonceProvider,
   ): Promise<{ nonce: string; expires_in: number }> {
+    if (provider !== 'apple' && provider !== 'google') {
+      throwInvalidRequest('Invalid request');
+    }
     const ip = clientIp(req);
     await this.assertIssueRate(ip);
 
@@ -54,10 +59,16 @@ export class OidcNonceService {
   }
 
   /**
-   * Atomically consume a previously issued nonce. Returns false if missing,
-   * expired, or already consumed (replay).
+   * After successful ID-token verify, atomically consume the nonce for
+   * `expectedProvider`. Fails closed on missing / expired / reused / wrong provider.
    */
-  async consume(plaintext: string): Promise<boolean> {
+  async consumeAfterVerify(
+    plaintext: string,
+    expectedProvider: OidcNonceProvider,
+  ): Promise<void> {
+    if (!plaintext || plaintext.length < 8) {
+      throwUnauthorized('invalid_token', 'Invalid token');
+    }
     const nonceHash = OidcNonceService.hashNonce(plaintext);
     const clock = await this.prisma.db.$queryRaw<Array<{ now: Date }>>`
       SELECT clock_timestamp() AS now
@@ -68,16 +79,12 @@ export class OidcNonceService {
       UPDATE auth_oidc_nonces
       SET consumed_at = ${now}
       WHERE nonce_hash = ${nonceHash}
+        AND provider = ${expectedProvider}
         AND consumed_at IS NULL
         AND expires_at > ${now}
       RETURNING id
     `;
-    return updated.length === 1;
-  }
-
-  async consumeOrThrow(plaintext: string): Promise<void> {
-    const ok = await this.consume(plaintext);
-    if (!ok) {
+    if (updated.length !== 1) {
       throwUnauthorized('invalid_token', 'Invalid token');
     }
   }

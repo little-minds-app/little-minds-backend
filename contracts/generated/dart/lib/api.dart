@@ -47,6 +47,8 @@ part 'model/email_otp_start_request.dart';
 part 'model/email_otp_start_response.dart';
 part 'model/email_otp_verify_request.dart';
 part 'model/google_auth_request.dart';
+part 'model/google_pkce_start_request.dart';
+part 'model/google_pkce_start_response.dart';
 part 'model/health_status.dart';
 part 'model/logout_all_response.dart';
 part 'model/logout_request.dart';

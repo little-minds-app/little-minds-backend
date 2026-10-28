@@ -19,6 +19,7 @@ Method | HTTP request | Description
 [**refreshParentSession**](AuthApi.md#refreshparentsession) | **POST** /v1/auth/token/refresh | Rotate parent access and refresh tokens
 [**revokeParentSession**](AuthApi.md#revokeparentsession) | **DELETE** /v1/auth/sessions/{sessionId} | Revoke one owned session
 [**startEmailOtp**](AuthApi.md#startemailotp) | **POST** /v1/auth/email/start | Start Email OTP challenge (ADR-021)
+[**startGooglePkce**](AuthApi.md#startgooglepkce) | **POST** /v1/auth/google/pkce/start | Issue one-time Google PKCE OAuth transaction/state (ADR-021)
 [**startPhoneOtp**](AuthApi.md#startphoneotp) | **POST** /v1/auth/phone/start | Start GSM OTP challenge (ADR-020)
 [**verifyEmailOtp**](AuthApi.md#verifyemailotp) | **POST** /v1/auth/email/verify | Verify Email OTP and mint parent session (ADR-021)
 [**verifyPhoneOtp**](AuthApi.md#verifyphoneotp) | **POST** /v1/auth/phone/verify | Verify GSM OTP and mint parent session (ADR-020)
@@ -72,7 +73,7 @@ No authorization required
 
 Google Sign-In nonce or auth-code+PKCE (ADR-021)
 
-Prefer ID token + mandatory nonce. Else authorization_code + code_verifier (PKCE) with server-side token exchange then JWKS verify. Never accepts ID-token-without-nonce. Fail-closed when Google config / PKCE disabled. 
+Prefer ID token + mandatory nonce. Else authorization_code + code_verifier + redirect_uri + **oauth_state** (from `POST /v1/auth/google/pkce/start`) — server atomically consumes the PKCE transaction, exchanges the code, then JWKS-verifies. Never accepts ID-token-without-nonce or unbound auth-code exchange. Fail-closed when Google config / PKCE disabled. 
 
 ### Example
 ```dart
@@ -158,7 +159,7 @@ No authorization required
 
 Issue short-lived OIDC nonce (ADR-021)
 
-Unauthenticated. Returns a server-issued nonce for Apple / Google ID-token paths. Single-use; TTL 600s. Rate-limited per IP. 
+Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple or Google ID-token paths (`provider` required: apple|google). Single-use; TTL 600s. Rate-limited per IP. Cross-provider consume is rejected. 
 
 ### Example
 ```dart
@@ -179,7 +180,7 @@ try {
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **oidcNonceRequest** | [**OidcNonceRequest**](OidcNonceRequest.md)|  | [optional] 
+ **oidcNonceRequest** | [**OidcNonceRequest**](OidcNonceRequest.md)|  | 
 
 ### Return type
 
@@ -444,6 +445,49 @@ Name | Type | Description  | Notes
 ### Return type
 
 [**EmailOtpStartResponse**](EmailOtpStartResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **startGooglePkce**
+> GooglePkceStartResponse startGooglePkce(googlePkceStartRequest)
+
+Issue one-time Google PKCE OAuth transaction/state (ADR-021)
+
+Unauthenticated. Returns a server-issued opaque `state` bound to allowlisted `client_id`, `redirect_uri`, and PKCE `code_challenge` (S256). Single-use; TTL 600s. Required before `POST /v1/auth/google` authorization-code path (`oauth_state`). Fail-closed when PKCE disabled / Google misconfigured. Rate-limited per IP. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final googlePkceStartRequest = GooglePkceStartRequest(); // GooglePkceStartRequest | 
+
+try {
+    final result = api_instance.startGooglePkce(googlePkceStartRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->startGooglePkce: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **googlePkceStartRequest** | [**GooglePkceStartRequest**](GooglePkceStartRequest.md)|  | 
+
+### Return type
+
+[**GooglePkceStartResponse**](GooglePkceStartResponse.md)
 
 ### Authorization
 

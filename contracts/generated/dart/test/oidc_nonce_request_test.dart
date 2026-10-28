@@ -16,7 +16,7 @@ void main() {
   // final instance = OidcNonceRequest();
 
   group('test OidcNonceRequest', () {
-    // Optional hint; default shared
+    // Provider binding; cross-provider consume is rejected
     // String provider
     test('to test the property `provider`', () async {
       // TODO

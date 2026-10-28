@@ -31,6 +31,7 @@ describe('GoogleIdentityService path selection (fail-closed)', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never, // pkceTx — not reached by path-selection rejects
       config,
       exchanger,
     );
@@ -62,6 +63,19 @@ describe('GoogleIdentityService path selection (fail-closed)', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('rejects authorization_code without server-issued oauth_state', async () => {
+    const { svc } = build({ GOOGLE_PKCE_ENABLED: true });
+    await expect(
+      svc.authenticate({} as never, {
+        authorizationCode: 'auth-code-value',
+        codeVerifier: 'a'.repeat(43),
+        redirectUri: 'http://localhost/cb',
+        oauthState: null,
+        ...notice,
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('fail-closes PKCE when GOOGLE_PKCE_ENABLED=false', async () => {
     const { svc } = build({ GOOGLE_PKCE_ENABLED: false });
     await expect(
@@ -69,6 +83,7 @@ describe('GoogleIdentityService path selection (fail-closed)', () => {
         authorizationCode: 'auth-code-value',
         codeVerifier: 'a'.repeat(43),
         redirectUri: 'http://localhost/cb',
+        oauthState: 'server-issued-state-value',
         ...notice,
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
