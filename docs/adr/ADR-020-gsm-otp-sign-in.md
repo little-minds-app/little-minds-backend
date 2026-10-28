@@ -107,11 +107,11 @@ Anticipate later: per-country config, capability differences, sender IDs, normal
 
 ## 5. U7 — Human-selected: Option A (implicit parent registration)
 
-**Status: SELECTED by Product Owner** (does **not** Accept the whole ADR).
+**Status: Accepted** (U7 Option A) with ADR-020 on 2026-10-28.
 
 On successful OTP verify:
 
-1. Normalize phone to E.164 (TR-only Day-1 per proposed **U10**).
+1. Normalize phone to E.164 (TR-only Day-1 per Accepted **U10**).
 2. Resolve existing phone identity by privacy-safe `provider_subject`.
 3. If an **active** parent owns the identity → authenticate that parent.
 4. If no phone identity exists → **create** `parent_accounts` + phone `parent_identities`.
@@ -231,7 +231,7 @@ Phone OTP verifies control of a number and (under U7) may create a **parent acco
 
 **Accepted** abuse/OTP numbers for implementation. Still **not** authorization to enable production SMS or purchase a vendor:
 
-| Limit | Proposed value |
+| Limit | Accepted value |
 |---|---|
 | Wrong OTP attempts / challenge | **5** then lock challenge |
 | Resend cooldown | **60 s** |
@@ -323,9 +323,9 @@ ADR-019 `mintSession` (and the proposed outer verify txn) **commits DB state fir
 
 ---
 
-## 11. OTP crypto & challenge rules (proposed)
+## 11. OTP crypto & challenge rules (Accepted)
 
-| Control | Proposal |
+| Control | Accepted rule |
 |---|---|
 | Code | 6-digit CSPRNG (**U1**) |
 | Hash | `HMAC-SHA256(OTP_PEPPER, challenge_id \|\| ":" \|\| subject_key \|\| ":" \|\| code)` — binds challenge + subject (anti cross-challenge replay) |
