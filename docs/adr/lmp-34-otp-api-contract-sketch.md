@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Sketch only — **not** published in live OpenAPI until the **implementation** PR bumps to **`0.5.0`**. Live contract stays **`0.4.0`**. Parent ADR-020 is **Accepted** (2026-10-28). |
+| **Status** | Normative companion to ADR-020. Live OpenAPI **`0.5.0`** publishes `POST /v1/auth/phone/start|verify` in the LMP-34 **implementation** PR. Parent ADR-020 is **Accepted** (2026-10-28). |
 | **Parent ADR** | [ADR-020](./ADR-020-gsm-otp-sign-in.md) (**Accepted**) |
 | **Jira** | LMP-34 |
 

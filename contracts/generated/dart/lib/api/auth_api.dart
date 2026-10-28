@@ -314,4 +314,118 @@ class AuthApi {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
   }
+
+  /// Start GSM OTP challenge (ADR-020)
+  ///
+  /// Unauthenticated. Türkiye (+90) only Day-1. Requires uniform `notice_version` + `notice_locale` (KVKK Option A). Never returns OTP. Anti-enumeration: response shape identical for existing vs new parents. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [PhoneOtpStartRequest] phoneOtpStartRequest (required):
+  Future<Response> startPhoneOtpWithHttpInfo(PhoneOtpStartRequest phoneOtpStartRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/phone/start';
+
+    // ignore: prefer_final_locals
+    Object? postBody = phoneOtpStartRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Start GSM OTP challenge (ADR-020)
+  ///
+  /// Unauthenticated. Türkiye (+90) only Day-1. Requires uniform `notice_version` + `notice_locale` (KVKK Option A). Never returns OTP. Anti-enumeration: response shape identical for existing vs new parents. 
+  ///
+  /// Parameters:
+  ///
+  /// * [PhoneOtpStartRequest] phoneOtpStartRequest (required):
+  Future<PhoneOtpStartResponse?> startPhoneOtp(PhoneOtpStartRequest phoneOtpStartRequest, { Future<void>? abortTrigger, }) async {
+    final response = await startPhoneOtpWithHttpInfo(phoneOtpStartRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'PhoneOtpStartResponse',) as PhoneOtpStartResponse;
+    
+    }
+    return null;
+  }
+
+  /// Verify GSM OTP and mint parent session (ADR-020)
+  ///
+  /// Uniform for existing and new parents (U7 Option A creates parent on first success). No privacy fields on verify — notice bound at start. Returns ADR-019 TokenPairResponse via SessionIssuerService.mintSessionTx. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [PhoneOtpVerifyRequest] phoneOtpVerifyRequest (required):
+  Future<Response> verifyPhoneOtpWithHttpInfo(PhoneOtpVerifyRequest phoneOtpVerifyRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/phone/verify';
+
+    // ignore: prefer_final_locals
+    Object? postBody = phoneOtpVerifyRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Verify GSM OTP and mint parent session (ADR-020)
+  ///
+  /// Uniform for existing and new parents (U7 Option A creates parent on first success). No privacy fields on verify — notice bound at start. Returns ADR-019 TokenPairResponse via SessionIssuerService.mintSessionTx. 
+  ///
+  /// Parameters:
+  ///
+  /// * [PhoneOtpVerifyRequest] phoneOtpVerifyRequest (required):
+  Future<TokenPairResponse?> verifyPhoneOtp(PhoneOtpVerifyRequest phoneOtpVerifyRequest, { Future<void>? abortTrigger, }) async {
+    final response = await verifyPhoneOtpWithHttpInfo(phoneOtpVerifyRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'TokenPairResponse',) as TokenPairResponse;
+    
+    }
+    return null;
+  }
 }

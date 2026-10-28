@@ -20,3 +20,6 @@ process.env.REFRESH_TOKEN_PEPPER ??= TEST_REFRESH_PEPPER;
 process.env.AUTH_DEV_BOOTSTRAP_ENABLED ??= 'true';
 process.env.AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST ??=
   '11111111-1111-4111-8111-111111111111';
+process.env.SMS_SENDER ??= 'fake';
+process.env.OTP_PEPPER ??= 'test-otp-pepper-32chars-minimum!!';
+process.env.PHONE_SUBJECT_PEPPER ??= 'test-phone-subject-pepper-32ch!!';

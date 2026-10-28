@@ -166,7 +166,7 @@ else
         [[ -z "$p" ]] && continue
         # LMP-32 health + LMP-33 parent session paths (ADR-019). No other /v1 invent.
         case "$p" in
-          /health|/health/ready|/v1/auth/token/refresh|/v1/auth/logout|/v1/auth/logout-all|/v1/auth/sessions|/v1/auth/sessions/{sessionId}|/v1/parent/me|/v1/auth/dev/session)
+          /health|/health/ready|/v1/auth/token/refresh|/v1/auth/logout|/v1/auth/logout-all|/v1/auth/sessions|/v1/auth/sessions/{sessionId}|/v1/parent/me|/v1/auth/dev/session|/v1/auth/phone/start|/v1/auth/phone/verify)
             ;;
           *)
             EXTRA_PATHS="${EXTRA_PATHS}${p} "
@@ -176,7 +176,7 @@ else
       if [[ -n "$EXTRA_PATHS" ]]; then
         fail "LMP-28-TC-006" "OpenAPI path surface outside health+LMP-33 auth allowlist; unexpected: ${EXTRA_PATHS}"
       else
-        pass "LMP-28-TC-006" "OpenAPI VERSION=${CONTRACT_VERSION} synced; paths health+LMP-33 auth (additive bumps OK)"
+        pass "LMP-28-TC-006" "OpenAPI VERSION=${CONTRACT_VERSION} synced; paths health+LMP-33/LMP-34 auth (additive bumps OK)"
       fi
     fi
   fi

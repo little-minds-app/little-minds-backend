@@ -14,6 +14,9 @@ describe('toPublicConfig', () => {
       REFRESH_TOKEN_PEPPER: 'staging-refresh-pepper-strong!!',
       AUTH_DEV_BOOTSTRAP_ENABLED: false,
       LISTEN_HOST: '0.0.0.0',
+      SMS_SENDER: 'production',
+      OTP_PEPPER: 'staging-otp-pepper-strong-value!!',
+      PHONE_SUBJECT_PEPPER: 'staging-phone-subject-pepper!!',
     };
 
     expect(toPublicConfig(env)).toEqual({
@@ -24,14 +27,18 @@ describe('toPublicConfig', () => {
       RELEASE: '2026.10.28-rc1',
       LISTEN_HOST: '0.0.0.0',
       AUTH_DEV_BOOTSTRAP_ENABLED: false,
+      SMS_SENDER: 'production',
     });
     expect(JSON.stringify(toPublicConfig(env))).not.toContain('s3curePass');
+    expect(JSON.stringify(toPublicConfig(env))).not.toContain('otp-pepper');
   });
 
   it('recognizes public env keys only', () => {
     expect(isPublicEnvKey('APP_ENV')).toBe(true);
     expect(isPublicEnvKey('RELEASE')).toBe(true);
     expect(isPublicEnvKey('LISTEN_HOST')).toBe(true);
+    expect(isPublicEnvKey('SMS_SENDER')).toBe(true);
     expect(isPublicEnvKey('DATABASE_URL')).toBe(false);
+    expect(isPublicEnvKey('OTP_PEPPER')).toBe(false);
   });
 });

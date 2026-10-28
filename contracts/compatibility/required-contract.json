@@ -1,5 +1,5 @@
 {
-  "$comment": "Minimum non-breaking contract surface. Paths outside allowlist fail. LMP-33 adds parent auth session paths (ADR-019). LMP-50 Activity* schemas remain components-only.",
+  "$comment": "Minimum non-breaking contract surface. Paths outside allowlist fail. LMP-33 parent auth + LMP-34 GSM OTP. LMP-50 Activity* schemas remain components-only.",
   "contractVersionFile": "contracts/VERSION",
   "allowBreakingRemovalsFromMajor": 1,
   "allowedPaths": [
@@ -11,7 +11,9 @@
     "/v1/auth/sessions",
     "/v1/auth/sessions/{sessionId}",
     "/v1/parent/me",
-    "/v1/auth/dev/session"
+    "/v1/auth/dev/session",
+    "/v1/auth/phone/start",
+    "/v1/auth/phone/verify"
   ],
   "requiredOperations": [
     {
@@ -20,7 +22,11 @@
       "operationId": "getHealth",
       "responseStatus": "200",
       "schemaRef": "#/components/schemas/HealthStatus",
-      "requiredProperties": ["status", "service", "timestamp"]
+      "requiredProperties": [
+        "status",
+        "service",
+        "timestamp"
+      ]
     },
     {
       "path": "/health/ready",
@@ -28,7 +34,12 @@
       "operationId": "getHealthReady",
       "responseStatus": "200",
       "schemaRef": "#/components/schemas/ReadinessStatus",
-      "requiredProperties": ["status", "service", "timestamp", "checks"]
+      "requiredProperties": [
+        "status",
+        "service",
+        "timestamp",
+        "checks"
+      ]
     },
     {
       "path": "/v1/auth/token/refresh",
@@ -51,24 +62,61 @@
       "operationId": "getParentMe",
       "responseStatus": "200",
       "schemaRef": "#/components/schemas/ParentMeResponse",
-      "requiredProperties": ["parent_id", "locale", "timezone", "lifecycle"]
+      "requiredProperties": [
+        "parent_id",
+        "locale",
+        "timezone",
+        "lifecycle"
+      ]
     }
   ],
   "requiredSchemas": {
     "HealthStatus": {
-      "required": ["status", "service", "timestamp"],
+      "required": [
+        "status",
+        "service",
+        "timestamp"
+      ],
       "properties": {
-        "status": { "enum": ["ok"] },
-        "service": { "enum": ["little-minds-backend"] },
-        "timestamp": { "type": "string", "format": "date-time" }
+        "status": {
+          "enum": [
+            "ok"
+          ]
+        },
+        "service": {
+          "enum": [
+            "little-minds-backend"
+          ]
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "ReadinessStatus": {
-      "required": ["status", "service", "timestamp", "checks"],
+      "required": [
+        "status",
+        "service",
+        "timestamp",
+        "checks"
+      ],
       "properties": {
-        "status": { "enum": ["ok", "not_ready"] },
-        "service": { "enum": ["little-minds-backend"] },
-        "timestamp": { "type": "string", "format": "date-time" }
+        "status": {
+          "enum": [
+            "ok",
+            "not_ready"
+          ]
+        },
+        "service": {
+          "enum": [
+            "little-minds-backend"
+          ]
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "TokenPairResponse": {
@@ -83,7 +131,12 @@
       "properties": {}
     },
     "ParentMeResponse": {
-      "required": ["parent_id", "locale", "timezone", "lifecycle"],
+      "required": [
+        "parent_id",
+        "locale",
+        "timezone",
+        "lifecycle"
+      ],
       "properties": {}
     },
     "ActivitySessionV1": {

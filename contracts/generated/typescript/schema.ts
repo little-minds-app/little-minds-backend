@@ -161,6 +161,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/phone/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start GSM OTP challenge (ADR-020)
+         * @description Unauthenticated. Türkiye (+90) only Day-1. Requires uniform
+         *     `notice_version` + `notice_locale` (KVKK Option A). Never returns OTP.
+         *     Anti-enumeration: response shape identical for existing vs new parents.
+         */
+        post: operations["startPhoneOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/phone/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify GSM OTP and mint parent session (ADR-020)
+         * @description Uniform for existing and new parents (U7 Option A creates parent on first
+         *     success). No privacy fields on verify — notice bound at start. Returns
+         *     ADR-019 TokenPairResponse via SessionIssuerService.mintSessionTx.
+         */
+        post: operations["verifyPhoneOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/dev/session": {
         parameters: {
             query?: never;
@@ -251,8 +295,33 @@ export interface components {
         };
         AuthError: {
             /** @enum {string} */
-            error: "invalid_request" | "invalid_token" | "expired_token" | "revoked_session" | "refresh_reuse" | "rate_limited" | "session_limit_exceeded" | "bootstrap_disabled";
+            error: "invalid_request" | "invalid_token" | "expired_token" | "revoked_session" | "refresh_reuse" | "rate_limited" | "session_limit_exceeded" | "bootstrap_disabled" | "otp_invalid" | "otp_cooldown" | "sms_unavailable";
             message: string;
+        };
+        PhoneOtpStartRequest: {
+            phone: string;
+            country_code?: string;
+            /**
+             * @description KVKK Option A — uniform for ALL callers. Must equal server active
+             *     published notice version. Not consent. Not required on verify.
+             */
+            notice_version: string;
+            notice_locale: string;
+            client_surface?: string;
+            device_id?: components["schemas"]["UuidV4OrV7"];
+        };
+        PhoneOtpStartResponse: {
+            challenge_id: components["schemas"]["UuidV4OrV7"];
+            /** @enum {integer} */
+            expires_in: 300;
+            /** @enum {integer} */
+            resend_after: 60;
+        };
+        PhoneOtpVerifyRequest: {
+            challenge_id: components["schemas"]["UuidV4OrV7"];
+            code: string;
+            client_surface?: string;
+            device_id?: components["schemas"]["UuidV4OrV7"];
         };
         ParentSessionSummary: {
             session_id: components["schemas"]["UuidV4OrV7"];
@@ -656,6 +725,117 @@ export interface operations {
             };
             /** @description Missing or invalid access token */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    startPhoneOtp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneOtpStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Challenge issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneOtpStartResponse"];
+                };
+            };
+            /** @description Malformed phone or invalid notice presentation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Cooldown or rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description SMS unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    verifyPhoneOtp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneOtpVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Token pair */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenPairResponse"];
+                };
+            };
+            /** @description Malformed body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Invalid or expired OTP */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Session limit exceeded */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

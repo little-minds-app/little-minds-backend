@@ -59,8 +59,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       res.setHeader('x-request-id', requestId);
     }
 
+    const errorCode = resolveAuthErrorCode(exception);
     res.status(status).json({
-      statusCode: status,
+      ...(errorCode ? { error: errorCode } : { statusCode: status }),
       message,
       request_id: requestId,
     });
@@ -72,6 +73,21 @@ function resolveStatus(exception: unknown): number {
     return exception.getStatus();
   }
   return HttpStatus.INTERNAL_SERVER_ERROR;
+}
+
+/** Preserve ADR-019/020 AuthError `error` codes when present on HttpException body. */
+function resolveAuthErrorCode(exception: unknown): string | undefined {
+  if (!(exception instanceof HttpException)) {
+    return undefined;
+  }
+  const body = exception.getResponse();
+  if (!body || typeof body !== 'object') {
+    return undefined;
+  }
+  const code = (body as { error?: unknown }).error;
+  return typeof code === 'string' && code.length > 0 && code.length <= 64
+    ? code
+    : undefined;
 }
 
 function resolveClientMessage(exception: unknown, status: number): string {

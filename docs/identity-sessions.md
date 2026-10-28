@@ -13,7 +13,7 @@ Authoritative design: [`docs/adr/ADR-019-parent-identity-secure-session-lifecycl
 | Cap | Max 20 active sessions per parent (`FOR UPDATE` on parent row) |
 | Client IP | Transport peer only — **never** trusts `X-Forwarded-For` for bootstrap/rate limits |
 | Dev bootstrap | Flag + allowlist + loopback **peer** + loopback **LISTEN_HOST** + local `PUBLIC_API_BASE_URL`; **rejects proxied** requests (XFF/Forwarded) |
-| OpenAPI | `contracts/VERSION` **0.4.0** |
+| OpenAPI | `contracts/VERSION` **0.5.0** (phone OTP routes) |
 
 ## Environment
 
@@ -50,6 +50,9 @@ Owned by **LMP-34**. Design ADR (**Accepted** 2026-10-28): [`docs/adr/ADR-020-gs
 - Little Minds owns OTP generate/verify; SMS providers are **delivery-only** adapters (`FakeSmsSender` locally; commercial candidates gated / **unapproved**).
 - **Not** Firebase Phone Auth / Twilio Verify as system of record.
 - **U7 Option A (Accepted):** first successful verify may create parent + phone identity (no silent cross-provider merge).
-- Privacy notice **Option A (Accepted):** present notice before phone submit; uniform `notice_version`+`notice_locale` on **start**; **verify** has no privacy fields; notice ≠ optional consent; legal review before production.
-- Implementation (Phase B) must call ADR-019 `SessionIssuerService` via `mintSessionTx` (ADR-020 §9). Post-commit JWT/HTTP failures are not rolled back — clients must handle ambiguous verify carefully. Do not invent a second session store.
-- Live OpenAPI phone routes land only in the LMP-34 **implementation** PR (`0.5.0`); docs Accept PR keeps **`0.4.0`**.
+- Privacy notice **Option A (Accepted):** present notice before phone submit; uniform `notice_version`+`notice_locale` on **start**; **verify** has no privacy fields; notice ≠ optional consent. Engineering catalog is a **placeholder** (`published: false`) — staging/production **boot fail-closed** until published; see [`docs/privacy-notice-catalog.md`](./privacy-notice-catalog.md).
+- Implementation (Phase B) calls ADR-019 `SessionIssuerService` via `mintSessionTx` (ADR-020 §9). Post-commit JWT/HTTP failures are not rolled back — clients must handle ambiguous verify carefully. Do not invent a second session store.
+- Live OpenAPI phone routes: **`0.5.0`** (`POST /v1/auth/phone/start|verify`). FakeSmsSender only in development/test; paid SMS unapproved.
+- **Verify gate:** only `status=pending` **and** `deliveryState=sent` (durable adapter acceptance). `pending_send` / `failed` → uniform `otp_invalid` (no handset-delivery claim; no OTP in errors).
+- **Ambiguous SMS send:** challenge committed before SMS (SMS outside long txns). Adapter failure → `503 sms_unavailable`. Adapter accept + post-send persistence failure → **no auto-resend**; `503 sms_unavailable`; stale `pending_send` superseded after ~90s so a **new** start can proceed. Lost HTTP after mark-sent → honor cooldown / new start.
+- **Retention (U16):** boot+interval scrub — challenges ~24h (SET NULL on delivery FK), delivery attempts ~7d, stale abuse counters ~48h.

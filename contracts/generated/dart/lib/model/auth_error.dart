@@ -125,6 +125,9 @@ enum AuthErrorErrorEnum {
   rateLimited._(r'rate_limited'),
   sessionLimitExceeded._(r'session_limit_exceeded'),
   bootstrapDisabled._(r'bootstrap_disabled'),
+  otpInvalid._(r'otp_invalid'),
+  otpCooldown._(r'otp_cooldown'),
+  smsUnavailable._(r'sms_unavailable'),
   ;
 
   /// Instantiate a new enum with the provided value.
@@ -191,6 +194,9 @@ class AuthErrorErrorEnumTypeTransformer {
         case r'rate_limited': return AuthErrorErrorEnum.rateLimited;
         case r'session_limit_exceeded': return AuthErrorErrorEnum.sessionLimitExceeded;
         case r'bootstrap_disabled': return AuthErrorErrorEnum.bootstrapDisabled;
+        case r'otp_invalid': return AuthErrorErrorEnum.otpInvalid;
+        case r'otp_cooldown': return AuthErrorErrorEnum.otpCooldown;
+        case r'sms_unavailable': return AuthErrorErrorEnum.smsUnavailable;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');
