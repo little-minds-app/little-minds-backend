@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Proposed** — revised from human-review direction; still requires explicit human **Accept** before implementation |
+| **Status** | **Accepted** — explicit human approval on 2026-10-28; implementation may proceed under separate PR and QA gates |
 | **Date** | 2026-10-28 (revised same day) |
 | **Jira** | [LMP-33](https://little-minds-app.atlassian.net/browse/LMP-33) (Epic [LMP-7](https://little-minds-app.atlassian.net/browse/LMP-7), `seq-015`) |
 | **Blueprint** | F-001, F-031 · §12 Auth · §13.1 identity tables · §29 · §31.1 / ADR-002 · §31.4 privacy · §27.4 local identity · §38 ownership |
@@ -10,7 +10,7 @@
 | **Repos** | `little-minds-backend` only in this PR. **After Accept**, sync the client ADR index (ADR-014) in a separate client task/PR — **not** in this backend docs PR. |
 | **Companion sketch** | [`lmp-33-session-api-contract-sketch.md`](./lmp-33-session-api-contract-sketch.md) (non-normative until Accepted; live OpenAPI stays `0.3.0` until the **implementation** PR) |
 
-> **Hard gate:** Do **not** implement production authentication, Prisma session migrations, or live OpenAPI auth paths until this ADR is **Accepted** by an explicit human decision. Status remains **Proposed** until then. No paid auth vendors. No GSM OTP here (LMP-34).
+> **Decision:** Human Accepted ADR-019 on 2026-10-28. Implementation is authorized in a separate LMP-33 PR, subject to CI, security tests and human review. No paid auth vendors. No GSM OTP here (LMP-34).
 
 ---
 
@@ -31,7 +31,7 @@ LMP-33 requires a stable parent identity domain and a secure session lifecycle (
 
 ---
 
-## 2. Decision summary (Proposed — review-aligned)
+## 2. Decision summary (Accepted)
 
 | Topic | Decision |
 |---|---|
@@ -192,7 +192,7 @@ History exists so a stolen older token cannot silently mint after rotation; pres
 
 ---
 
-## 5. Prisma schema changes (Proposed)
+## 5. Prisma schema changes (Accepted)
 
 Additive migration only. **`parent_sessions` is an accepted catalog extension** relative to Blueprint §13.1 once this ADR is Accepted (documents secure-session persistence required by §12 / §29 / ADR-002).
 
@@ -247,7 +247,7 @@ model ParentSession {
 
 ---
 
-## 6. OpenAPI / HTTP contract (Proposed sketch)
+## 6. OpenAPI / HTTP contract (Accepted design; non-live sketch)
 
 Live contract remains **`contracts/openapi.yaml` `0.3.0`** in this docs PR. After ADR **Accept**, the **implementation** PR publishes additive **`0.4.0`**. Full shapes: companion sketch.
 
@@ -334,7 +334,7 @@ Rotation: new key pair → sign with new `kid` → keep previous **public** key 
 
 Library: **`jose`** for JWS; Node `crypto` for random + HMAC/SHA-256. No hand-rolled JWT.
 
-### 9.2 Rate limits (Proposed)
+### 9.2 Rate limits (Accepted)
 
 | Scope | Limit |
 |---|---|
@@ -410,7 +410,7 @@ LMP-34 must **not** invent a second session store.
 
 ## 14. U1–U15 resolution table (human-review direction)
 
-Status of this ADR document remains **Proposed** until an explicit human **Accept**. The table records the approved *direction* applied in this revision:
+**Accepted by explicit human approval on 2026-10-28.** The table records the final V1 decisions:
 
 | ID | Topic | Resolution |
 |---|---|---|
@@ -441,9 +441,9 @@ Status of this ADR document remains **Proposed** until an explicit human **Accep
 
 ---
 
-## 15. Implementation plan (after explicit Accept only)
+## 15. Implementation plan (after Accept)
 
-1. Human flips ADR-019 to **Accepted** (or records Accept in PR review).
+1. **Completed:** Human accepted ADR-019 on 2026-10-28; this docs PR records that decision.
 2. Separate LMP-33 **implementation** PR: migration, SessionIssuer, guards, routes, OpenAPI **0.4.0**, env catalog, tests.
 3. Separate **client** PR: ADR index sync (U15).
 4. No merge-as-Done / no Jira Done from this docs PR. LMP-34 wires phone verify → SessionIssuer afterward.
