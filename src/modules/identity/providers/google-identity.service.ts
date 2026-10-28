@@ -62,7 +62,20 @@ export class GoogleIdentityService {
   ) {}
 
   private clientIds(): string[] {
-    return this.config.get('GOOGLE_CLIENT_IDS', { infer: true }) ?? [];
+    const raw = this.config.get('GOOGLE_CLIENT_IDS', { infer: true }) as
+      | string[]
+      | string
+      | undefined;
+    if (Array.isArray(raw)) {
+      return raw;
+    }
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      return raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    return [];
   }
 
   private jwksConfig(): { url?: string; local?: JSONWebKeySet } {
@@ -179,6 +192,7 @@ export class GoogleIdentityService {
       nonceMode,
     });
     if (!verified.ok) {
+      this.logger.warn(`google_verify_failed reason=${verified.reason}`);
       throwUnauthorized('invalid_token', 'Invalid token');
     }
 

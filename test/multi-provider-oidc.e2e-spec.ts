@@ -9,18 +9,11 @@ import {
   ACTIVE_PRIVACY_NOTICE_LOCALE,
   ACTIVE_PRIVACY_NOTICE_VERSION,
 } from '../src/modules/identity/otp/otp.constants';
-import { FakeGoogleTokenExchanger } from '../src/modules/identity/providers/google-token-exchanger';
-import { GOOGLE_TOKEN_EXCHANGER } from '../src/modules/identity/providers/google-token-exchanger';
 import {
-  TEST_EMAIL_SUBJECT_PEPPER,
-  TEST_JWT_PRIVATE_PEM,
-  TEST_JWT_PUBLIC_PEM,
-  TEST_OTP_PEPPER,
-  TEST_PHONE_SUBJECT_PEPPER,
-  TEST_REFRESH_PEPPER,
-} from './fixtures/auth/keys';
+  FakeGoogleTokenExchanger,
+  GOOGLE_TOKEN_EXCHANGER,
+} from '../src/modules/identity/providers/google-token-exchanger';
 import {
-  getTestOidcKeys,
   signTestIdToken,
   TEST_OIDC_AUD_APPLE,
   TEST_OIDC_AUD_GOOGLE,
@@ -28,6 +21,10 @@ import {
   TEST_OIDC_ISS_GOOGLE,
 } from './fixtures/oidc/test-keys';
 
+/**
+ * OIDC Apple/Google HTTP e2e. Relies on test/setup-e2e-env.ts installing
+ * APPLE and GOOGLE env (incl. local JWKS) before AppModule validateEnv.
+ */
 const describeOidc =
   process.env.LM_PHONE_OTP_E2E === '1' && process.env.DATABASE_URL
     ? describe
@@ -37,32 +34,9 @@ describeOidc('POST /v1/auth/apple|google (LMP-35 e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let fakeExchange: FakeGoogleTokenExchanger;
-  let jwksJson: string;
 
   beforeAll(async () => {
-    const keys = await getTestOidcKeys();
-    jwksJson = keys.jwksJson;
-
-    process.env.JWT_ACCESS_PRIVATE_KEY_PEM ??= TEST_JWT_PRIVATE_PEM;
-    process.env.JWT_ACCESS_PUBLIC_KEY_PEM ??= TEST_JWT_PUBLIC_PEM;
-    process.env.REFRESH_TOKEN_PEPPER ??= TEST_REFRESH_PEPPER;
-    process.env.OTP_PEPPER ??= TEST_OTP_PEPPER;
-    process.env.PHONE_SUBJECT_PEPPER ??= TEST_PHONE_SUBJECT_PEPPER;
-    process.env.EMAIL_SUBJECT_PEPPER ??= TEST_EMAIL_SUBJECT_PEPPER;
-    process.env.SMS_SENDER = 'fake';
-    process.env.MAIL_SENDER = 'fake';
-    process.env.APP_ENV = 'development';
     process.env.AUTH_DEV_BOOTSTRAP_ENABLED = 'false';
-    process.env.APPLE_CLIENT_IDS = TEST_OIDC_AUD_APPLE;
-    process.env.APPLE_ISSUER = TEST_OIDC_ISS_APPLE;
-    process.env.APPLE_JWKS_JSON = jwksJson;
-    process.env.GOOGLE_CLIENT_IDS = TEST_OIDC_AUD_GOOGLE;
-    process.env.GOOGLE_ISSUERS = TEST_OIDC_ISS_GOOGLE;
-    process.env.GOOGLE_JWKS_JSON = jwksJson;
-    process.env.GOOGLE_PKCE_ENABLED = 'true';
-    process.env.GOOGLE_CLIENT_SECRET = 'test-google-client-secret!!';
-    process.env.GOOGLE_REDIRECT_URIS = 'http://localhost/oauth/google/callback';
-
     fakeExchange = new FakeGoogleTokenExchanger();
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -118,7 +92,6 @@ describeOidc('POST /v1/auth/apple|google (LMP-35 e2e)', () => {
     expect(auth.body.access_token).toBeTruthy();
     expect(auth.body.parent_id).toMatch(/^[0-9a-f-]{36}$/i);
 
-    // Replay nonce → invalid_token
     const replay = await request(app.getHttpServer())
       .post('/v1/auth/apple')
       .send({
