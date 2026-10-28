@@ -16,7 +16,7 @@ void main() {
   // final instance = ReadinessStatusChecks();
 
   group('test ReadinessStatusChecks', () {
-    // PostgreSQL probe result. `skipped` when DATABASE_URL is unset; `down` forces overall not_ready. 
+    // PostgreSQL probe result. `skipped` only when APP_ENV=development and DATABASE_URL is unset. Staging/production missing DATABASE_URL or a failed probe → `down` (forces overall not_ready). 
     // String database
     test('to test the property `database`', () async {
       // TODO

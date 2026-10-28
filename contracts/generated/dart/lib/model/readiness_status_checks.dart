@@ -16,7 +16,7 @@ class ReadinessStatusChecks {
     required this.database,
   });
 
-  /// PostgreSQL probe result. `skipped` when DATABASE_URL is unset; `down` forces overall not_ready. 
+  /// PostgreSQL probe result. `skipped` only when APP_ENV=development and DATABASE_URL is unset. Staging/production missing DATABASE_URL or a failed probe → `down` (forces overall not_ready). 
   ReadinessStatusChecksDatabaseEnum database;
 
   @override
@@ -106,7 +106,7 @@ class ReadinessStatusChecks {
   };
 }
 
-/// PostgreSQL probe result. `skipped` when DATABASE_URL is unset; `down` forces overall not_ready. 
+/// PostgreSQL probe result. `skipped` only when APP_ENV=development and DATABASE_URL is unset. Staging/production missing DATABASE_URL or a failed probe → `down` (forces overall not_ready). 
 enum ReadinessStatusChecksDatabaseEnum {
   up._(r'up'),
   down._(r'down'),

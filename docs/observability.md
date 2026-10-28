@@ -30,8 +30,9 @@ Cost-aware, pluggable observability for `little-minds-backend`. **Core logging i
 ## Alert-ready signals (no paid monitoring)
 
 1. Scrapable JSON logs with `severity: error|critical` and `error_fingerprint`
-2. `GET /health/ready` → **503** + `status: not_ready` when PostgreSQL probe fails
-3. Bounded in-memory recent-error summaries (`RecentErrorsStore`) for future Admin Error Center
+2. `GET /health/ready` → **503** + `status: not_ready` when PostgreSQL probe fails **or** when `APP_ENV` is `staging`/`production` and `DATABASE_URL` is missing (`checks.database: down`, never `skipped`)
+3. `checks.database: skipped` is allowed **only** for `APP_ENV=development` with unset `DATABASE_URL`
+4. Bounded in-memory recent-error summaries (`RecentErrorsStore`) for future Admin Error Center
 
 Operator email/webhook delivery and Admin Error Center UI are **out of scope** for LMP-32 (separate Blueprint §31.6 tickets).
 

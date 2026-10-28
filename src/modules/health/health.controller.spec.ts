@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { HealthController } from './health.controller';
 import { HealthService } from './health.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,6 +29,12 @@ describe('HealthController', () => {
             error: jest.fn(),
             info: jest.fn(),
             warn: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) => (key === 'APP_ENV' ? 'development' : undefined),
           },
         },
       ],

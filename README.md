@@ -37,7 +37,7 @@ Liveness JSON shape:
 }
 ```
 
-`GET /health` is unauthenticated process liveness. `GET /health/ready` probes PostgreSQL when `DATABASE_URL` is set (HTTP 503 + `status: not_ready` on failure — alert-ready without paid monitoring). Product routes will use `/v1/...` later. Structured JSON logs + `x-request-id` correlation: see [`docs/observability.md`](./docs/observability.md) (LMP-32 / ADR-013).
+`GET /health` is unauthenticated process liveness. `GET /health/ready` probes PostgreSQL when `DATABASE_URL` is set (HTTP 503 + `status: not_ready` on failure). Staging/production missing `DATABASE_URL` also return 503 (`database: down`); `database: skipped` is development-only. Structured JSON logs + `x-request-id` correlation: see [`docs/observability.md`](./docs/observability.md) (LMP-32 / ADR-013).
 
 ## OpenAPI contract (LMP-23)
 

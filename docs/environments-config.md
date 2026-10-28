@@ -35,7 +35,7 @@ Fail-fast validation: `src/config/env.validation.ts` (wired through Nest `Config
 | `PORT` | default `3000` | required (usually `3000` behind a proxy) | required |
 | `PUBLIC_API_BASE_URL` | default `http://localhost:3000` | required `https://…` | required `https://…` |
 | `RELEASE` | default `dev` | optional public release id for structured logs | optional public release id for structured logs |
-| `DATABASE_URL` | optional for Nest liveness; required for Prisma CLI / readiness probe | **required**; non-local host; no Compose placeholders | **required**; non-local; no placeholders |
+| `DATABASE_URL` | optional for Nest liveness; readiness may `skip` only in development | **required** at boot and for readiness (missing → 503 / `database: down`) | **required** at boot and for readiness (missing → 503 / `database: down`) |
 | Local Compose passwords (`postgres` / `minioadmin`) | allowed | **rejected** | **rejected** |
 
 Example files:

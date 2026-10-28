@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { AppEnv, AppEnvironment } from '../../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecentErrorsStore } from '../observability/recent-errors.store';
 import { StructuredLogger } from '../observability/structured-logger';
@@ -23,12 +25,21 @@ export type ReadinessStatus = {
 /** @deprecated Prefer LivenessStatus — kept for existing imports. */
 export type HealthStatus = LivenessStatus;
 
+/**
+ * `checks.database: skipped` is allowed only for local development product env.
+ * Staging and production must have DATABASE_URL; missing → treat as down / not_ready.
+ */
+export function allowsDatabaseSkip(appEnv: AppEnvironment): boolean {
+  return appEnv === 'development';
+}
+
 @Injectable()
 export class HealthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly logger: StructuredLogger,
     private readonly recentErrors: RecentErrorsStore,
+    private readonly config: ConfigService<AppEnv, true>,
   ) {}
 
   getLiveness(): LivenessStatus {
@@ -41,15 +52,22 @@ export class HealthService {
 
   /**
    * Readiness for load balancers / alert scrapers.
-   * - database=skipped when DATABASE_URL is unset (local Nest without DB)
-   * - database=up|down when configured; down → status not_ready (HTTP 503)
+   * - database=skipped only when APP_ENV=development and DATABASE_URL unset
+   * - staging/production missing DATABASE_URL → database=down, not_ready (HTTP 503)
+   * - configured: database=up|down from ping; down → not_ready
    */
   async getReadiness(): Promise<ReadinessStatus> {
-    let database: DatabaseCheck = 'skipped';
+    const appEnv = this.config.get('APP_ENV', { infer: true });
+    let database: DatabaseCheck;
 
     if (this.prisma.isConfigured) {
       const up = await this.prisma.ping();
       database = up ? 'up' : 'down';
+    } else if (allowsDatabaseSkip(appEnv)) {
+      database = 'skipped';
+    } else {
+      // Staging/production (and any non-development env) require DATABASE_URL.
+      database = 'down';
     }
 
     const ready = database !== 'down';
