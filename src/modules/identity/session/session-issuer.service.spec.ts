@@ -33,7 +33,16 @@ type SessionRow = {
 function memoryDb() {
   const sessions = new Map<string, SessionRow>();
   const hashLookups = new Map<string, { hash: string; sessionId: string }>();
-  const parents = new Map([
+  const parents = new Map<
+    string,
+    {
+      id: string;
+      locale: string;
+      timezone: string;
+      lifecycle: ParentAccountLifecycle;
+      deletedAt: Date | null;
+    }
+  >([
     [
       '11111111-1111-4111-8111-111111111111',
       {
@@ -41,7 +50,7 @@ function memoryDb() {
         locale: 'tr-TR',
         timezone: 'Europe/Istanbul',
         lifecycle: ParentAccountLifecycle.active,
-        deletedAt: null as Date | null,
+        deletedAt: null,
       },
     ],
   ]);
