@@ -45,4 +45,4 @@ GSM OTP login mint is **LMP-34** and must call `SessionIssuerService.mintSession
 
 ## GSM OTP
 
-Owned by **LMP-34** — must call `SessionIssuerService.mintSession` after verify. Do not invent a second session store.
+Owned by **LMP-34**. Design ADR (Proposed): [`docs/adr/ADR-020-gsm-otp-sign-in.md`](./adr/ADR-020-gsm-otp-sign-in.md). After Accept, verify must call `SessionIssuerService.mintSession`. Do not invent a second session store. Live OpenAPI phone routes land only in the LMP-34 implementation PR.
