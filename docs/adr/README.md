@@ -48,6 +48,14 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 
 ---
 
+## Proposed (human review required — not normative yet)
+
+| ADR | Title | Jira | Notes |
+|---|---|---|---|
+| **ADR-019** | Parent identity & secure session lifecycle | [LMP-33](https://little-minds-app.atlassian.net/browse/LMP-33) | Completes ADR-002 *implementation/security design* gap. **Do not implement** auth/session code until Accepted. Full text: [`ADR-019-parent-identity-secure-session-lifecycle.md`](./ADR-019-parent-identity-secure-session-lifecycle.md). API sketch (non-live): [`lmp-33-session-api-contract-sketch.md`](./lmp-33-session-api-contract-sketch.md). After Accept, sync the client ADR index (ADR-014). |
+
+---
+
 ## LMP-19 doc tests
 
 Structure checks: `scripts/check-lmp19-docs.sh` (backend pointer checks). Client runs the fuller matrix suite against the canonical docs.
