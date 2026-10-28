@@ -106,10 +106,14 @@ function resolveAppEnv(
   if (rawAppEnv) {
     return rawAppEnv;
   }
-  // Jest / CI harness uses NODE_ENV=test; product env stays development.
-  if (nodeEnv === 'test') {
-    return 'development';
+  // NODE_ENV=production without explicit APP_ENV must not silent-fallback to
+  // development (would allow FakeSms / local peppers / unpublished notice fixtures).
+  if (nodeEnv === 'production') {
+    fail(
+      'APP_ENV is required when NODE_ENV=production (set APP_ENV=staging or APP_ENV=production; do not rely on development defaults)',
+    );
   }
+  // Local/CI: omitted APP_ENV with NODE_ENV=test|development → development.
   return 'development';
 }
 
