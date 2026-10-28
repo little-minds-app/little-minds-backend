@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import {
   SignJWT,
+  compactVerify,
+  decodeJwt,
   generateKeyPair,
   importPKCS8,
   importSPKI,
@@ -112,28 +114,71 @@ export class JwtAccessService implements OnModuleInit {
           algorithms: [JWT_ALG],
           clockTolerance: JWT_CLOCK_SKEW_SECONDS,
         });
-        if (payload.token_use !== 'access') {
-          throw new Error('invalid token_use');
-        }
-        if (typeof payload.sub !== 'string' || !payload.sub) {
-          throw new Error('missing sub');
-        }
-        if (typeof payload.sid !== 'string' || !payload.sid) {
-          throw new Error('missing sid');
-        }
-        if (typeof payload.jti !== 'string' || !payload.jti) {
-          throw new Error('missing jti');
-        }
-        return {
-          sub: payload.sub,
-          sid: payload.sid,
-          jti: payload.jti,
-          token_use: 'access',
-        };
+        return this.requireAccessClaims(payload);
       } catch (err) {
         lastError = err;
       }
     }
     throw lastError instanceof Error ? lastError : new Error('invalid_token');
+  }
+
+  /**
+   * Logout-only: verify JWS signature + required claims, but allow expired access JWTs
+   * so a client can revoke by `sid` after access TTL without a refresh body.
+   * Does **not** authorize protected resources — SessionIssuer still applies revoke idempotently.
+   */
+  async resolveAccessTokenForLogout(token: string): Promise<AccessTokenClaims> {
+    const keys: KeyLike[] = [this.publicKey];
+    if (this.previousPublicKey) {
+      keys.push(this.previousPublicKey);
+    }
+
+    let lastError: unknown;
+    for (const key of keys) {
+      try {
+        await compactVerify(token, key, { algorithms: [JWT_ALG] });
+        const payload = decodeJwt(token);
+        if (payload.iss !== this.issuer) {
+          throw new Error('invalid issuer');
+        }
+        const aud = payload.aud;
+        const audOk =
+          aud === this.audience ||
+          (Array.isArray(aud) && aud.includes(this.audience));
+        if (!audOk) {
+          throw new Error('invalid audience');
+        }
+        return this.requireAccessClaims(payload);
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error('invalid_token');
+  }
+
+  private requireAccessClaims(payload: {
+    token_use?: unknown;
+    sub?: unknown;
+    sid?: unknown;
+    jti?: unknown;
+  }): AccessTokenClaims {
+    if (payload.token_use !== 'access') {
+      throw new Error('invalid token_use');
+    }
+    if (typeof payload.sub !== 'string' || !payload.sub) {
+      throw new Error('missing sub');
+    }
+    if (typeof payload.sid !== 'string' || !payload.sid) {
+      throw new Error('missing sid');
+    }
+    if (typeof payload.jti !== 'string' || !payload.jti) {
+      throw new Error('missing jti');
+    }
+    return {
+      sub: payload.sub,
+      sid: payload.sid,
+      jti: payload.jti,
+      token_use: 'access',
+    };
   }
 }

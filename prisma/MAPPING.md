@@ -10,6 +10,7 @@
 | `ParentAccount` | `parent_accounts` | §13.1 `parent_accounts` + §38.2 lifecycle | `id`, `auth_subject`, `locale`, `timezone`, `lifecycle` (`active`/`pending_deletion`/`deleted`), `created_at`, `updated_at`, `deleted_at` |
 | `ParentIdentity` | `parent_identities` | §13.1 / §38.2 | Unique `(provider, provider_subject)`; `verified_contact` minimized; `verified_at`, `linked_at`, `unlinked_at` |
 | `ParentSession` | `parent_sessions` | **ADR-019 / LMP-33** catalog extension for §12/§29 secure sessions | Opaque refresh hash + bounded history; absolute 30-day expiry; revoke reasons; optional `device_id` |
+| `ParentSessionRefreshHashLookup` | `parent_session_refresh_hash_lookups` | **ADR-019 / LMP-33** indexed prior hashes | O(1) refresh-reuse detection; FK cascade on session delete |
 | `ParentProfile` | `parent_profiles` | **§38.2 canonical**; replaces §13 `parent_demographics` as a table | Optional name + age band / gender / children count / occupation; `collection_notice_version` |
 | `ProfileDraft` | `profile_drafts` | §38.2 new | Short-lived encrypted Apple/provider name draft; `expires_at`, `status` |
 | `PrivacyNoticeAcknowledgment` | `privacy_notice_acknowledgments` | §13.1 | Notice presentation evidence ≠ consent |

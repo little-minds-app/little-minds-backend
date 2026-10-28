@@ -32,6 +32,7 @@ type SessionRow = {
 
 function memoryDb() {
   const sessions = new Map<string, SessionRow>();
+  const hashLookups = new Map<string, { hash: string; sessionId: string }>();
   const parents = new Map([
     [
       '11111111-1111-4111-8111-111111111111',
@@ -45,149 +46,211 @@ function memoryDb() {
     ],
   ]);
 
-  const db: Record<string, unknown> = {
-    parentAccount: {
-      findUnique: async ({ where: { id } }: { where: { id: string } }) =>
-        parents.get(id) ?? null,
+  const db: Record<string, unknown> = {};
+
+  const parentSession = {
+    count: async ({
+      where,
+    }: {
+      where: { parentId: string; revokedAt: null; expiresAt: { gt: Date } };
+    }) =>
+      [...sessions.values()].filter(
+        (s) =>
+          s.parentId === where.parentId &&
+          s.revokedAt == null &&
+          s.expiresAt > where.expiresAt.gt,
+      ).length,
+    create: async ({
+      data,
+    }: {
+      data: Partial<SessionRow> & { id: string };
+    }) => {
+      const now = new Date();
+      const row: SessionRow = {
+        refreshTokenHashHistory: [],
+        refreshGeneration: 0,
+        revokedAt: null,
+        revokedReason: null,
+        deviceId: null,
+        clientSurface: null,
+        userAgentSummary: null,
+        lastRefreshedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        expiresAt: now,
+        parentId: '',
+        tokenFamilyId: '',
+        refreshTokenHash: null,
+        ...data,
+        id: data.id,
+      };
+      sessions.set(row.id, row);
+      return row;
     },
-    parentSession: {
-      count: async ({
-        where,
-      }: {
-        where: { parentId: string; revokedAt: null; expiresAt: { gt: Date } };
-      }) =>
-        [...sessions.values()].filter(
-          (s) =>
-            s.parentId === where.parentId &&
-            s.revokedAt == null &&
-            s.expiresAt > where.expiresAt.gt,
-        ).length,
-      create: async ({ data }: { data: Partial<SessionRow> & { id: string } }) => {
-        const now = new Date();
-        const row: SessionRow = {
-          refreshTokenHashHistory: [],
-          refreshGeneration: 0,
-          revokedAt: null,
-          revokedReason: null,
-          deviceId: null,
-          clientSurface: null,
-          userAgentSummary: null,
-          lastRefreshedAt: null,
-          createdAt: now,
-          updatedAt: now,
-          expiresAt: now,
-          parentId: '',
-          tokenFamilyId: '',
-          refreshTokenHash: null,
-          ...data,
-          id: data.id,
-        };
-        sessions.set(row.id, row);
+    findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+      for (const row of sessions.values()) {
+        if (
+          where.refreshTokenHash &&
+          row.refreshTokenHash !== where.refreshTokenHash
+        ) {
+          continue;
+        }
+        if (where.id && row.id !== where.id) continue;
+        if (where.parentId && row.parentId !== where.parentId) continue;
         return row;
-      },
-      findFirst: async ({
-        where,
-      }: {
-        where: Record<string, unknown>;
-      }) => {
-        for (const row of sessions.values()) {
-          if (where.refreshTokenHash && row.refreshTokenHash !== where.refreshTokenHash) {
-            continue;
-          }
-          if (where.id && row.id !== where.id) continue;
-          if (where.parentId && row.parentId !== where.parentId) continue;
-          return row;
+      }
+      return null;
+    },
+    findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+      sessions.get(id) ?? null,
+    findMany: async ({ where }: { where: Record<string, unknown> }) => {
+      let rows = [...sessions.values()];
+      if (where.parentId) {
+        rows = rows.filter((r) => r.parentId === where.parentId);
+      }
+      if (where.revokedAt === null) {
+        rows = rows.filter((r) => r.revokedAt == null);
+      }
+      return rows;
+    },
+    updateMany: async ({
+      where,
+      data,
+    }: {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    }) => {
+      let count = 0;
+      for (const [id, row] of sessions) {
+        if (where.id && row.id !== where.id) continue;
+        if (
+          where.refreshTokenHash &&
+          row.refreshTokenHash !== where.refreshTokenHash
+        ) {
+          continue;
         }
-        return null;
-      },
-      findMany: async ({
-        where,
-      }: {
-        where: Record<string, unknown>;
-        orderBy?: unknown;
-        take?: number;
-      }) => {
-        let rows = [...sessions.values()];
-        if (where.parentId) {
-          rows = rows.filter((r) => r.parentId === where.parentId);
+        if (where.revokedAt === null && row.revokedAt != null) continue;
+        if (where.parentId && row.parentId !== where.parentId) continue;
+        if (
+          where.expiresAt &&
+          typeof where.expiresAt === 'object' &&
+          'gt' in (where.expiresAt as object) &&
+          !(row.expiresAt > (where.expiresAt as { gt: Date }).gt)
+        ) {
+          continue;
         }
-        if (where.revokedAt === null) {
-          rows = rows.filter((r) => r.revokedAt == null);
+        const next = { ...row } as SessionRow;
+        if ('refreshTokenHash' in data) {
+          next.refreshTokenHash = data.refreshTokenHash as string | null;
+        }
+        if ('refreshTokenHashHistory' in data) {
+          next.refreshTokenHashHistory = data.refreshTokenHashHistory;
         }
         if (
-          where.refreshGeneration &&
-          typeof where.refreshGeneration === 'object' &&
-          'gt' in (where.refreshGeneration as object)
+          data.refreshGeneration &&
+          typeof data.refreshGeneration === 'object' &&
+          'increment' in (data.refreshGeneration as object)
         ) {
-          const gt = (where.refreshGeneration as { gt: number }).gt;
-          rows = rows.filter((r) => r.refreshGeneration > gt);
+          next.refreshGeneration += (
+            data.refreshGeneration as { increment: number }
+          ).increment;
         }
-        return rows;
-      },
-      updateMany: async ({
-        where,
-        data,
-      }: {
-        where: Record<string, unknown>;
-        data: Record<string, unknown>;
-      }) => {
-        let count = 0;
-        for (const [id, row] of sessions) {
-          if (where.id && row.id !== where.id) continue;
-          if (
-            where.refreshTokenHash &&
-            row.refreshTokenHash !== where.refreshTokenHash
-          ) {
-            continue;
-          }
-          if (where.revokedAt === null && row.revokedAt != null) continue;
-          if (where.parentId && row.parentId !== where.parentId) continue;
-          const next = { ...row } as SessionRow;
-          if ('refreshTokenHash' in data) {
-            next.refreshTokenHash = data.refreshTokenHash as string | null;
-          }
-          if ('refreshTokenHashHistory' in data) {
-            next.refreshTokenHashHistory = data.refreshTokenHashHistory;
-          }
-          if (
-            data.refreshGeneration &&
-            typeof data.refreshGeneration === 'object' &&
-            'increment' in (data.refreshGeneration as object)
-          ) {
-            next.refreshGeneration += (
-              data.refreshGeneration as { increment: number }
-            ).increment;
-          }
-          if ('lastRefreshedAt' in data) {
-            next.lastRefreshedAt = data.lastRefreshedAt as Date;
-          }
-          if ('revokedAt' in data) {
-            next.revokedAt = data.revokedAt as Date | null;
-          }
-          if ('revokedReason' in data) {
-            next.revokedReason = data.revokedReason as string | null;
-          }
-          sessions.set(id, next);
-          count += 1;
+        if ('lastRefreshedAt' in data) {
+          next.lastRefreshedAt = data.lastRefreshedAt as Date;
         }
-        return { count };
-      },
-      update: async ({
-        where: { id },
-        data,
-      }: {
-        where: { id: string };
-        data: Record<string, unknown>;
-      }) => {
-        const row = sessions.get(id);
-        if (!row) throw new Error('missing');
-        const next = { ...row, ...data } as SessionRow;
+        if ('revokedAt' in data) {
+          next.revokedAt = data.revokedAt as Date | null;
+        }
+        if ('revokedReason' in data) {
+          next.revokedReason = data.revokedReason as string | null;
+        }
         sessions.set(id, next);
-        return next;
-      },
+        count += 1;
+      }
+      return { count };
+    },
+    update: async ({
+      where: { id },
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }) => {
+      const row = sessions.get(id);
+      if (!row) throw new Error('missing');
+      const next = { ...row, ...data } as SessionRow;
+      sessions.set(id, next);
+      return next;
     },
   };
 
+  const parentSessionRefreshHashLookup = {
+    upsert: async ({
+      where: { hash },
+      create,
+    }: {
+      where: { hash: string };
+      create: { hash: string; sessionId: string };
+      update: { sessionId: string };
+    }) => {
+      hashLookups.set(hash, { hash: create.hash, sessionId: create.sessionId });
+      return hashLookups.get(hash);
+    },
+    findUnique: async ({
+      where: { hash },
+      include,
+    }: {
+      where: { hash: string };
+      include?: { session: boolean };
+    }) => {
+      const hit = hashLookups.get(hash);
+      if (!hit) return null;
+      if (include?.session) {
+        return { ...hit, session: sessions.get(hit.sessionId) ?? null };
+      }
+      return hit;
+    },
+    findMany: async ({
+      where: { sessionId },
+    }: {
+      where: { sessionId: string };
+      select?: { hash: boolean };
+    }) =>
+      [...hashLookups.values()]
+        .filter((row) => row.sessionId === sessionId)
+        .map((row) => ({ hash: row.hash })),
+    deleteMany: async ({
+      where,
+    }: {
+      where: { sessionId?: string | { in: string[] }; hash?: { in: string[] } };
+    }) => {
+      let count = 0;
+      for (const [hash, row] of [...hashLookups.entries()]) {
+        if (where.hash?.in && !where.hash.in.includes(hash)) continue;
+        if (typeof where.sessionId === 'string' && row.sessionId !== where.sessionId) {
+          continue;
+        }
+        if (
+          where.sessionId &&
+          typeof where.sessionId === 'object' &&
+          'in' in where.sessionId &&
+          !where.sessionId.in.includes(row.sessionId)
+        ) {
+          continue;
+        }
+        hashLookups.delete(hash);
+        count += 1;
+      }
+      return { count };
+    },
+  };
+
+  db.parentAccount = {
+    findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+      parents.get(id) ?? null,
+  };
+  db.parentSession = parentSession;
+  db.parentSessionRefreshHashLookup = parentSessionRefreshHashLookup;
   db.$transaction = async <T>(fn: (tx: typeof db) => Promise<T>): Promise<T> =>
     fn(db);
   db.$queryRaw = async (
@@ -199,10 +262,14 @@ function memoryDb() {
       const id = String(values[0] ?? '');
       return parents.has(id) ? [{ id }] : [];
     }
+    if (sql.includes('parent_sessions') && sql.includes('FOR UPDATE')) {
+      const id = String(values[0] ?? '');
+      return sessions.has(id) ? [{ id }] : [];
+    }
     return [];
   };
 
-  return { db, sessions, parents };
+  return { db, sessions, parents, hashLookups };
 }
 
 describe('SessionIssuerService (LMP-33)', () => {
@@ -307,5 +374,67 @@ describe('SessionIssuerService (LMP-33)', () => {
     const rejected = results.filter((r) => r.status === 'rejected');
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
+  });
+
+  it('detects reuse via indexed lookup beyond 500 newer sessions', async () => {
+    const { issuer, mem } = await build();
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const pair = await issuer.mintSession({ parentId });
+    const rotated = await issuer.refresh(pair.refresh_token);
+    expect(rotated.session_id).toBe(pair.session_id);
+
+    const now = new Date();
+    for (let i = 0; i < 520; i += 1) {
+      const id = `bbbbbbbb-bbbb-4bbb-8bbb-${i.toString().padStart(12, '0')}`;
+      mem.sessions.set(id, {
+        id,
+        parentId,
+        tokenFamilyId: id,
+        refreshTokenHash: hashRefreshToken(`noise-${i}`, TEST_REFRESH_PEPPER),
+        refreshTokenHashHistory: [
+          {
+            h: hashRefreshToken(`noise-old-${i}`, TEST_REFRESH_PEPPER),
+            g: 0,
+            at: now.toISOString(),
+          },
+        ],
+        refreshGeneration: 1,
+        expiresAt: new Date(now.getTime() + 86_400_000),
+        revokedAt: null,
+        revokedReason: null,
+        deviceId: null,
+        clientSurface: null,
+        userAgentSummary: null,
+        createdAt: now,
+        updatedAt: now,
+        lastRefreshedAt: now,
+      });
+    }
+
+    await expect(issuer.refresh(pair.refresh_token)).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'refresh_reuse' }),
+    });
+  });
+
+  it('rejects refresh when session expires before conditional update', async () => {
+    const { issuer, mem } = await build();
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const pair = await issuer.mintSession({ parentId });
+    const row = mem.sessions.get(pair.session_id)!;
+    row.expiresAt = new Date(Date.now() - 1000);
+    mem.sessions.set(pair.session_id, row);
+    await expect(issuer.refresh(pair.refresh_token)).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'expired_token' }),
+    });
+  });
+
+  it('logout by sid is idempotent for already-revoked sessions', async () => {
+    const { issuer } = await build();
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const pair = await issuer.mintSession({ parentId });
+    await issuer.logout({ sessionId: pair.session_id, parentId });
+    await expect(
+      issuer.logout({ sessionId: pair.session_id, parentId }),
+    ).resolves.toBeUndefined();
   });
 });

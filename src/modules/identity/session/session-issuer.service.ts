@@ -19,7 +19,6 @@ import {
   appendHashHistory,
   generateRefreshToken,
   hashRefreshToken,
-  historyContainsHash,
   parseHashHistory,
 } from './refresh-token';
 import {
@@ -43,6 +42,8 @@ export type MintSessionInput = {
   userAgentSummary?: string | null;
 };
 
+type TxClient = Prisma.TransactionClient;
+
 @Injectable()
 export class SessionIssuerService {
   constructor(
@@ -59,6 +60,11 @@ export class SessionIssuerService {
       );
     }
     return pepper;
+  }
+
+  /** Peppered hash for rate-limit buckets — never store/log the raw token fragment. */
+  refreshRateLimitKey(refreshToken: string): string {
+    return hashRefreshToken(refreshToken, this.pepper());
   }
 
   async mintSession(input: MintSessionInput): Promise<TokenPair> {
@@ -141,54 +147,73 @@ export class SessionIssuerService {
     const presentedHash = hashRefreshToken(refreshToken, pepper);
     const db = this.prisma.db;
     const now = new Date();
-
-    const current = await db.parentSession.findFirst({
-      where: { refreshTokenHash: presentedHash },
-    });
-
-    if (!current) {
-      const reused = await this.findHistoryMatch(presentedHash);
-      if (reused) {
-        await this.revokeSession(reused.id, ParentSessionRevokeReason.refresh_reuse);
-        throwUnauthorized('refresh_reuse', 'Refresh token reuse detected');
-      }
-      throwUnauthorized('invalid_token', 'Invalid refresh token');
-    }
-
-    if (current.revokedAt) {
-      throwUnauthorized('revoked_session', 'Session has been revoked');
-    }
-    if (current.expiresAt.getTime() <= now.getTime()) {
-      throwUnauthorized('expired_token', 'Session has expired');
-    }
-
-    const parent = await db.parentAccount.findUnique({
-      where: { id: current.parentId },
-    });
-    if (
-      !parent ||
-      parent.deletedAt ||
-      parent.lifecycle !== ParentAccountLifecycle.active
-    ) {
-      throwUnauthorized('invalid_token', 'Parent account is not active');
-    }
-
     const newRefresh = generateRefreshToken();
     const newHash = hashRefreshToken(newRefresh, pepper);
-    const history = parseHashHistory(current.refreshTokenHashHistory);
-    const nextHistory = appendHashHistory(history, {
-      h: presentedHash,
-      g: current.refreshGeneration,
-      at: now.toISOString(),
-    });
 
-    // Conditional UPDATE is the single-winner gate (ADR-019 §4.2).
-    const updated = await db.$transaction(async (tx) =>
-      tx.parentSession.updateMany({
+    const result = await db.$transaction(async (tx) => {
+      const current = await tx.parentSession.findFirst({
+        where: { refreshTokenHash: presentedHash },
+      });
+
+      if (!current) {
+        const reused = await this.findHistoryMatchTx(tx, presentedHash);
+        if (reused) {
+          await this.revokeSessionTx(
+            tx,
+            reused.id,
+            ParentSessionRevokeReason.refresh_reuse,
+          );
+          throwUnauthorized('refresh_reuse', 'Refresh token reuse detected');
+        }
+        throwUnauthorized('invalid_token', 'Invalid refresh token');
+      }
+
+      // Lock the session row before expiry / parent / rotation checks.
+      await tx.$queryRaw`
+        SELECT id FROM parent_sessions
+        WHERE id = ${current.id}::uuid
+        FOR UPDATE
+      `;
+
+      const locked = await tx.parentSession.findUnique({
+        where: { id: current.id },
+      });
+      if (!locked || locked.refreshTokenHash !== presentedHash) {
+        throwUnauthorized('invalid_token', 'Invalid refresh token');
+      }
+      if (locked.revokedAt) {
+        throwUnauthorized('revoked_session', 'Session has been revoked');
+      }
+      if (locked.expiresAt.getTime() <= now.getTime()) {
+        throwUnauthorized('expired_token', 'Session has expired');
+      }
+
+      const parent = await tx.parentAccount.findUnique({
+        where: { id: locked.parentId },
+      });
+      if (
+        !parent ||
+        parent.deletedAt ||
+        parent.lifecycle !== ParentAccountLifecycle.active
+      ) {
+        throwUnauthorized('invalid_token', 'Parent account is not active');
+      }
+
+      const history = parseHashHistory(locked.refreshTokenHashHistory);
+      const nextHistory = appendHashHistory(history, {
+        h: presentedHash,
+        g: locked.refreshGeneration,
+        at: now.toISOString(),
+      });
+
+      // Conditional UPDATE is the single-winner gate (ADR-019 §4.2).
+      // Expiry is enforced atomically in the WHERE clause.
+      const updated = await tx.parentSession.updateMany({
         where: {
-          id: current.id,
+          id: locked.id,
           refreshTokenHash: presentedHash,
           revokedAt: null,
+          expiresAt: { gt: now },
         },
         data: {
           refreshTokenHash: newHash,
@@ -197,17 +222,39 @@ export class SessionIssuerService {
           refreshGeneration: { increment: 1 },
           lastRefreshedAt: now,
         },
-      }),
-    );
+      });
 
-    if (updated.count !== 1) {
-      // Consumed by a concurrent winner — do not instruct retry of this token.
-      throwUnauthorized('invalid_token', 'Invalid refresh token');
-    }
+      if (updated.count !== 1) {
+        throwUnauthorized('invalid_token', 'Invalid refresh token');
+      }
+
+      await tx.parentSessionRefreshHashLookup.upsert({
+        where: { hash: presentedHash },
+        create: { hash: presentedHash, sessionId: locked.id },
+        update: { sessionId: locked.id },
+      });
+
+      // Keep lookup table aligned with bounded history (max 8).
+      const keep = new Set(nextHistory.map((entry) => entry.h));
+      const prior = await tx.parentSessionRefreshHashLookup.findMany({
+        where: { sessionId: locked.id },
+        select: { hash: true },
+      });
+      const stale = prior
+        .map((row) => row.hash)
+        .filter((hash) => !keep.has(hash));
+      if (stale.length > 0) {
+        await tx.parentSessionRefreshHashLookup.deleteMany({
+          where: { hash: { in: stale } },
+        });
+      }
+
+      return { sessionId: locked.id, parentId: locked.parentId };
+    });
 
     const accessToken = await this.jwt.signAccessToken({
-      parentId: current.parentId,
-      sessionId: current.id,
+      parentId: result.parentId,
+      sessionId: result.sessionId,
     });
 
     return {
@@ -215,8 +262,8 @@ export class SessionIssuerService {
       refresh_token: newRefresh,
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
-      session_id: current.id,
-      parent_id: current.parentId,
+      session_id: result.sessionId,
+      parent_id: result.parentId,
     };
   }
 
@@ -239,27 +286,38 @@ export class SessionIssuerService {
       const session = await this.prisma.db.parentSession.findFirst({
         where: { id: opts.sessionId, parentId: opts.parentId },
       });
-      if (session) {
+      if (session && !session.revokedAt) {
         await this.revokeSession(session.id, ParentSessionRevokeReason.logout);
       }
+      // Idempotent 204 when already revoked / missing for owned id path handled by caller
     }
   }
 
   async logoutAll(parentId: string): Promise<number> {
     const now = new Date();
-    const result = await this.prisma.db.parentSession.updateMany({
-      where: {
-        parentId,
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: now,
-        revokedReason: ParentSessionRevokeReason.logout_all,
-        refreshTokenHash: null,
-        refreshTokenHashHistory: [] as unknown as Prisma.InputJsonValue,
-      },
+    return this.prisma.db.$transaction(async (tx) => {
+      const active = await tx.parentSession.findMany({
+        where: { parentId, revokedAt: null },
+        select: { id: true },
+      });
+      if (active.length === 0) {
+        return 0;
+      }
+      const ids = active.map((row) => row.id);
+      await tx.parentSessionRefreshHashLookup.deleteMany({
+        where: { sessionId: { in: ids } },
+      });
+      const result = await tx.parentSession.updateMany({
+        where: { parentId, revokedAt: null },
+        data: {
+          revokedAt: now,
+          revokedReason: ParentSessionRevokeReason.logout_all,
+          refreshTokenHash: null,
+          refreshTokenHashHistory: [] as unknown as Prisma.InputJsonValue,
+        },
+      });
+      return result.count;
     });
-    return result.count;
   }
 
   async revokeOwnedSession(
@@ -352,7 +410,20 @@ export class SessionIssuerService {
     sessionId: string,
     reason: ParentSessionRevokeReason,
   ): Promise<void> {
-    await this.prisma.db.parentSession.update({
+    await this.prisma.db.$transaction(async (tx) => {
+      await this.revokeSessionTx(tx, sessionId, reason);
+    });
+  }
+
+  private async revokeSessionTx(
+    tx: TxClient,
+    sessionId: string,
+    reason: ParentSessionRevokeReason,
+  ): Promise<void> {
+    await tx.parentSessionRefreshHashLookup.deleteMany({
+      where: { sessionId },
+    });
+    await tx.parentSession.update({
       where: { id: sessionId },
       data: {
         revokedAt: new Date(),
@@ -363,24 +434,18 @@ export class SessionIssuerService {
     });
   }
 
-  private async findHistoryMatch(
+  /** O(1) indexed prior-hash lookup — no scan limit. */
+  private async findHistoryMatchTx(
+    tx: TxClient,
     presentedHash: string,
   ): Promise<ParentSession | null> {
-    // V1: scan recently rotated non-revoked sessions (history lives in JSON).
-    const candidates = await this.prisma.db.parentSession.findMany({
-      where: {
-        revokedAt: null,
-        refreshGeneration: { gt: 0 },
-      },
-      orderBy: { lastRefreshedAt: 'desc' },
-      take: 500,
+    const hit = await tx.parentSessionRefreshHashLookup.findUnique({
+      where: { hash: presentedHash },
+      include: { session: true },
     });
-    for (const session of candidates) {
-      const history = parseHashHistory(session.refreshTokenHashHistory);
-      if (historyContainsHash(history, presentedHash)) {
-        return session;
-      }
+    if (!hit || hit.session.revokedAt) {
+      return null;
     }
-    return null;
+    return hit.session;
   }
 }

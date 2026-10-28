@@ -133,14 +133,26 @@ model ParentSession {
   updatedAt               DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
   lastRefreshedAt         DateTime?                  @map("last_refreshed_at") @db.Timestamptz(6)
 
-  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Restrict)
-  device Device?       @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  parent       ParentAccount                     @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  device       Device?                           @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  priorHashes  ParentSessionRefreshHashLookup[]
 
   @@unique([refreshTokenHash], map: "parent_sessions_refresh_token_hash_key")
   @@index([parentId, revokedAt], map: "parent_sessions_parent_revoked_idx")
   @@index([tokenFamilyId], map: "parent_sessions_token_family_idx")
   @@index([expiresAt], map: "parent_sessions_expires_at_idx")
   @@map("parent_sessions")
+}
+
+/// Indexed prior refresh hashes for O(1) reuse detection (no scan limit).
+model ParentSessionRefreshHashLookup {
+  hash      String        @id @db.VarChar(64)
+  sessionId String        @map("session_id") @db.Uuid
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  session   ParentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId], map: "parent_session_refresh_hash_lookups_session_idx")
+  @@map("parent_session_refresh_hash_lookups")
 }
 
 /// Provider-linked identity. Unique active (provider, provider_subject).

@@ -46,4 +46,30 @@ describe('JwtAccessService (LMP-33)', () => {
     });
     await expect(svc.verifyAccessToken(`${token}x`)).rejects.toBeTruthy();
   });
+
+  it('resolveAccessTokenForLogout accepts expired but signed access JWTs', async () => {
+    const { SignJWT, importPKCS8 } = await import('jose');
+    const svc = await build();
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const sessionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const key = await importPKCS8(TEST_JWT_PRIVATE_PEM, 'EdDSA');
+    const now = Math.floor(Date.now() / 1000);
+    const expired = await new SignJWT({
+      token_use: 'access',
+      sid: sessionId,
+    })
+      .setProtectedHeader({ alg: 'EdDSA', typ: 'JWT', kid: 'test' })
+      .setIssuer('little-minds-backend')
+      .setAudience('little-minds-parent')
+      .setSubject(parentId)
+      .setJti('logout-expired-jti')
+      .setIssuedAt(now - 3600)
+      .setExpirationTime(now - 1800)
+      .sign(key);
+
+    await expect(svc.verifyAccessToken(expired)).rejects.toBeTruthy();
+    const claims = await svc.resolveAccessTokenForLogout(expired);
+    expect(claims.sub).toBe(parentId);
+    expect(claims.sid).toBe(sessionId);
+  });
 });

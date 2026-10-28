@@ -285,4 +285,32 @@ describe('validateEnv', () => {
       }),
     ).toThrow(/JWT_ACCESS_PRIVATE_KEY_PEM/);
   });
+
+  it('rejects staging/production when AUTH_DEV_BOOTSTRAP_ENABLED is true', () => {
+    expect(() =>
+      validateEnv({
+        ...stagingAuthEnv,
+        APP_ENV: 'staging',
+        NODE_ENV: 'production',
+        PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds',
+        AUTH_DEV_BOOTSTRAP_ENABLED: 'true',
+      }),
+    ).toThrow(/AUTH_DEV_BOOTSTRAP_ENABLED must be false/);
+  });
+
+  it('rejects production local refresh pepper', () => {
+    expect(() =>
+      validateEnv({
+        ...stagingAuthEnv,
+        APP_ENV: 'production',
+        NODE_ENV: 'production',
+        PUBLIC_API_BASE_URL: 'https://api.example.invalid',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.example.invalid:5432/little_minds',
+        REFRESH_TOKEN_PEPPER: 'local-dev-refresh-pepper-not-for-prod',
+      }),
+    ).toThrow(/REFRESH_TOKEN_PEPPER/);
+  });
 });

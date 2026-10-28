@@ -40,7 +40,10 @@ export class AuthController {
     }
     const ip = clientIp(req);
     this.rateLimit.consumeRefreshIp(ip);
-    this.rateLimit.consumeRefreshSession(`rt:${token.slice(0, 24)}`);
+    // Keyed peppered hash — never bucket on raw token prefixes (LMP-33 QA).
+    this.rateLimit.consumeRefreshSession(
+      this.sessions.refreshRateLimitKey(token),
+    );
     return this.sessions.refresh(token);
   }
 
@@ -62,11 +65,14 @@ export class AuthController {
       const match = /^Bearer\s+(\S+)$/i.exec(authHeader);
       if (match) {
         try {
-          const claims = await this.jwt.verifyAccessToken(match[1]);
+          // Allow expired (but signed) access JWTs for revoke-by-sid; signature
+          // alone does not authorize protected routes (ParentAuthGuard still
+          // requires an active session).
+          const claims = await this.jwt.resolveAccessTokenForLogout(match[1]);
           sessionId = claims.sid;
           parentId = claims.sub;
         } catch {
-          // Invalid bearer alone is ok if refresh is present; otherwise still logout no-op path
+          // Invalid/unsigned bearer alone is ok if refresh is present.
         }
       }
     }

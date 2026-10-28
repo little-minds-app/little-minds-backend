@@ -144,6 +144,9 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/little_minds?schema=public
       # Required by scripts/db-reset-dev.sh safety gate (explicit approval; loopback-only).
       LM_CONFIRM_DB_RESET: "1"
+      # LMP-33 session DB integration tests (ADR-019 signing + pepper).
+      REFRESH_TOKEN_PEPPER: "ci-refresh-pepper-not-for-prod!!"
+      AUTH_DEV_BOOTSTRAP_ENABLED: "false"
 
     steps:
       - name: Checkout repository
