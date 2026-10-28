@@ -19,15 +19,15 @@ import {
 } from './fixtures/auth/keys';
 
 /**
- * In-memory / mocked Prisma is insufficient for OTP partial unique + abuse counters.
- * This e2e boots AppModule with FakeSmsSender; Prisma must be available OR we
- * substitute a lightweight stub for controllers that only exercise validation.
- *
- * When DATABASE_URL is unset, we still cover uniform notice/phone validation
- * via a minimal Nest module substitute below is skipped — full flow uses DB suite.
+ * Full HTTP OTP flow needs Postgres (challenges + durable counters).
+ * Nest CI has no DB — opt in explicitly (prisma-checks / local Compose):
+ *   LM_PHONE_OTP_E2E=1 DATABASE_URL=... npm run test:e2e -- phone-otp
+ * Default coverage for concurrency/retention lives in `phone-otp.db.spec.ts`.
  */
-const hasDb = Boolean(process.env.DATABASE_URL);
-const describePhone = hasDb ? describe : describe.skip;
+const describePhone =
+  process.env.LM_PHONE_OTP_E2E === '1' && process.env.DATABASE_URL
+    ? describe
+    : describe.skip;
 
 describePhone('POST /v1/auth/phone/* (LMP-34 e2e)', () => {
   let app: INestApplication<App>;

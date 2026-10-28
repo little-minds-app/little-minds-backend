@@ -173,9 +173,24 @@ jobs:
 
       - name: Integrity tests
         run: npm run test:db -- --ci
+        env:
+          LM_PHONE_OTP_E2E: "1"
+
+      - name: Phone OTP HTTP e2e against Postgres
+        run: npm run test:e2e -- --ci --testPathPatterns=phone-otp
+        env:
+          LM_PHONE_OTP_E2E: "1"
+          SMS_SENDER: "fake"
+          OTP_PEPPER: "ci-otp-pepper-not-for-prod!!!!!!"
+          PHONE_SUBJECT_PEPPER: "ci-phone-subject-pepper!!!!!"
+          APP_ENV: development
+          NODE_ENV: test
+          AUTH_DEV_BOOTSTRAP_ENABLED: "false"
 
       - name: Clean remigrate and re-seed
         run: npm run db:reset
 
       - name: Re-seed idempotency + integrity after reset
         run: npm run test:db -- --ci
+        env:
+          LM_PHONE_OTP_E2E: "1"
