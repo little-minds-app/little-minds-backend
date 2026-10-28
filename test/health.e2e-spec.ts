@@ -172,6 +172,9 @@ describe.each(['staging', 'production'] as const)(
             if (key === 'AUTH_DEV_BOOTSTRAP_ENABLED') {
               return false;
             }
+            if (key === 'LISTEN_HOST') {
+              return '0.0.0.0';
+            }
             return undefined;
           },
         })

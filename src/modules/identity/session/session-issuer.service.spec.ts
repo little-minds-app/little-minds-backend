@@ -265,8 +265,11 @@ function memoryDb() {
   db.$queryRaw = async (
     strings: TemplateStringsArray,
     ...values: unknown[]
-  ): Promise<Array<{ id: string }>> => {
+  ): Promise<Array<Record<string, unknown>>> => {
     const sql = strings.join('?');
+    if (sql.includes('clock_timestamp')) {
+      return [{ now: new Date() }];
+    }
     if (sql.includes('parent_accounts') && sql.includes('FOR UPDATE')) {
       const id = String(values[0] ?? '');
       return parents.has(id) ? [{ id }] : [];
@@ -432,6 +435,37 @@ describe('SessionIssuerService (LMP-33)', () => {
     const row = mem.sessions.get(pair.session_id)!;
     row.expiresAt = new Date(Date.now() - 1000);
     mem.sessions.set(pair.session_id, row);
+    await expect(issuer.refresh(pair.refresh_token)).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'expired_token' }),
+    });
+  });
+
+  it('rejects refresh when absolute expiry passes during lock wait (post-lock clock)', async () => {
+    const { issuer, mem } = await build();
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const pair = await issuer.mintSession({ parentId });
+    const row = mem.sessions.get(pair.session_id)!;
+    // Still valid if checked with a stale pre-lock clock, but post-lock
+    // clock_timestamp is forced past expiresAt.
+    const expiresAt = new Date(Date.now() + 5_000);
+    row.expiresAt = expiresAt;
+    mem.sessions.set(pair.session_id, row);
+
+    const originalQuery = mem.db.$queryRaw as (
+      strings: TemplateStringsArray,
+      ...values: unknown[]
+    ) => Promise<Array<Record<string, unknown>>>;
+    mem.db.$queryRaw = async (
+      strings: TemplateStringsArray,
+      ...values: unknown[]
+    ) => {
+      const sql = strings.join('?');
+      if (sql.includes('clock_timestamp')) {
+        return [{ now: new Date(expiresAt.getTime() + 1) }];
+      }
+      return originalQuery(strings, ...values);
+    };
+
     await expect(issuer.refresh(pair.refresh_token)).rejects.toMatchObject({
       response: expect.objectContaining({ error: 'expired_token' }),
     });

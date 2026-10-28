@@ -289,8 +289,11 @@ function createMemoryPrisma(): PrismaService {
   db.$queryRaw = async (
     strings: TemplateStringsArray,
     ...values: unknown[]
-  ): Promise<Array<{ id: string }>> => {
+  ): Promise<Array<Record<string, unknown>>> => {
     const sql = strings.join('?');
+    if (sql.includes('clock_timestamp')) {
+      return [{ now: new Date() }];
+    }
     if (sql.includes('parent_accounts') && sql.includes('FOR UPDATE')) {
       const id = String(values[0] ?? '');
       return parents.has(id) ? [{ id }] : [];
@@ -327,6 +330,7 @@ describe('Identity sessions (e2e LMP-33)', () => {
     process.env.REFRESH_TOKEN_PEPPER = TEST_REFRESH_PEPPER;
     process.env.AUTH_DEV_BOOTSTRAP_ENABLED = 'true';
     process.env.AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST = PARENT_ID;
+    process.env.LISTEN_HOST = '127.0.0.1';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -413,14 +417,32 @@ describe('Identity sessions (e2e LMP-33)', () => {
       .expect(404);
   });
 
-  it('ignores forged X-Forwarded-For for bootstrap (peer remains loopback in harness)', async () => {
-    // Spoofed XFF must not change peer-based loopback decision. Supertest peers
-    // are loopback, so bootstrap still succeeds even if XFF claims a public IP.
+  it('rejects bootstrap when reverse-proxy forwarding headers are present', async () => {
+    // Peer is loopback in the harness; any forwarding header implies external ingress.
     await request(app.getHttpServer())
       .post('/v1/auth/dev/session')
       .set('X-Forwarded-For', '203.0.113.9')
       .send({ parent_id: PARENT_ID })
-      .expect(200);
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/dev/session')
+      .set('X-Real-IP', '198.51.100.7')
+      .send({ parent_id: PARENT_ID })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/dev/session')
+      .set('Forwarded', 'for=203.0.113.9;proto=https;host=api.example.invalid')
+      .send({ parent_id: PARENT_ID })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/dev/session')
+      .set('X-Forwarded-Host', 'api.example.invalid')
+      .set('X-Forwarded-Proto', 'https')
+      .send({ parent_id: PARENT_ID })
+      .expect(403);
   });
 
   it('logout with bearer after revoke is idempotent 204', async () => {

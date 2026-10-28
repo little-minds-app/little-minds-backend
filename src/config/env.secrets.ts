@@ -36,6 +36,7 @@ export const PUBLIC_ENV_KEYS = [
   'JWT_PREVIOUS_PUBLIC_KEY_PEM',
   'AUTH_DEV_BOOTSTRAP_ENABLED',
   'AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST',
+  'LISTEN_HOST',
 ] as const;
 
 export type PublicEnvKey = (typeof PUBLIC_ENV_KEYS)[number];
@@ -118,6 +119,12 @@ function isLocalDevelopmentHost(hostname: string): boolean {
  */
 export function isLocalApiBaseHost(hostname: string): boolean {
   return isLocalDevelopmentHost(hostname);
+}
+
+/** Strict loopback bind hosts for AUTH_DEV_BOOTSTRAP_ENABLED (not 0.0.0.0 / LAN). */
+export function isLoopbackListenHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return host === '127.0.0.1' || host === '::1' || host === 'localhost';
 }
 
 /**

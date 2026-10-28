@@ -146,7 +146,6 @@ export class SessionIssuerService {
     const pepper = this.pepper();
     const presentedHash = hashRefreshToken(refreshToken, pepper);
     const db = this.prisma.db;
-    const now = new Date();
     const newRefresh = generateRefreshToken();
     const newHash = hashRefreshToken(newRefresh, pepper);
 
@@ -184,6 +183,13 @@ export class SessionIssuerService {
         FOR UPDATE
       `;
 
+      // Wall-clock after lock wait — not transaction-start NOW(), and not a
+      // pre-lock Date captured before FOR UPDATE (LMP-33 re-review).
+      const [{ now: dbNow }] = await tx.$queryRaw<Array<{ now: Date }>>`
+        SELECT clock_timestamp() AS now
+      `;
+      const now = dbNow instanceof Date ? dbNow : new Date(dbNow);
+
       const locked = await tx.parentSession.findUnique({
         where: { id: current.id },
       });
@@ -216,7 +222,7 @@ export class SessionIssuerService {
       });
 
       // Conditional UPDATE is the single-winner gate (ADR-019 §4.2).
-      // Expiry is enforced atomically in the WHERE clause.
+      // Expiry is enforced atomically in the WHERE clause with post-lock time.
       const updated = await tx.parentSession.updateMany({
         where: {
           id: locked.id,

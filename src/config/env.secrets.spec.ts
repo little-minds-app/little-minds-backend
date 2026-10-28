@@ -2,6 +2,7 @@ import {
   databaseUrlUsesForbiddenLocalSecrets,
   isForbiddenStandaloneSecret,
   isLocalApiBaseHost,
+  isLoopbackListenHost,
   isLocalDatabaseUrl,
   isSecretEnvKey,
 } from './env.secrets';
@@ -37,6 +38,14 @@ describe('env.secrets helpers', () => {
     expect(isLocalApiBaseHost('10.0.2.2')).toBe(true);
     expect(isLocalApiBaseHost('192.168.0.5')).toBe(true);
     expect(isLocalApiBaseHost('api.staging.example.invalid')).toBe(false);
+  });
+
+  it('allows only strict loopback listen hosts for bootstrap bind', () => {
+    expect(isLoopbackListenHost('127.0.0.1')).toBe(true);
+    expect(isLoopbackListenHost('::1')).toBe(true);
+    expect(isLoopbackListenHost('localhost')).toBe(true);
+    expect(isLoopbackListenHost('0.0.0.0')).toBe(false);
+    expect(isLoopbackListenHost('10.0.2.2')).toBe(false);
   });
 
   it('detects local placeholder credentials in DATABASE_URL', () => {

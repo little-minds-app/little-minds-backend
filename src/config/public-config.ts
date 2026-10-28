@@ -3,7 +3,13 @@ import { PUBLIC_ENV_KEYS } from './env.secrets';
 
 export type PublicAppConfig = Pick<
   AppEnv,
-  'APP_ENV' | 'NODE_ENV' | 'PORT' | 'PUBLIC_API_BASE_URL' | 'RELEASE'
+  | 'APP_ENV'
+  | 'NODE_ENV'
+  | 'PORT'
+  | 'PUBLIC_API_BASE_URL'
+  | 'RELEASE'
+  | 'LISTEN_HOST'
+  | 'AUTH_DEV_BOOTSTRAP_ENABLED'
 >;
 
 /**
@@ -17,6 +23,8 @@ export function toPublicConfig(env: AppEnv): PublicAppConfig {
     PORT: env.PORT,
     PUBLIC_API_BASE_URL: env.PUBLIC_API_BASE_URL,
     RELEASE: env.RELEASE,
+    LISTEN_HOST: env.LISTEN_HOST,
+    AUTH_DEV_BOOTSTRAP_ENABLED: env.AUTH_DEV_BOOTSTRAP_ENABLED,
   };
 }
 

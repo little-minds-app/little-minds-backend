@@ -12,12 +12,20 @@ Authoritative design: [`docs/adr/ADR-019-parent-identity-secure-session-lifecycl
 | Protected routes | Always load `parent_sessions` by `sid` (immediate revoke) |
 | Cap | Max 20 active sessions per parent (`FOR UPDATE` on parent row) |
 | Client IP | Transport peer only — **never** trusts `X-Forwarded-For` for bootstrap/rate limits |
-| Dev bootstrap | `POST /v1/auth/dev/session` — development/test + flag + allowlist + loopback peer only |
+| Dev bootstrap | Flag + allowlist + loopback **peer** + loopback **LISTEN_HOST** + local `PUBLIC_API_BASE_URL`; **rejects proxied** requests (XFF/Forwarded) |
 | OpenAPI | `contracts/VERSION` **0.4.0** |
 
 ## Environment
 
-See `.env.example`. Staging/production require `JWT_ACCESS_*_PEM` and a strong non-local `REFRESH_TOKEN_PEPPER`; `AUTH_DEV_BOOTSTRAP_ENABLED` must be false. Public verify PEMs are non-secret; private key + pepper are secrets. No paid KMS in V1.
+See `.env.example`. Staging/production require `JWT_ACCESS_*_PEM` and a strong non-local `REFRESH_TOKEN_PEPPER`; `AUTH_DEV_BOOTSTRAP_ENABLED` must be false. When bootstrap is enabled locally, `LISTEN_HOST` must be `127.0.0.1`/`::1` (Nest binds only there) and `PUBLIC_API_BASE_URL` must be a local host — this fails closed against a public reverse proxy that would otherwise make every peer look like loopback. Public verify PEMs are non-secret; private key + pepper are secrets. No paid KMS in V1.
+
+### Local simulator / device workflow (bootstrap)
+
+`POST /v1/auth/dev/session` is intentionally unreachable via shared Docker publishes, LAN binds (`0.0.0.0`), or any reverse proxy that sets `X-Forwarded-*` / `Forwarded` / `X-Real-IP`. Safe local workflows:
+
+1. Run the API on the host with `LISTEN_HOST=127.0.0.1` and call bootstrap from the same machine (iOS Simulator / Android emulator via `http://127.0.0.1:3000` or the platform loopback alias).
+2. Do **not** put nginx/Caddy/Cloudflare in front of a bootstrap-enabled process.
+3. Physical devices on the LAN cannot use bootstrap while the fail-closed bind is in force — use a host-side curl/bootstrap then paste tokens, or wait for LMP-34 GSM OTP mint.
 
 ## Client integration requirements (ADR-019 — remaining work outside this PR)
 

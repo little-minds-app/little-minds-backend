@@ -12,6 +12,7 @@ process.env.APP_ENV ??= 'development';
 process.env.NODE_ENV ??= 'test';
 process.env.PORT ??= '3000';
 process.env.PUBLIC_API_BASE_URL ??= 'http://localhost:3000';
+process.env.LISTEN_HOST ??= '127.0.0.1';
 
 process.env.JWT_ACCESS_PRIVATE_KEY_PEM ??= TEST_JWT_PRIVATE_PEM;
 process.env.JWT_ACCESS_PUBLIC_KEY_PEM ??= TEST_JWT_PUBLIC_PEM;

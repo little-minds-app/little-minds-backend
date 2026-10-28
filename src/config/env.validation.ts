@@ -4,6 +4,7 @@ import {
   isForbiddenStandaloneSecret,
   isLocalApiBaseHost,
   isLocalDatabaseUrl,
+  isLoopbackListenHost,
 } from './env.secrets';
 
 /**
@@ -51,6 +52,8 @@ const baseSchema = z.object({
       return value === '1' || value.toLowerCase() === 'true';
     }),
   AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST: z.string().optional(),
+  /** Nest listen bind host. Required to be loopback when AUTH_DEV_BOOTSTRAP_ENABLED. */
+  LISTEN_HOST: z.string().trim().min(1).max(253).optional(),
 });
 
 export type AppEnv = {
@@ -72,6 +75,8 @@ export type AppEnv = {
   REFRESH_TOKEN_PEPPER: string;
   AUTH_DEV_BOOTSTRAP_ENABLED: boolean;
   AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST?: string;
+  /** Bind address for `app.listen` — loopback-only when bootstrap is enabled. */
+  LISTEN_HOST: string;
 };
 
 function fail(details: string): never {
@@ -227,6 +232,44 @@ function assertAuthSecrets(
 }
 
 /**
+ * Fail-closed bind + advertising gates when local session bootstrap is enabled
+ * (ADR-019 §8 / LMP-33 re-review): prevent public ingress → loopback reverse-proxy
+ * from making every peer look like 127.0.0.1 while the API is shared.
+ */
+function assertListenHostForBootstrap(
+  bootstrapEnabled: boolean,
+  publicApiBaseUrl: string,
+  rawListenHost: string | undefined,
+): string {
+  const listenHost = (rawListenHost && rawListenHost.trim()) || '0.0.0.0';
+  if (!bootstrapEnabled) {
+    return listenHost;
+  }
+
+  if (!isLoopbackListenHost(listenHost)) {
+    fail(
+      'LISTEN_HOST must be 127.0.0.1 or ::1 when AUTH_DEV_BOOTSTRAP_ENABLED=true (refuse 0.0.0.0 / shared binds)',
+    );
+  }
+
+  let hostname: string;
+  try {
+    hostname = new URL(publicApiBaseUrl).hostname;
+  } catch {
+    fail(
+      'PUBLIC_API_BASE_URL must be a valid local URL when AUTH_DEV_BOOTSTRAP_ENABLED=true',
+    );
+  }
+  if (!isLocalApiBaseHost(hostname)) {
+    fail(
+      'PUBLIC_API_BASE_URL must use a local/development host when AUTH_DEV_BOOTSTRAP_ENABLED=true',
+    );
+  }
+
+  return listenHost;
+}
+
+/**
  * Startup env schema for Nest bootstrap (LMP-28 + LMP-33).
  * Fail-fast on invalid values and on staging/production secret isolation violations.
  */
@@ -262,6 +305,12 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     AUTH_DEV_BOOTSTRAP_ENABLED: bootstrapEnabled,
   });
 
+  const listenHost = assertListenHostForBootstrap(
+    bootstrapEnabled,
+    publicApiBaseUrl,
+    parsed.data.LISTEN_HOST,
+  );
+
   const result: AppEnv = {
     APP_ENV: appEnv,
     NODE_ENV: nodeEnv,
@@ -279,6 +328,7 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     JWT_AUDIENCE: parsed.data.JWT_AUDIENCE,
     AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST:
       parsed.data.AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST,
+    LISTEN_HOST: listenHost,
   };
 
   if (appEnv === 'staging' || appEnv === 'production') {

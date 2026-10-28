@@ -139,4 +139,69 @@ describeDb('Identity sessions against PostgreSQL (LMP-33)', () => {
       response: expect.objectContaining({ error: 'expired_token' }),
     });
   });
+
+  it('rejects refresh after lock wait that crosses absolute expiry (Postgres)', async () => {
+    const pair = await issuer.mintSession({ parentId: SEED_IDS.parent });
+    const before = await prisma.parentSession.findUniqueOrThrow({
+      where: { id: pair.session_id },
+    });
+    expect(before.refreshGeneration).toBe(0);
+    expect(before.refreshTokenHash).toBeTruthy();
+
+    // Expire ~1.5s from now so a contended lock wait crosses the boundary.
+    const expiresAt = new Date(Date.now() + 1_500);
+    await prisma.parentSession.update({
+      where: { id: pair.session_id },
+      data: { expiresAt },
+    });
+
+    // Interactive $transaction pins one pooled connection for the whole hold —
+    // raw BEGIN/ROLLBACK across awaits is not connection-safe with Prisma.
+    const locker = new PrismaClient();
+    await locker.$connect();
+    try {
+      let signalLockHeld!: () => void;
+      const lockHeld = new Promise<void>((resolve) => {
+        signalLockHeld = resolve;
+      });
+      let releaseLock!: () => void;
+      const lockRelease = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+
+      const holdPromise = locker.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`
+            SELECT id FROM parent_sessions
+            WHERE id = ${pair.session_id}::uuid
+            FOR UPDATE
+          `;
+          signalLockHeld();
+          await lockRelease;
+        },
+        { maxWait: 5_000, timeout: 15_000 },
+      );
+
+      await lockHeld;
+      const refreshPromise = issuer.refresh(pair.refresh_token);
+
+      // Hold the row lock past absolute expiry, then release.
+      await new Promise((resolve) => setTimeout(resolve, 2_200));
+      releaseLock();
+      await holdPromise;
+
+      await expect(refreshPromise).rejects.toMatchObject({
+        response: expect.objectContaining({ error: 'expired_token' }),
+      });
+    } finally {
+      await locker.$disconnect();
+    }
+
+    const after = await prisma.parentSession.findUniqueOrThrow({
+      where: { id: pair.session_id },
+    });
+    expect(after.refreshGeneration).toBe(before.refreshGeneration);
+    expect(after.refreshTokenHash).toBe(before.refreshTokenHash);
+    expect(after.lastRefreshedAt).toBeNull();
+  }, 20_000);
 });

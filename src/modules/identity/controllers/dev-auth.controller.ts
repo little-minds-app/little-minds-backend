@@ -87,6 +87,27 @@ export class DevAuthController {
       throwForbidden('bootstrap_disabled', 'Dev bootstrap is disabled');
     }
 
+    // Fail closed behind reverse proxies: peer would be loopback while the
+    // public client is remote (LMP-33 re-review).
+    if (requestLooksProxied(req)) {
+      throwForbidden(
+        'bootstrap_disabled',
+        'Dev bootstrap rejects proxied requests',
+      );
+    }
+
+    const listenHost = this.config.get('LISTEN_HOST', { infer: true });
+    if (
+      listenHost !== '127.0.0.1' &&
+      listenHost !== '::1' &&
+      listenHost.toLowerCase() !== 'localhost'
+    ) {
+      throwForbidden(
+        'bootstrap_disabled',
+        'Dev bootstrap requires loopback LISTEN_HOST',
+      );
+    }
+
     const ip = clientIp(req);
     if (!isLoopbackIp(ip)) {
       throwForbidden(
@@ -117,4 +138,16 @@ function truncateUa(value: unknown): string | null {
     return null;
   }
   return value.slice(0, 128);
+}
+
+/** True when common reverse-proxy forwarding headers are present. */
+export function requestLooksProxied(req: Request): boolean {
+  const headers = req.headers;
+  return Boolean(
+    headers['x-forwarded-for'] ||
+      headers['x-real-ip'] ||
+      headers['forwarded'] ||
+      headers['x-forwarded-host'] ||
+      headers['x-forwarded-proto'],
+  );
 }

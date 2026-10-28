@@ -313,4 +313,53 @@ describe('validateEnv', () => {
       }),
     ).toThrow(/REFRESH_TOKEN_PEPPER/);
   });
+
+  it('defaults LISTEN_HOST to 0.0.0.0 when bootstrap is disabled', () => {
+    const env = validateEnv({ APP_ENV: 'development' });
+    expect(env.LISTEN_HOST).toBe('0.0.0.0');
+    expect(env.AUTH_DEV_BOOTSTRAP_ENABLED).toBe(false);
+  });
+
+  it('requires loopback LISTEN_HOST when AUTH_DEV_BOOTSTRAP_ENABLED=true', () => {
+    expect(() =>
+      validateEnv({
+        APP_ENV: 'development',
+        AUTH_DEV_BOOTSTRAP_ENABLED: 'true',
+        PUBLIC_API_BASE_URL: 'http://localhost:3000',
+        LISTEN_HOST: '0.0.0.0',
+      }),
+    ).toThrow(/LISTEN_HOST must be 127\.0\.0\.1/);
+  });
+
+  it('requires local PUBLIC_API_BASE_URL when bootstrap is enabled', () => {
+    expect(() =>
+      validateEnv({
+        APP_ENV: 'development',
+        AUTH_DEV_BOOTSTRAP_ENABLED: 'true',
+        PUBLIC_API_BASE_URL: 'https://api.shared.example.invalid',
+        LISTEN_HOST: '127.0.0.1',
+      }),
+    ).toThrow(/PUBLIC_API_BASE_URL must use a local/);
+  });
+
+  it('accepts bootstrap with loopback bind + local API URL', () => {
+    const env = validateEnv({
+      APP_ENV: 'development',
+      AUTH_DEV_BOOTSTRAP_ENABLED: 'true',
+      PUBLIC_API_BASE_URL: 'http://127.0.0.1:3000',
+      LISTEN_HOST: '127.0.0.1',
+    });
+    expect(env.LISTEN_HOST).toBe('127.0.0.1');
+    expect(env.AUTH_DEV_BOOTSTRAP_ENABLED).toBe(true);
+  });
+
+  it('rejects bootstrap when LISTEN_HOST is omitted (defaults to 0.0.0.0)', () => {
+    expect(() =>
+      validateEnv({
+        APP_ENV: 'development',
+        AUTH_DEV_BOOTSTRAP_ENABLED: 'true',
+        PUBLIC_API_BASE_URL: 'http://localhost:3000',
+      }),
+    ).toThrow(/LISTEN_HOST must be 127\.0\.0\.1/);
+  });
 });
