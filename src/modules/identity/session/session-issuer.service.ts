@@ -150,7 +150,16 @@ export class SessionIssuerService {
     const newRefresh = generateRefreshToken();
     const newHash = hashRefreshToken(newRefresh, pepper);
 
-    const result = await db.$transaction(async (tx) => {
+    // Return codes instead of throwing inside the txn — Nest HttpExceptions
+    // would otherwise roll back reuse revocation (LMP-33 CI / Prisma).
+    type RefreshOutcome =
+      | { kind: 'rotated'; sessionId: string; parentId: string }
+      | { kind: 'reuse' }
+      | { kind: 'invalid' }
+      | { kind: 'revoked' }
+      | { kind: 'expired' };
+
+    const outcome = await db.$transaction(async (tx): Promise<RefreshOutcome> => {
       const current = await tx.parentSession.findFirst({
         where: { refreshTokenHash: presentedHash },
       });
@@ -163,9 +172,9 @@ export class SessionIssuerService {
             reused.id,
             ParentSessionRevokeReason.refresh_reuse,
           );
-          throwUnauthorized('refresh_reuse', 'Refresh token reuse detected');
+          return { kind: 'reuse' };
         }
-        throwUnauthorized('invalid_token', 'Invalid refresh token');
+        return { kind: 'invalid' };
       }
 
       // Lock the session row before expiry / parent / rotation checks.
@@ -179,13 +188,13 @@ export class SessionIssuerService {
         where: { id: current.id },
       });
       if (!locked || locked.refreshTokenHash !== presentedHash) {
-        throwUnauthorized('invalid_token', 'Invalid refresh token');
+        return { kind: 'invalid' };
       }
       if (locked.revokedAt) {
-        throwUnauthorized('revoked_session', 'Session has been revoked');
+        return { kind: 'revoked' };
       }
       if (locked.expiresAt.getTime() <= now.getTime()) {
-        throwUnauthorized('expired_token', 'Session has expired');
+        return { kind: 'expired' };
       }
 
       const parent = await tx.parentAccount.findUnique({
@@ -196,7 +205,7 @@ export class SessionIssuerService {
         parent.deletedAt ||
         parent.lifecycle !== ParentAccountLifecycle.active
       ) {
-        throwUnauthorized('invalid_token', 'Parent account is not active');
+        return { kind: 'invalid' };
       }
 
       const history = parseHashHistory(locked.refreshTokenHashHistory);
@@ -225,7 +234,7 @@ export class SessionIssuerService {
       });
 
       if (updated.count !== 1) {
-        throwUnauthorized('invalid_token', 'Invalid refresh token');
+        return { kind: 'invalid' };
       }
 
       await tx.parentSessionRefreshHashLookup.upsert({
@@ -249,12 +258,29 @@ export class SessionIssuerService {
         });
       }
 
-      return { sessionId: locked.id, parentId: locked.parentId };
+      return {
+        kind: 'rotated',
+        sessionId: locked.id,
+        parentId: locked.parentId,
+      };
     });
 
+    if (outcome.kind === 'reuse') {
+      throwUnauthorized('refresh_reuse', 'Refresh token reuse detected');
+    }
+    if (outcome.kind === 'revoked') {
+      throwUnauthorized('revoked_session', 'Session has been revoked');
+    }
+    if (outcome.kind === 'expired') {
+      throwUnauthorized('expired_token', 'Session has expired');
+    }
+    if (outcome.kind === 'invalid') {
+      throwUnauthorized('invalid_token', 'Invalid refresh token');
+    }
+
     const accessToken = await this.jwt.signAccessToken({
-      parentId: result.parentId,
-      sessionId: result.sessionId,
+      parentId: outcome.parentId,
+      sessionId: outcome.sessionId,
     });
 
     return {
@@ -262,8 +288,8 @@ export class SessionIssuerService {
       refresh_token: newRefresh,
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
-      session_id: result.sessionId,
-      parent_id: result.parentId,
+      session_id: outcome.sessionId,
+      parent_id: outcome.parentId,
     };
   }
 
