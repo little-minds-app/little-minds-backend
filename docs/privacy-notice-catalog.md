@@ -19,12 +19,20 @@ Source of truth in code: `src/modules/identity/otp/privacy-notice.catalog.ts`.
 | `APP_ENV` | Unpublished engineering fixture allowed? |
 |---|---|
 | `development` / local CI (`NODE_ENV=test`) | **Yes** — synthetic fixtures only |
-| `staging` | **No** — boot fails until a catalog entry is `published: true` |
-| `production` | **No** — boot fails until a catalog entry is `published: true` |
+| `staging` | **No** — boot fails until **some** catalog entry is `published: true` |
+| `production` | **No** — boot fails until **some** catalog entry is `published: true` |
 
-`validateEnv` enforces this. Staging/production **cannot be activated** on the
-placeholder catalog. Flipping `published: true` without qualified legal review is
-forbidden.
+`validateEnv` enforces the boot gate. Staging/production **cannot be activated** on a
+catalog with zero published entries.
+
+### Per-pair acceptance (Option A)
+
+Start accepts only an **exact** `notice_version` + `notice_locale` present in the
+server catalog (anti-enumeration). In staging/production, **that same entry** must
+have `published: true`. Another published catalog row does **not** authorize an
+unpublished pair. Local/CI may still use unpublished engineering fixtures.
+
+Flipping `published: true` without qualified legal review is forbidden.
 
 ## Legal blocker (production / staging personal data)
 

@@ -34,11 +34,7 @@ import {
   verifyOtpCode,
 } from './otp-crypto';
 import { normalizeTrMobileE164 } from './phone-normalize';
-import {
-  allowsUnpublishedPrivacyNoticeFixtures,
-  isActivePrivacyNoticePair,
-  isPrivacyNoticeLegallyPublished,
-} from './privacy-notice.catalog';
+import { isAcceptablePrivacyNoticePair } from './privacy-notice.catalog';
 import { isUuidV4OrV7 } from './otp-uuid';
 import {
   OTP_MAX_WRONG_ATTEMPTS,
@@ -116,16 +112,9 @@ export class PhoneOtpService {
   }
 
   private assertNotice(version: string, locale: string): void {
-    if (!isActivePrivacyNoticePair(version, locale)) {
-      // Uniform invalid_request — same shape for all callers (U12 / Option A).
-      throwInvalidRequest('Invalid request');
-    }
     const appEnv = this.config.get('APP_ENV', { infer: true });
-    // Defense in depth: unpublished engineering fixtures never serve real-user envs.
-    if (
-      !allowsUnpublishedPrivacyNoticeFixtures(appEnv) &&
-      !isPrivacyNoticeLegallyPublished()
-    ) {
+    // Exact catalog pair; staging/prod require THAT entry published (anti-enum).
+    if (!isAcceptablePrivacyNoticePair(version, locale, appEnv)) {
       throwInvalidRequest('Invalid request');
     }
   }
