@@ -73,9 +73,12 @@ describe('Environment & secrets contract (LMP-28)', () => {
     ).toThrow(/Environment validation failed/);
   });
 
-  it('does not alter OpenAPI 0.1.0 pin artifacts', () => {
-    expect(read('contracts/VERSION').trim()).toBe('0.1.0');
-    expect(read('contracts/openapi.yaml')).toContain('version: 0.1.0');
+  it('keeps OpenAPI path surface health-only (version may bump additively)', () => {
+    const version = read('contracts/VERSION').trim();
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(read('contracts/openapi.yaml')).toContain(`version: ${version}`);
     expect(read('contracts/openapi.yaml')).toContain('/health:');
+    // No live ingest path published yet (LMP-50 schemas-only). Mentions in prose are OK.
+    expect(read('contracts/openapi.yaml')).not.toMatch(/\n\s+\/v1\/events(?:\/|$)/);
   });
 });

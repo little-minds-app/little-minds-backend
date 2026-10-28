@@ -1,0 +1,155 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://little-minds.app/schemas/activity/defs.schema.json",
+  "title": "ActivityContractSharedDefs",
+  "description": "Shared definitions for ActivitySessionV1 / ActivityEventV1 (LMP-50). Accepts UUIDv4 and UUIDv7 only.",
+  "definitions": {
+    "UuidV4OrV7": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[47][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+      "description": "RFC 4122 UUID with version nibble 4 or 7 (UUIDv4 or UUIDv7)."
+    },
+    "UtcInstantZ": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$",
+      "description": "UTC ISO-8601 instant ending in Z (no offset forms)."
+    },
+    "SchemaVersionV1": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Product event/session schema semver. Independent from OpenAPI info.version."
+    },
+    "MonotonicDurationSeconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400,
+      "description": "Active-play monotonic seconds within boot; excludes paused/background. Upper bound is a schema guardrail, not a legal retention day count."
+    },
+    "ConsentScope": {
+      "type": "string",
+      "enum": [
+        "essential_play_events",
+        "essential_service_telemetry",
+        "optional_product_analytics"
+      ],
+      "description": "Purpose-specific consent scope allowlist (draft placeholders until legal sign-off)."
+    },
+    "ConsentPurpose": {
+      "type": "string",
+      "enum": [
+        "essential_service_telemetry",
+        "essential_play_events",
+        "optional_product_analytics"
+      ]
+    },
+    "ConsentDecision": {
+      "type": "string",
+      "enum": ["granted", "denied", "withdrawn"],
+      "description": "Client-declared decision is evidence of UX choice only — NEVER treated as server authorization."
+    },
+    "CompletionStatus": {
+      "type": "string",
+      "enum": ["started", "completed", "abandoned", "interrupted"]
+    },
+    "EventType": {
+      "type": "string",
+      "enum": [
+        "activity_started",
+        "activity_attempted",
+        "activity_hint_used",
+        "activity_completed",
+        "activity_abandoned",
+        "child_mode_foreground_started",
+        "child_mode_foreground_ended",
+        "real_world_mission_offered",
+        "real_world_mission_opened",
+        "mission_feedback_submitted",
+        "mentor_card_opened",
+        "screen_limit_reached",
+        "content_pack_downloaded"
+      ],
+      "description": "Blueprint §14.1 Kids Mode gameplay allowlist. content_* analytics aliases are NOT accepted in v1."
+    },
+    "StableContentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "description": "Stable editorial / content code id (not free prose)."
+    },
+    "AgeBand": {
+      "type": "string",
+      "enum": ["24_35", "36_47", "48_59", "60_71"]
+    },
+    "NearFarRelation": {
+      "type": "string",
+      "enum": ["near", "far", "unknown"]
+    },
+    "ScoringNeutral": {
+      "type": "string",
+      "enum": ["neutral"]
+    },
+    "MissionFeedbackStatus": {
+      "type": "string",
+      "enum": ["completed", "skipped", "not_now", "partial"]
+    },
+    "SessionConsent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["purpose", "policy_version", "consent_scope", "decision"],
+      "properties": {
+        "purpose": { "$ref": "#/definitions/ConsentPurpose" },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        },
+        "consent_scope": { "$ref": "#/definitions/ConsentScope" },
+        "decision": { "$ref": "#/definitions/ConsentDecision" }
+      }
+    },
+    "SessionProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["emitter", "capture_channel", "clock_trust"],
+      "properties": {
+        "emitter": {
+          "type": "string",
+          "enum": ["kids_mode_client", "parent_dashboard", "sync_worker"]
+        },
+        "capture_channel": {
+          "type": "string",
+          "enum": ["offline_queue", "online_direct", "replay_backfill"]
+        },
+        "clock_trust": {
+          "type": "string",
+          "enum": ["monotonic_within_boot", "wall_clock_only", "unknown"]
+        }
+      }
+    },
+    "EventProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["emitter", "actor_scope", "source", "clock_trust"],
+      "properties": {
+        "emitter": {
+          "type": "string",
+          "enum": ["kids_mode_client", "parent_dashboard", "sync_worker"]
+        },
+        "actor_scope": {
+          "type": "string",
+          "enum": ["child_play", "parent"]
+        },
+        "source": {
+          "type": "string",
+          "enum": ["instrumented", "caregiver_report"]
+        },
+        "clock_trust": {
+          "type": "string",
+          "enum": ["monotonic_within_boot", "wall_clock_only", "unknown"]
+        }
+      }
+    }
+  }
+}

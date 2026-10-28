@@ -52,7 +52,7 @@ Clients do **not** read backend `.env` files. Each Flutter flavor sets the dart-
 | `staging` | `LM_API_BASE_URL` | Same value as staging `PUBLIC_API_BASE_URL` (hostname is a **TECHNICAL ASSUMPTION** until staging is provisioned; backend requires `https:` and rejects local/dev hosts) |
 | `production` | `LM_API_BASE_URL` | Same value as production `PUBLIC_API_BASE_URL` (hostname **TECHNICAL ASSUMPTION** until production is provisioned; backend requires `https:` and rejects local/dev hosts) |
 
-OpenAPI contract version remains **`0.1.0`** with `GET /health` only (LMP-23 pin). Do not invent `/v1/...` routes here. Local OpenAPI `servers` URL stays `http://localhost:3000`.
+OpenAPI path surface remains **`GET /health` only** (see `contracts/VERSION` for current semver; additive component bumps such as LMP-50 `0.2.0` are allowed). Do not invent `/v1/...` routes here. Local OpenAPI `servers` URL stays `http://localhost:3000`. Clients pin a backend **commit SHA**, not a hardcoded VERSION string.
 
 ## Secret leakage guards
 

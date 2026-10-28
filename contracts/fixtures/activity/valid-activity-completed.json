@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "018f0000-0000-7000-8000-000000000001",
+  "event_type": "activity_completed",
+  "play_session_id": "018f0000-0000-7000-8000-000000000002",
+  "device_id": "018f0000-0000-4000-8000-000000000003",
+  "content_version_id": "018f0000-0000-4000-8000-000000000004",
+  "occurred_at": "2026-10-28T06:01:24.000Z",
+  "monotonic_duration_seconds": 84,
+  "consent_scope": "essential_play_events",
+  "consent_policy_version": "privacy-notice-draft-0",
+  "provenance": {
+    "emitter": "kids_mode_client",
+    "actor_scope": "child_play",
+    "source": "instrumented",
+    "clock_trust": "monotonic_within_boot"
+  },
+  "payload": {
+    "completion_status": "completed",
+    "scoring": "neutral",
+    "hints_used": 1,
+    "eligible_first_attempts": 6,
+    "correct_first_attempts": 5
+  }
+}

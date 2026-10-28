@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://little-minds.app/schemas/activity/activity-session-v1.schema.json",
+  "title": "ActivitySessionV1",
+  "description": "Versioned activity session wire document (LMP-50 / Blueprint §13.4 + §38.2). Client MUST NOT send child_id or received_at — ownership is server-derived.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "play_session_id",
+    "device_id",
+    "content_version_id",
+    "started_at",
+    "completion_status",
+    "consent",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "defs.schema.json#/definitions/SchemaVersionV1"
+    },
+    "play_session_id": {
+      "$ref": "defs.schema.json#/definitions/UuidV4OrV7",
+      "description": "Canonical session id (= activity_sessions.id)."
+    },
+    "device_id": {
+      "$ref": "defs.schema.json#/definitions/UuidV4OrV7"
+    },
+    "content_version_id": {
+      "$ref": "defs.schema.json#/definitions/UuidV4OrV7",
+      "description": "Day-1 targets activity_variants.id."
+    },
+    "started_at": {
+      "$ref": "defs.schema.json#/definitions/UtcInstantZ"
+    },
+    "ended_at": {
+      "$ref": "defs.schema.json#/definitions/UtcInstantZ"
+    },
+    "monotonic_duration_seconds": {
+      "$ref": "defs.schema.json#/definitions/MonotonicDurationSeconds"
+    },
+    "completion_status": {
+      "$ref": "defs.schema.json#/definitions/CompletionStatus"
+    },
+    "app_build": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$"
+    },
+    "locale": {
+      "type": "string",
+      "pattern": "^[a-z]{2}-[A-Z]{2}$"
+    },
+    "consent": {
+      "$ref": "defs.schema.json#/definitions/SessionConsent"
+    },
+    "provenance": {
+      "$ref": "defs.schema.json#/definitions/SessionProvenance"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["ended_at", "started_at"]
+      },
+      "then": {
+        "required": ["monotonic_duration_seconds"]
+      }
+    }
+  ]
+}

@@ -12,7 +12,7 @@ LMP-20 wires **Health** + thin **Identity** Nest modules. Remaining §12.3 names
 | `mentor/` | Content validators (LMP-47); Nest routes deferred | Mentor serving APIs / recommendations |
 | `real-world-mission/` | Placeholder | Missions |
 | `screen-time-policy/` | Placeholder | Screen-time policy |
-| `activity-ingestion/` | Placeholder | Event ingestion |
+| `activity-ingestion/` | Contract validators (LMP-50); Nest ingest routes deferred | `POST /v1/events/batch` + persistence |
 | `analytics/` | Placeholder | Analytics |
 | `insight/` | Placeholder | Insights |
 | `subscription/` | Placeholder | Subscriptions |

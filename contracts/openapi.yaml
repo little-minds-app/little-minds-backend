@@ -3,9 +3,12 @@ info:
   title: Little Minds Backend API
   description: |
     Authoritative OpenAPI contract for little-minds-backend (ADR-014).
-    LMP-23 scope: process liveness (`GET /health`) only.
-    Product `/v1/...` routes are added by later Jira tasks — do not invent them here.
-  version: 0.1.0
+    Paths: process liveness (`GET /health`) only.
+    LMP-50 adds ActivitySessionV1 / ActivityEventV1 **components** for versioned
+    event contracts. Live `POST /v1/events/batch` is intentionally **not** published
+    here — ingest lands in a later Jira task. Authoritative Ajv JSON Schemas live under
+    `contracts/schemas/activity/` (`schema_version` 1.0.0, independent of this info.version).
+  version: 0.2.0
   contact:
     name: Little Minds
 servers:
@@ -59,3 +62,220 @@ components:
           type: string
           format: date-time
           description: UTC ISO-8601 timestamp when the check was produced
+    ActivitySchemaVersion:
+      type: string
+      enum:
+        - '1.0.0'
+      description: |
+        Product event/session schema semver. Independent from OpenAPI info.version.
+    UuidV4OrV7:
+      type: string
+      pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[47][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+      description: RFC 4122 UUID with version nibble 4 or 7
+    UtcInstantZ:
+      type: string
+      pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$'
+      description: UTC ISO-8601 instant ending in Z
+    ConsentScope:
+      type: string
+      enum:
+        - essential_play_events
+        - essential_service_telemetry
+        - optional_product_analytics
+      description: Purpose-specific consent scope (draft placeholders until legal sign-off)
+    ActivityEventType:
+      type: string
+      enum:
+        - activity_started
+        - activity_attempted
+        - activity_hint_used
+        - activity_completed
+        - activity_abandoned
+        - child_mode_foreground_started
+        - child_mode_foreground_ended
+        - real_world_mission_offered
+        - real_world_mission_opened
+        - mission_feedback_submitted
+        - mentor_card_opened
+        - screen_limit_reached
+        - content_pack_downloaded
+      description: Blueprint §14.1 allowlist
+    ActivitySessionConsent:
+      type: object
+      additionalProperties: false
+      required:
+        - purpose
+        - policy_version
+        - consent_scope
+        - decision
+      properties:
+        purpose:
+          type: string
+          enum:
+            - essential_service_telemetry
+            - essential_play_events
+            - optional_product_analytics
+        policy_version:
+          type: string
+        consent_scope:
+          $ref: '#/components/schemas/ConsentScope'
+        decision:
+          type: string
+          enum:
+            - granted
+            - denied
+            - withdrawn
+          description: Client UX evidence only — never treated as server authorization
+    ActivitySessionProvenance:
+      type: object
+      additionalProperties: false
+      required:
+        - emitter
+        - capture_channel
+        - clock_trust
+      properties:
+        emitter:
+          type: string
+          enum:
+            - kids_mode_client
+            - parent_dashboard
+            - sync_worker
+        capture_channel:
+          type: string
+          enum:
+            - offline_queue
+            - online_direct
+            - replay_backfill
+        clock_trust:
+          type: string
+          enum:
+            - monotonic_within_boot
+            - wall_clock_only
+            - unknown
+    ActivityEventProvenance:
+      type: object
+      additionalProperties: false
+      required:
+        - emitter
+        - actor_scope
+        - source
+        - clock_trust
+      properties:
+        emitter:
+          type: string
+          enum:
+            - kids_mode_client
+            - parent_dashboard
+            - sync_worker
+        actor_scope:
+          type: string
+          enum:
+            - child_play
+            - parent
+        source:
+          type: string
+          enum:
+            - instrumented
+            - caregiver_report
+        clock_trust:
+          type: string
+          enum:
+            - monotonic_within_boot
+            - wall_clock_only
+            - unknown
+    ActivitySessionV1:
+      type: object
+      additionalProperties: false
+      description: |
+        Versioned activity session wire document. Client MUST NOT send child_id or received_at.
+        Full validation rules: contracts/schemas/activity/activity-session-v1.schema.json
+      required:
+        - schema_version
+        - play_session_id
+        - device_id
+        - content_version_id
+        - started_at
+        - completion_status
+        - consent
+        - provenance
+      properties:
+        schema_version:
+          $ref: '#/components/schemas/ActivitySchemaVersion'
+        play_session_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        device_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        content_version_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        started_at:
+          $ref: '#/components/schemas/UtcInstantZ'
+        ended_at:
+          $ref: '#/components/schemas/UtcInstantZ'
+        monotonic_duration_seconds:
+          type: integer
+          minimum: 0
+          maximum: 86400
+        completion_status:
+          type: string
+          enum:
+            - started
+            - completed
+            - abandoned
+            - interrupted
+        app_build:
+          type: string
+        locale:
+          type: string
+          pattern: '^[a-z]{2}-[A-Z]{2}$'
+        consent:
+          $ref: '#/components/schemas/ActivitySessionConsent'
+        provenance:
+          $ref: '#/components/schemas/ActivitySessionProvenance'
+    ActivityEventV1:
+      type: object
+      additionalProperties: false
+      description: |
+        Versioned activity event envelope (§14.1 + §38.4). Rejects client received_at / child_id.
+        Parent-only events omit play_session_id. Per-type payloads enforced by JSON Schema.
+        Full validation: contracts/schemas/activity/activity-event-v1.schema.json
+      required:
+        - schema_version
+        - event_id
+        - event_type
+        - device_id
+        - content_version_id
+        - occurred_at
+        - consent_scope
+        - consent_policy_version
+        - provenance
+        - payload
+      properties:
+        schema_version:
+          $ref: '#/components/schemas/ActivitySchemaVersion'
+        event_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        event_type:
+          $ref: '#/components/schemas/ActivityEventType'
+        play_session_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+          description: Required for child_play; omit for parent-only events
+        device_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        content_version_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        occurred_at:
+          $ref: '#/components/schemas/UtcInstantZ'
+        monotonic_duration_seconds:
+          type: integer
+          minimum: 0
+          maximum: 86400
+        consent_scope:
+          $ref: '#/components/schemas/ConsentScope'
+        consent_policy_version:
+          type: string
+        provenance:
+          $ref: '#/components/schemas/ActivityEventProvenance'
+        payload:
+          type: object
+          additionalProperties: true
+          description: Typed allowlisted payload per event_type (see JSON Schema)

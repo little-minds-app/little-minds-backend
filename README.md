@@ -51,7 +51,7 @@ npm run contracts:check   # validate + compatibility + generate TS/Dart + drift
 npm test -- test/openapi.negative.contract.spec.ts  # LMP-27 breakage proofs
 ```
 
-Current LMP-23 surface: `GET /health` only (`0.1.0`). Blueprint §15 product routes are added with their implementing Jira tasks.
+Current path surface: `GET /health` only (see `contracts/VERSION` for semver; additive schema components may bump the minor version). Blueprint §15 product routes are added with their implementing Jira tasks.
 
 ## Mentor card content schema (LMP-47)
 

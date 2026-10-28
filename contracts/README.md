@@ -14,8 +14,9 @@ Backend is the single source of truth. Clients **must not** import a floating `m
 | `generated/typescript/` | Deterministic TypeScript types (`openapi-typescript`) |
 | `generated/dart/` | Deterministic Dart client (`openapi-generator` / `dart`) |
 
-**Current contract version:** see `VERSION` (starts at `0.1.0`).  
-**Current surface:** `GET /health` only. Blueprint §15 `/v1/...` routes are **not** invented here.
+**Current contract version:** see `VERSION`.  
+**Current path surface:** `GET /health` only. Blueprint §15 `/v1/...` routes are **not** invented here.  
+**LMP-50:** OpenAPI `components.schemas` include `ActivitySessionV1` / `ActivityEventV1` (documentation). Authoritative Ajv schemas + `schema_version` **1.0.0** live under `contracts/schemas/activity/` (independent from OpenAPI `info.version`). No ingest path.
 
 ## How clients pin (no mutable `main`)
 
