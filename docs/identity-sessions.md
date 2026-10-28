@@ -45,4 +45,11 @@ GSM OTP login mint is **LMP-34** and must call `SessionIssuerService.mintSession
 
 ## GSM OTP
 
-Owned by **LMP-34** — must call `SessionIssuerService.mintSession` after verify. Do not invent a second session store.
+Owned by **LMP-34**. Design ADR (**Accepted** 2026-10-28): [`docs/adr/ADR-020-gsm-otp-sign-in.md`](./adr/ADR-020-gsm-otp-sign-in.md).
+
+- Little Minds owns OTP generate/verify; SMS providers are **delivery-only** adapters (`FakeSmsSender` locally; commercial candidates gated / **unapproved**).
+- **Not** Firebase Phone Auth / Twilio Verify as system of record.
+- **U7 Option A (Accepted):** first successful verify may create parent + phone identity (no silent cross-provider merge).
+- Privacy notice **Option A (Accepted):** present notice before phone submit; uniform `notice_version`+`notice_locale` on **start**; **verify** has no privacy fields; notice ≠ optional consent; legal review before production.
+- Implementation (Phase B) must call ADR-019 `SessionIssuerService` via `mintSessionTx` (ADR-020 §9). Post-commit JWT/HTTP failures are not rolled back — clients must handle ambiguous verify carefully. Do not invent a second session store.
+- Live OpenAPI phone routes land only in the LMP-34 **implementation** PR (`0.5.0`); docs Accept PR keeps **`0.4.0`**.

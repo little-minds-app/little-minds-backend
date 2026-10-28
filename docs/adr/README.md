@@ -52,7 +52,13 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 
 | ADR | Title | Jira | Notes |
 |---|---|---|---|
-| **ADR-019 (Accepted 2026-10-28)** | Parent identity & secure session lifecycle | [LMP-33](https://little-minds-app.atlassian.net/browse/LMP-33) | Completes ADR-002 session implementation/security gap. U1–U15 resolved; bounded hash history (max 8) is an accepted detection limit. [Decision](./ADR-019-parent-identity-secure-session-lifecycle.md) · [Non-live API sketch](./lmp-33-session-api-contract-sketch.md). Implementation and OpenAPI 0.4.0 in separate PR; client ADR index sync in separate client PR. |
+| **ADR-019 (Accepted 2026-10-28)** | Parent identity & secure session lifecycle | [LMP-33](https://little-minds-app.atlassian.net/browse/LMP-33) | Completes ADR-002 session implementation/security gap. U1–U15 resolved; bounded hash history (max 8) is an accepted detection limit. [Decision](./ADR-019-parent-identity-secure-session-lifecycle.md) · [Non-live API sketch](./lmp-33-session-api-contract-sketch.md). Implementation merged; client ADR index sync remains a separate client PR. |
+
+## ADR-020 — Accepted (implementation separate)
+
+| ADR | Title | Jira | Notes |
+|---|---|---|---|
+| **ADR-020 (Accepted 2026-10-28)** | GSM OTP sign-in — LM-owned OTP + delivery-only SMS adapters | [LMP-34](https://little-minds-app.atlassian.net/browse/LMP-34) | PO Accept: architecture, **U7 Option A**, KVKK notice **Option A**, **U1–U17**. **Deferred/gated:** U18–U20; paid SMS unapproved; legal review before production. Implementation = separate PR; this docs PR keeps live OpenAPI **`0.4.0`**. [Decision](./ADR-020-gsm-otp-sign-in.md) · [Sketch](./lmp-34-otp-api-contract-sketch.md). |
 
 ---
 
