@@ -1,6 +1,7 @@
 import {
   collectConsentAuthorizationIssues,
   collectSessionConsentAuthorizationIssues,
+  evaluateConsentScopeAuthorization,
   isClientDecisionMasqueradingAsServerRecord,
   isConsentScopeAuthorized,
   isConsentScopeBlocked,
@@ -12,20 +13,20 @@ import type {
 
 const SCOPE = 'essential_play_events' as const;
 
-describe('Consent authorization hardening (LMP-50)', () => {
-  const serverGranted: ServerConsentRecord = {
+function record(
+  partial: Partial<ServerConsentRecord> &
+    Pick<ServerConsentRecord, 'status' | 'effective_at'>,
+): ServerConsentRecord {
+  return {
     purpose: SCOPE,
     consent_scope: SCOPE,
-    status: 'granted',
     policy_version: 'privacy-notice-draft-0',
     source: 'server_consent_store',
+    ...partial,
   };
+}
 
-  const serverWithdrawn: ServerConsentRecord = {
-    ...serverGranted,
-    status: 'withdrawn',
-  };
-
+describe('Consent authorization hardening (LMP-50)', () => {
   it('client decision:granted never authorizes with empty server records', () => {
     expect(
       isConsentScopeAuthorized(SCOPE, [], {
@@ -44,48 +45,159 @@ describe('Consent authorization hardening (LMP-50)', () => {
     ]);
   });
 
-  it('client decision:granted never overrides withdrawn/denied server status', () => {
-    expect(
-      isConsentScopeAuthorized(SCOPE, [serverWithdrawn], {
-        clientDeclaredDecision: 'granted',
+  it('grant→withdraw: newer withdrawal beats older grant', () => {
+    const rows: ServerConsentRecord[] = [
+      record({
+        status: 'granted',
+        effective_at: '2026-10-01T00:00:00.000Z',
+        revision: 1,
       }),
-    ).toBe(false);
-    expect(
-      isConsentScopeAuthorized(
-        SCOPE,
-        [{ ...serverGranted, status: 'denied' }],
-        { clientDeclaredDecision: 'granted' },
-      ),
-    ).toBe(false);
+      record({
+        status: 'withdrawn',
+        effective_at: '2026-10-02T00:00:00.000Z',
+        revision: 2,
+      }),
+    ];
+    expect(isConsentScopeAuthorized(SCOPE, rows)).toBe(false);
+    expect(evaluateConsentScopeAuthorization(SCOPE, rows).reason).toBe(
+      'not_granted',
+    );
   });
 
-  it('only authoritative server sources can grant', () => {
-    expect(isConsentScopeAuthorized(SCOPE, [serverGranted])).toBe(true);
-    expect(
-      isConsentScopeAuthorized(SCOPE, [
-        { ...serverGranted, source: 'sync_scope_grant' },
-      ]),
-    ).toBe(true);
+  it('withdraw→fresh grant: newer grant authorizes', () => {
+    const rows: ServerConsentRecord[] = [
+      record({
+        status: 'withdrawn',
+        effective_at: '2026-10-01T00:00:00.000Z',
+        revision: 1,
+      }),
+      record({
+        status: 'granted',
+        effective_at: '2026-10-03T00:00:00.000Z',
+        revision: 2,
+      }),
+    ];
+    expect(isConsentScopeAuthorized(SCOPE, rows)).toBe(true);
+    expect(evaluateConsentScopeAuthorization(SCOPE, rows).effective?.revision).toBe(
+      2,
+    );
+  });
 
-    // Forged / missing authoritative source — cast to bypass TS and prove runtime reject
-    const forged = {
-      purpose: SCOPE,
-      consent_scope: SCOPE,
-      status: 'granted' as const,
-      policy_version: 'privacy-notice-draft-0',
-      source: 'client_decision' as unknown as ServerConsentRecord['source'],
-    };
-    expect(isConsentScopeAuthorized(SCOPE, [forged])).toBe(false);
-    expect(isClientDecisionMasqueradingAsServerRecord(forged)).toBe(true);
+  it('same-version conflict with differing status is denied', () => {
+    const rows: ServerConsentRecord[] = [
+      record({
+        status: 'granted',
+        effective_at: '2026-10-01T00:00:00.000Z',
+        revision: 5,
+        source: 'server_consent_store',
+      }),
+      record({
+        status: 'denied',
+        effective_at: '2026-10-01T00:00:00.000Z',
+        revision: 5,
+        source: 'server_consent_store',
+      }),
+    ];
+    const evalResult = evaluateConsentScopeAuthorization(SCOPE, rows);
+    expect(evalResult.authorized).toBe(false);
+    expect(evalResult.reason).toBe('conflict');
+    expect(
+      collectConsentAuthorizationIssues(SCOPE, rows)[0]?.code,
+    ).toBe('consent.conflict');
+  });
+
+  it('server_consent_store beats sync_scope_grant at equal effective_at/revision', () => {
+    const rows: ServerConsentRecord[] = [
+      record({
+        status: 'withdrawn',
+        effective_at: '2026-10-01T00:00:00.000Z',
+        revision: 3,
+        source: 'server_consent_store',
+      }),
+      record({
+        status: 'granted',
+        effective_at: '2026-10-01T00:00:00.000Z',
+        revision: 3,
+        source: 'sync_scope_grant',
+      }),
+    ];
+    // store withdrawn outranks sync grant at the same ordering key
+    expect(isConsentScopeAuthorized(SCOPE, rows)).toBe(false);
+    expect(evaluateConsentScopeAuthorization(SCOPE, rows).effective?.source).toBe(
+      'server_consent_store',
+    );
+  });
+
+  it('missing ordering metadata fails closed', () => {
+    const missingTime = [
+      {
+        purpose: SCOPE,
+        consent_scope: SCOPE,
+        status: 'granted' as const,
+        policy_version: 'privacy-notice-draft-0',
+        source: 'server_consent_store' as const,
+        effective_at: '',
+      },
+    ];
+    expect(isConsentScopeAuthorized(SCOPE, missingTime)).toBe(false);
+    expect(evaluateConsentScopeAuthorization(SCOPE, missingTime).reason).toBe(
+      'missing_ordering',
+    );
+
+    const badOffset = [
+      record({
+        status: 'granted',
+        effective_at: '2026-10-01T00:00:00+03:00' as unknown as string,
+      }),
+    ];
+    expect(
+      evaluateConsentScopeAuthorization(SCOPE, badOffset).reason,
+    ).toBe('missing_ordering');
+  });
+
+  it('forged / unknown sources fail closed', () => {
+    const forged = [
+      {
+        purpose: SCOPE,
+        consent_scope: SCOPE,
+        status: 'granted' as const,
+        policy_version: 'privacy-notice-draft-0',
+        source: 'client_decision' as unknown as ServerConsentRecord['source'],
+        effective_at: '2026-10-01T00:00:00.000Z',
+      },
+    ];
+    expect(isConsentScopeAuthorized(SCOPE, forged)).toBe(false);
+    expect(evaluateConsentScopeAuthorization(SCOPE, forged).reason).toBe(
+      'forged_or_unknown_source',
+    );
+    expect(isClientDecisionMasqueradingAsServerRecord(forged[0])).toBe(true);
     expect(
       isClientDecisionMasqueradingAsServerRecord({
         decision: 'granted',
         consent_scope: SCOPE,
       }),
     ).toBe(true);
-    expect(isClientDecisionMasqueradingAsServerRecord(serverGranted)).toBe(
-      false,
-    );
+  });
+
+  it('any historical grant does not authorize after later denial', () => {
+    const rows: ServerConsentRecord[] = [
+      record({
+        status: 'granted',
+        effective_at: '2026-09-01T00:00:00.000Z',
+        revision: 1,
+      }),
+      record({
+        status: 'granted',
+        effective_at: '2026-09-15T00:00:00.000Z',
+        revision: 2,
+      }),
+      record({
+        status: 'denied',
+        effective_at: '2026-10-01T00:00:00.000Z',
+        revision: 3,
+      }),
+    ];
+    expect(isConsentScopeAuthorized(SCOPE, rows)).toBe(false);
   });
 
   it('session consent.decision granted is ignored by authorization hook', () => {
@@ -102,11 +214,22 @@ describe('Consent authorization hardening (LMP-50)', () => {
       collectSessionConsentAuthorizationIssues(session, []).length,
     ).toBeGreaterThan(0);
     expect(
-      collectSessionConsentAuthorizationIssues(session, [serverWithdrawn])
-        .length,
+      collectSessionConsentAuthorizationIssues(session, [
+        record({
+          status: 'withdrawn',
+          effective_at: '2026-10-02T00:00:00.000Z',
+          revision: 2,
+        }),
+      ]).length,
     ).toBeGreaterThan(0);
     expect(
-      collectSessionConsentAuthorizationIssues(session, [serverGranted]),
+      collectSessionConsentAuthorizationIssues(session, [
+        record({
+          status: 'granted',
+          effective_at: '2026-10-02T00:00:00.000Z',
+          revision: 2,
+        }),
+      ]),
     ).toEqual([]);
   });
 });

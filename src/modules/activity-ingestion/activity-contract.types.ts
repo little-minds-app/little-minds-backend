@@ -137,6 +137,9 @@ export type ActivityEventValidationResult =
  * Server-attested consent row used for authorization checks.
  * NEVER constructed from client `decision` alone.
  * `source` must be an authoritative server/sync channel.
+ *
+ * Ordering: prefer `revision` when present on all candidates for a scope;
+ * otherwise require trustworthy `effective_at` (UTC Z). Missing ordering → deny.
  */
 export type ServerConsentRecord = {
   purpose: string;
@@ -145,4 +148,22 @@ export type ServerConsentRecord = {
   policy_version: string;
   /** Authoritative origin — client wire decisions are not valid sources. */
   source: 'server_consent_store' | 'sync_scope_grant';
+  /**
+   * Server UTC instant when this decision became effective (ISO-8601 ending in Z).
+   * Required for chronological latest-effective selection.
+   */
+  effective_at: string;
+  /**
+   * Optional monotonic revision from the authoritative store.
+   * When every candidate for a scope has revision, revision wins over wall clock.
+   */
+  revision?: number;
 };
+
+/** Why a consent_scope failed latest-effective authorization (safe for logs). */
+export type ConsentAuthorizationDenialReason =
+  | 'no_records'
+  | 'forged_or_unknown_source'
+  | 'missing_ordering'
+  | 'conflict'
+  | 'not_granted';

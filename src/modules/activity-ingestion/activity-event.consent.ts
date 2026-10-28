@@ -3,6 +3,7 @@ import {
   OPTIONAL_CONSENT_SCOPES,
   type ActivitySessionV1,
   type ActivityValidationIssue,
+  type ConsentAuthorizationDenialReason,
   type ConsentDecision,
   type ConsentScope,
   type ServerConsentRecord,
@@ -11,8 +12,11 @@ import {
 /**
  * Consent gating helpers (Blueprint §29 / §38.2–38.3).
  *
- * HARD RULE: a client `decision: "granted"` field is NEVER authorization.
- * Only server-attested consent records (or sync-scope grants) authorize.
+ * HARD RULES:
+ * - Client `decision: "granted"` is NEVER authorization.
+ * - Authorization uses **latest-effective** server-attested consent (not “any grant”).
+ * - Withdrawal/denial that is newer than a grant wins.
+ * - Ambiguous ordering, forged sources, or status conflicts → deny (fail closed).
  */
 
 /** Sources that are allowed to authorize a consent_scope. */
@@ -23,6 +27,15 @@ export const SERVER_CONSENT_AUTHORITATIVE_SOURCES = [
 
 export type ServerConsentAuthoritativeSource =
   (typeof SERVER_CONSENT_AUTHORITATIVE_SOURCES)[number];
+
+/** Higher rank wins ties at the same revision / effective_at. */
+const SOURCE_PRECEDENCE: Record<ServerConsentAuthoritativeSource, number> = {
+  server_consent_store: 2,
+  sync_scope_grant: 1,
+};
+
+const UTC_Z_PATTERN =
+  /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$/;
 
 export function isEssentialConsentScope(scope: ConsentScope): boolean {
   return (ESSENTIAL_CONSENT_SCOPES as readonly string[]).includes(scope);
@@ -41,16 +54,18 @@ function isAuthoritativeSource(
   );
 }
 
-function authoritativeGrantedRecords(
+function matchesScope(
+  row: ServerConsentRecord,
   consentScope: ConsentScope,
-  serverRecords: readonly ServerConsentRecord[],
-): ServerConsentRecord[] {
-  return serverRecords.filter(
-    (row) =>
-      isAuthoritativeSource(row.source) &&
-      row.status === 'granted' &&
-      (row.consent_scope === consentScope || row.purpose === consentScope),
-  );
+): boolean {
+  return row.consent_scope === consentScope || row.purpose === consentScope;
+}
+
+function isTrustworthyEffectiveAt(value: string | undefined): boolean {
+  if (typeof value !== 'string' || !UTC_Z_PATTERN.test(value)) {
+    return false;
+  }
+  return Number.isFinite(Date.parse(value));
 }
 
 export type ConsentAuthorizationOptions = {
@@ -62,41 +77,152 @@ export type ConsentAuthorizationOptions = {
   clientDeclaredDecision?: ConsentDecision | string | null;
 };
 
+export type ConsentAuthorizationEvaluation = {
+  authorized: boolean;
+  reason?: ConsentAuthorizationDenialReason;
+  /** Latest-effective record when selection succeeded without conflict. */
+  effective?: ServerConsentRecord;
+};
+
+/**
+ * Compare two authoritative records for latest-effective ordering.
+ * Returns positive if `a` is newer/higher precedence than `b`.
+ */
+function compareLatestEffective(
+  a: ServerConsentRecord,
+  b: ServerConsentRecord,
+  useRevision: boolean,
+): number {
+  if (useRevision) {
+    const ra = a.revision as number;
+    const rb = b.revision as number;
+    if (ra !== rb) {
+      return ra - rb;
+    }
+  }
+
+  const ta = Date.parse(a.effective_at);
+  const tb = Date.parse(b.effective_at);
+  if (ta !== tb) {
+    return ta - tb;
+  }
+
+  return (
+    SOURCE_PRECEDENCE[a.source as ServerConsentAuthoritativeSource] -
+    SOURCE_PRECEDENCE[b.source as ServerConsentAuthoritativeSource]
+  );
+}
+
+function orderingKeyEqual(
+  a: ServerConsentRecord,
+  b: ServerConsentRecord,
+  useRevision: boolean,
+): boolean {
+  if (useRevision && a.revision !== b.revision) {
+    return false;
+  }
+  if (Date.parse(a.effective_at) !== Date.parse(b.effective_at)) {
+    return false;
+  }
+  return (
+    SOURCE_PRECEDENCE[a.source as ServerConsentAuthoritativeSource] ===
+    SOURCE_PRECEDENCE[b.source as ServerConsentAuthoritativeSource]
+  );
+}
+
+/**
+ * Evaluate latest-effective consent for a scope against server records.
+ * Fail closed on forged sources, missing ordering metadata, or conflicts.
+ */
+export function evaluateConsentScopeAuthorization(
+  consentScope: ConsentScope,
+  serverRecords: readonly ServerConsentRecord[],
+  options?: ConsentAuthorizationOptions,
+): ConsentAuthorizationEvaluation {
+  void options?.clientDeclaredDecision;
+
+  const scoped = serverRecords.filter((row) => matchesScope(row, consentScope));
+  if (scoped.length === 0) {
+    return { authorized: false, reason: 'no_records' };
+  }
+
+  // Any forged / unknown source in the scoped set poisons authorization.
+  for (const row of scoped) {
+    if (!isAuthoritativeSource(row.source)) {
+      return { authorized: false, reason: 'forged_or_unknown_source' };
+    }
+    if (!isTrustworthyEffectiveAt(row.effective_at)) {
+      return { authorized: false, reason: 'missing_ordering' };
+    }
+    if (
+      row.revision !== undefined &&
+      (!Number.isInteger(row.revision) || row.revision < 0)
+    ) {
+      return { authorized: false, reason: 'missing_ordering' };
+    }
+  }
+
+  const allHaveRevision = scoped.every(
+    (row) => typeof row.revision === 'number' && Number.isInteger(row.revision),
+  );
+
+  const sorted = [...scoped].sort((a, b) =>
+    compareLatestEffective(b, a, allHaveRevision),
+  );
+  const latest = sorted[0];
+  const runnerUp = sorted[1];
+
+  if (
+    runnerUp &&
+    orderingKeyEqual(latest, runnerUp, allHaveRevision) &&
+    latest.status !== runnerUp.status
+  ) {
+    return { authorized: false, reason: 'conflict' };
+  }
+
+  if (latest.status !== 'granted') {
+    return {
+      authorized: false,
+      reason: 'not_granted',
+      effective: latest,
+    };
+  }
+
+  return { authorized: true, effective: latest };
+}
+
 /**
  * Authorize a declared event/session consent_scope against server records.
- * Client-declared decision is ignored on purpose — including `"granted"`.
+ * Uses latest-effective selection — not “any historical grant”.
  */
 export function isConsentScopeAuthorized(
   consentScope: ConsentScope,
   serverRecords: readonly ServerConsentRecord[],
   options?: ConsentAuthorizationOptions,
 ): boolean {
-  // Poison pill: even if callers pass decision:"granted", it cannot authorize.
-  void options?.clientDeclaredDecision;
-
-  return authoritativeGrantedRecords(consentScope, serverRecords).length > 0;
+  return evaluateConsentScopeAuthorization(
+    consentScope,
+    serverRecords,
+    options,
+  ).authorized;
 }
 
 /**
- * Withdrawal / denial / missing server grant blocks upload for that purpose.
- * Client decision is irrelevant.
+ * Withdrawal / denial / missing / conflict blocks the purpose.
+ * Equivalent to !isConsentScopeAuthorized for latest-effective semantics.
  */
 export function isConsentScopeBlocked(
   consentScope: ConsentScope,
   serverRecords: readonly ServerConsentRecord[],
   options?: ConsentAuthorizationOptions,
 ): boolean {
-  void options?.clientDeclaredDecision;
-
-  if (authoritativeGrantedRecords(consentScope, serverRecords).length > 0) {
-    return false;
-  }
-  return true;
+  return !isConsentScopeAuthorized(consentScope, serverRecords, options);
 }
 
 /**
  * Validation hook: produce issues when a scope is not server-authorized.
  * Always ignores clientDeclaredDecision (including `"granted"`).
+ * Messages are stable and do not echo client or record payloads.
  */
 export function collectConsentAuthorizationIssues(
   consentScope: ConsentScope,
@@ -104,26 +230,45 @@ export function collectConsentAuthorizationIssues(
   options?: ConsentAuthorizationOptions & { path?: string },
 ): ActivityValidationIssue[] {
   const path = options?.path ?? 'consent_scope';
-  const clientDecision = options?.clientDeclaredDecision;
+  const evaluation = evaluateConsentScopeAuthorization(
+    consentScope,
+    serverRecords,
+    { clientDeclaredDecision: options?.clientDeclaredDecision },
+  );
 
-  if (
-    isConsentScopeBlocked(consentScope, serverRecords, {
-      clientDeclaredDecision: clientDecision,
-    }) ||
-    !isConsentScopeAuthorized(consentScope, serverRecords, {
-      clientDeclaredDecision: clientDecision,
-    })
-  ) {
-    return [
-      {
-        code: 'consent.unauthorized_scope',
-        path,
-        message:
-          'consent_scope is not authorized by server-attested records (client decision is not authorization)',
-      },
-    ];
+  if (evaluation.authorized) {
+    return [];
   }
-  return [];
+
+  const codeByReason: Record<ConsentAuthorizationDenialReason, string> = {
+    no_records: 'consent.unauthorized_scope',
+    forged_or_unknown_source: 'consent.forged_source',
+    missing_ordering: 'consent.missing_ordering',
+    conflict: 'consent.conflict',
+    not_granted: 'consent.unauthorized_scope',
+  };
+
+  const messageByReason: Record<ConsentAuthorizationDenialReason, string> = {
+    no_records:
+      'consent_scope is not authorized by server-attested records (client decision is not authorization)',
+    forged_or_unknown_source:
+      'consent_scope authorization rejected: forged or unknown consent source',
+    missing_ordering:
+      'consent_scope authorization rejected: missing or untrusted ordering metadata',
+    conflict:
+      'consent_scope authorization rejected: conflicting latest-effective consent records',
+    not_granted:
+      'consent_scope is not authorized by latest-effective server consent (client decision is not authorization)',
+  };
+
+  const reason = evaluation.reason ?? 'not_granted';
+  return [
+    {
+      code: codeByReason[reason],
+      path,
+      message: messageByReason[reason],
+    },
+  ];
 }
 
 /**
@@ -138,7 +283,6 @@ export function collectSessionConsentAuthorizationIssues(
     session.consent.consent_scope,
     serverRecords,
     {
-      // Explicitly pass the client decision to prove it cannot authorize.
       clientDeclaredDecision: session.consent.decision,
       path: 'consent.consent_scope',
     },
@@ -152,20 +296,25 @@ export function collectSessionConsentAuthorizationIssues(
 export function isClientDecisionMasqueradingAsServerRecord(
   candidate: unknown,
 ): boolean {
-  if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
+  if (
+    candidate === null ||
+    typeof candidate !== 'object' ||
+    Array.isArray(candidate)
+  ) {
     return false;
   }
   const row = candidate as Record<string, unknown>;
   const source = row.source;
-  if (source === 'client_decision' || source === 'wire_consent' || source === 'offline_claim') {
+  if (
+    source === 'client_decision' ||
+    source === 'wire_consent' ||
+    source === 'offline_claim'
+  ) {
     return true;
   }
-  // Missing authoritative source while claiming granted status from a decision field.
   if (
     row.decision === 'granted' &&
-    !isAuthoritativeSource(
-      typeof source === 'string' ? source : undefined,
-    )
+    !isAuthoritativeSource(typeof source === 'string' ? source : undefined)
   ) {
     return true;
   }

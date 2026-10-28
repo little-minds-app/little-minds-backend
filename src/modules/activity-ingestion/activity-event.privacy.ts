@@ -1,4 +1,5 @@
 import type { ActivityValidationIssue } from './activity-contract.types';
+import { sanitizeIssuePath } from './activity-validation-sanitize';
 
 /**
  * Recursive privacy rejection (Blueprint §14.1 / §16 / ADR-017 / §34.3 / §38.4).
@@ -78,10 +79,18 @@ const BANNED_SUBSTRINGS = [
 const FREE_TEXT_VALUE_MAX = 64;
 
 function pathJoin(base: string, key: string | number): string {
+  const segment =
+    typeof key === 'number'
+      ? `[${key}]`
+      : key.length > 64
+        ? `${key.slice(0, 64)}…`
+        : key;
   if (base === '') {
-    return String(key);
+    return sanitizeIssuePath(typeof key === 'number' ? `[${key}]` : segment);
   }
-  return typeof key === 'number' ? `${base}[${key}]` : `${base}.${key}`;
+  return sanitizeIssuePath(
+    typeof key === 'number' ? `${base}[${key}]` : `${base}.${segment}`,
+  );
 }
 
 function keyLooksBanned(key: string): boolean {
@@ -146,7 +155,8 @@ export function collectPrivacyIssues(
         issues.push({
           code: 'privacy.banned_key',
           path: childPath,
-          message: `Forbidden privacy-sensitive key "${key}"`,
+          // Do not echo attacker-controlled key text in the message body.
+          message: 'Forbidden privacy-sensitive key',
         });
         // Still walk children to surface nested issues without trusting content.
       }

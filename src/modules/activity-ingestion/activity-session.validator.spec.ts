@@ -94,6 +94,8 @@ describe('ActivitySessionV1 validation (LMP-50)', () => {
           status: 'withdrawn',
           policy_version: 'privacy-notice-draft-0',
           source: 'server_consent_store',
+          effective_at: '2026-10-28T06:00:00.000Z',
+          revision: 2,
         },
       ],
     });
@@ -119,6 +121,8 @@ describe('ActivitySessionV1 validation (LMP-50)', () => {
           status: 'granted',
           policy_version: 'privacy-notice-draft-0',
           source: 'sync_scope_grant',
+          effective_at: '2026-10-28T06:00:00.000Z',
+          revision: 1,
         },
       ],
     });

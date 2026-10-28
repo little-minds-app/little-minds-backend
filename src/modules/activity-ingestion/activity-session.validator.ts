@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import Ajv, { type ErrorObject, type ValidateFunction } from 'ajv';
+import Ajv, { type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import {
   activityDefsSchemaPath,
@@ -19,6 +19,10 @@ import {
   collectForbiddenClientIdentityIssues,
   collectPrivacyIssues,
 } from './activity-event.privacy';
+import {
+  mapAjvErrorsSafe,
+  schemaVersionIncompatibleIssue,
+} from './activity-validation-sanitize';
 
 let cachedValidate: ValidateFunction | undefined;
 let cachedSchemaVersion: string | undefined;
@@ -70,25 +74,6 @@ export function getActivitySchemaVersion(schemaRoot?: string): string {
 export function resetActivitySessionValidatorCache(): void {
   cachedValidate = undefined;
   cachedSchemaVersion = undefined;
-}
-
-function mapAjvErrors(
-  errors: ErrorObject[] | null | undefined,
-): ActivityValidationIssue[] {
-  if (!errors?.length) {
-    return [
-      {
-        code: 'schema.invalid',
-        path: '',
-        message: 'Payload failed JSON Schema validation',
-      },
-    ];
-  }
-  return errors.map((err) => ({
-    code: `schema.${err.keyword}`,
-    path: err.instancePath || err.schemaPath,
-    message: err.message ?? 'Schema validation failed',
-  }));
 }
 
 function validateTemporalOrder(
@@ -144,18 +129,14 @@ export function validateActivitySession(
   issues.push(...collectForbiddenClientIdentityIssues(record));
 
   if (record.schema_version !== ACTIVITY_SCHEMA_VERSION) {
-    issues.push({
-      code: 'schema.version_incompatible',
-      path: 'schema_version',
-      message: `Unsupported schema_version ${String(record.schema_version)}; expected ${ACTIVITY_SCHEMA_VERSION}`,
-    });
+    issues.push(schemaVersionIncompatibleIssue());
     return { ok: false, issues };
   }
 
   const validate = getAjvValidator(options?.schemaRoot);
   const schemaOk = validate(payload);
   if (!schemaOk) {
-    issues.push(...mapAjvErrors(validate.errors));
+    issues.push(...mapAjvErrorsSafe(validate.errors));
   }
 
   issues.push(...collectPrivacyIssues(payload));

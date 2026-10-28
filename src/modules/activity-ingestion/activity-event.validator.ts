@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import Ajv, { type ErrorObject, type ValidateFunction } from 'ajv';
+import Ajv, { type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import {
   activityDefsSchemaPath,
@@ -25,6 +25,10 @@ import {
   collectForbiddenClientIdentityIssues,
   collectPrivacyIssues,
 } from './activity-event.privacy';
+import {
+  mapAjvErrorsSafe,
+  schemaVersionIncompatibleIssue,
+} from './activity-validation-sanitize';
 
 let cachedValidate: ValidateFunction | undefined;
 let cachedSchemaVersion: string | undefined;
@@ -78,25 +82,6 @@ export function resetActivityEventValidatorCache(): void {
   cachedSchemaVersion = undefined;
 }
 
-function mapAjvErrors(
-  errors: ErrorObject[] | null | undefined,
-): ActivityValidationIssue[] {
-  if (!errors?.length) {
-    return [
-      {
-        code: 'schema.invalid',
-        path: '',
-        message: 'Payload failed JSON Schema validation',
-      },
-    ];
-  }
-  return errors.map((err) => ({
-    code: `schema.${err.keyword}`,
-    path: err.instancePath || err.schemaPath,
-    message: err.message ?? 'Schema validation failed',
-  }));
-}
-
 function isDurationBearing(
   eventType: string,
 ): eventType is DurationBearingEventType {
@@ -120,7 +105,7 @@ function validateActorConsistency(
       issues.push({
         code: 'provenance.actor_scope',
         path: 'provenance.actor_scope',
-        message: `${event.event_type} requires actor_scope parent`,
+        message: 'Parent-only event requires actor_scope parent',
       });
     }
     if (event.play_session_id !== undefined) {
@@ -134,7 +119,7 @@ function validateActorConsistency(
     issues.push({
       code: 'provenance.actor_scope',
       path: 'provenance.actor_scope',
-      message: `${event.event_type} requires actor_scope child_play`,
+      message: 'Child-play event requires actor_scope child_play',
     });
   }
 
@@ -157,7 +142,8 @@ function validateActorConsistency(
       issues.push({
         code: 'duration.required',
         path: 'monotonic_duration_seconds',
-        message: `Duration-bearing event ${event.event_type} requires monotonic_duration_seconds`,
+        message:
+          'Duration-bearing event requires monotonic_duration_seconds',
       });
     }
   }
@@ -205,18 +191,14 @@ export function validateActivityEvent(
   issues.push(...collectForbiddenClientIdentityIssues(record));
 
   if (record.schema_version !== ACTIVITY_SCHEMA_VERSION) {
-    issues.push({
-      code: 'schema.version_incompatible',
-      path: 'schema_version',
-      message: `Unsupported schema_version ${String(record.schema_version)}; expected ${ACTIVITY_SCHEMA_VERSION}`,
-    });
+    issues.push(schemaVersionIncompatibleIssue());
     return { ok: false, issues };
   }
 
   const validate = getAjvValidator(options?.schemaRoot);
   const schemaOk = validate(payload);
   if (!schemaOk) {
-    issues.push(...mapAjvErrors(validate.errors));
+    issues.push(...mapAjvErrorsSafe(validate.errors));
   }
 
   issues.push(...collectPrivacyIssues(payload));
