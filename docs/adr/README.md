@@ -48,6 +48,14 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 
 ---
 
+## ADR-019 — Accepted security design
+
+| ADR | Title | Jira | Notes |
+|---|---|---|---|
+| **ADR-019 (Accepted 2026-10-28)** | Parent identity & secure session lifecycle | [LMP-33](https://little-minds-app.atlassian.net/browse/LMP-33) | Completes ADR-002 session implementation/security gap. U1–U15 resolved; bounded hash history (max 8) is an accepted detection limit. [Decision](./ADR-019-parent-identity-secure-session-lifecycle.md) · [Non-live API sketch](./lmp-33-session-api-contract-sketch.md). Implementation and OpenAPI 0.4.0 in separate PR; client ADR index sync in separate client PR. |
+
+---
+
 ## LMP-19 doc tests
 
 Structure checks: `scripts/check-lmp19-docs.sh` (backend pointer checks). Client runs the fuller matrix suite against the canonical docs.
