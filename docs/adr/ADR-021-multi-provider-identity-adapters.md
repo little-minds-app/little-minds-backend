@@ -3,14 +3,14 @@
 | Field | Value |
 |---|---|
 | **Status** | **Proposed** — architecture proposal for human review. **Not Accepted.** No runtime implementation authorized by this docs PR. |
-| **Date** | 2026-10-28 |
+| **Date** | 2026-10-28 (hardened review revision) |
 | **Jira** | [LMP-35](https://little-minds-app.atlassian.net/browse/LMP-35) (Epic [LMP-7](https://little-minds-app.atlassian.net/browse/LMP-7), `seq-017`) |
 | **Blueprint** | F-031 · §12 Auth · §13.1 / §29 · §31.1 / ADR-002 · §31.4 privacy · §36.2 Apple name draft · §38 ownership |
-| **Depends on** | [ADR-019](./ADR-019-parent-identity-secure-session-lifecycle.md) (**Accepted**) — sole session mint port · [ADR-020](./ADR-020-gsm-otp-sign-in.md) (**Accepted**) — OTP / notice patterns for Email OTP |
+| **Depends on** | [ADR-019](./ADR-019-parent-identity-secure-session-lifecycle.md) (**Accepted**) — sole session mint port · [ADR-020](./ADR-020-gsm-otp-sign-in.md) (**Accepted**) — OTP / notice / delivery-gating patterns for Email OTP |
 | **Repos** | `little-minds-backend` only. Client ADR index sync = separate client PR (deferred process) |
 | **Companion sketch** | [`lmp-35-multi-provider-api-contract-sketch.md`](./lmp-35-multi-provider-api-contract-sketch.md) (non-live; live OpenAPI stays **`0.5.0`** until a future implementation PR proposes **`0.6.0`**) |
 
-> **Decision pending:** This ADR proposes Apple ID token verification, Google ID token verification, and Email OTP adapters that resolve to the same canonical `parent_accounts.id` via `parent_identities`, minting sessions only through ADR-019 `SessionIssuerService` / `mintSessionTx`. **First-time account creation policy for non-phone providers requires explicit human approval** (see **U7**). Paid Apple/Google developer program costs, production email delivery vendors, and account **linking** (**LMP-36**) are out of this ADR’s Accept scope.
+> **Decision pending:** This ADR proposes Apple ID token verification, Google ID token verification, and Email OTP adapters that resolve to the same canonical `parent_accounts.id` via `parent_identities`, minting sessions only through ADR-019 `SessionIssuerService` / `mintSessionTx`. **Recommended first-time create policy: U7 Option A** (auto-create, phone parity) — **still Proposed until human Accept**. **No silent email-based linking** in LMP-35; **LMP-36** owns explicit linking. Paid providers and production email delivery remain gated.
 
 ---
 
@@ -18,14 +18,9 @@
 
 LMP-34 delivered GSM OTP (`phone` provider) on `main`. Blueprint **F-031** and §29 require Day-1 mobile support for **Sign in with Apple**, **Google Sign-In**, and **email OTP**, each resolving to the same parent account model after verified identity — without using provider IDs or email as the database primary key.
 
-**On `main` (post LMP-34):**
+**On `main` (post LMP-34):** `SessionIssuerService` + `mintSessionTx`; `parent_identities` unique on `(provider, provider_subject)`; phone OTP + privacy Option A; OpenAPI **`0.5.0`**.
 
-- `SessionIssuerService` + `mintSessionTx` (ADR-019 / ADR-020)
-- `parent_identities` unique on `(provider, provider_subject)`
-- Phone OTP + privacy notice Option A + OpenAPI **`0.5.0`**
-- Identity README marks Apple / Google / email as **LMP-35**
-
-This docs PR proposes the architecture only. It does **not** implement adapters, migrations, SDKs, live OpenAPI paths, or Accept.
+This docs PR proposes architecture only. It does **not** implement adapters, migrations, SDKs, live OpenAPI paths, or Accept.
 
 ---
 
@@ -35,259 +30,304 @@ Little Minds **owns** identity verification outcomes, parent resolution, and ses
 
 | Provider | LM owns | External role |
 |---|---|---|
-| **Apple** | Verify Apple **ID token** (JWKS); map `sub` → `parent_identities` | Apple issues ID token to the app; LM does **not** use Apple as session SoR |
-| **Google** | Verify Google **ID token** (JWKS); map `sub` → `parent_identities` | Google issues ID token; LM does **not** use Google/Firebase Auth as session SoR |
-| **Email OTP** | Generate / hash / verify OTP; challenge persistence; abuse limits | **MailSender** delivery-only (Mailpit local; production SMTP/vendor **unapproved**) |
+| **Apple** | Full ID token cryptographic verification (§4); map verified `sub` → identity | Apple issues ID token; **not** session SoR |
+| **Google** | Full ID token cryptographic verification (§5); map verified `sub` → identity | Google issues ID token; **not** session SoR |
+| **Email OTP** | OTP generate/hash/verify; challenges; durable abuse; delivery gating | **MailSender** delivery-only (Mailpit local; production SMTP **unapproved**) |
 
-**Rejected as identity / session system of record:** Firebase Authentication, Auth0 (as SoR), Cognito, or any hosted “verify and mint our sessions” product. Vendor SDKs may be used only as **token/JWKS helpers** or **SMTP delivery**, never as the parent/session authority.
+**Rejected as identity / session SoR:** Firebase Authentication, Auth0-as-SoR, Cognito, “verify and mint our sessions” products. Vendor libraries may assist JWKS/SMTP only.
 
 ```text
-Little Minds iOS / Android / (future web)
-          |
-          v
 NestJS IdentityModule
-          |
-          +-- AppleIdentityService   (verify ID token → subject)
-          +-- GoogleIdentityService  (verify ID token → subject)
-          +-- EmailOtpService        (LM-owned OTP; MailSender delivery)
-          |
-          +-- IdentityResolveService (provider + subject → parent_id)
-          |      |-- NO silent cross-provider merge by email
-          |      +-- first-time create policy = U7 (human Approve required)
-          |
-          v
-      SessionIssuerService.mintSessionTx  (ADR-019 only)
+  +-- AppleIdentityService   (mandatory claim/JWKS/nonce checks → sub)
+  +-- GoogleIdentityService  (mandatory claim/JWKS/nonce checks → sub)
+  +-- EmailOtpService        (LM OTP + MailSender; deliveryState gating)
+  +-- IdentityResolveService (provider+subject → parent; NO silent merge)
+  v
+SessionIssuerService.mintSessionTx  (ADR-019 only)
 ```
 
-Canonical account key: **`parent_accounts.id`** (UUID). Never use Apple `sub`, Google `sub`, email, or phone as PK.
+Canonical key: **`parent_accounts.id`**. Never use Apple/Google `sub`, email, or phone as PK.
 
-Successful auth → **only** ADR-019 session mint (no second session store).
+**Reject unverified client identities:** any email, name, or `sub` supplied by the client **outside** a successfully verified ID token (or outside LM Email OTP verify) MUST be ignored for identity binding. Client claims are never authoritative.
 
 ---
 
 ## 3. Ownership vs adjacent work
 
-| Concern | Owner | Notes |
-|---|---|---|
-| Sessions / refresh / logout / guards | ADR-019 / LMP-33 | Unchanged |
-| GSM OTP | ADR-020 / LMP-34 | Unchanged; `provider=phone` |
-| Apple / Google / Email OTP adapters | **LMP-35** (this ADR) | Proposed |
-| Explicit account **linking** / recovery UX | **LMP-36** (out of scope) | Do not implement linking APIs here |
-| Phone change | ADR-020 **U18** deferred | — |
-| Web cookie session UX | LMP-38 | — |
-| Admin MFA | LMP-65 | — |
+| Concern | Owner |
+|---|---|
+| Sessions / refresh / logout / guards | ADR-019 / LMP-33 |
+| GSM OTP | ADR-020 / LMP-34 |
+| Apple / Google / Email OTP adapters | **LMP-35** (this ADR) |
+| Explicit account **linking** / recovery | **LMP-36** — **out of LMP-35** |
+| Phone change | ADR-020 U18 deferred |
+| Web cookies / admin MFA | LMP-38 / LMP-65 |
 
 ---
 
-## 4. Apple ID token verification (proposed)
+## 4. Apple ID token verification (proposed — precise)
 
 ### 4.1 Flow
 
-1. Client completes Sign in with Apple; obtains Apple **ID token** (JWT).
-2. `POST /v1/auth/apple` (name TBD in sketch) sends ID token (+ optional `notice_version`/`notice_locale` / nonce / device surface).
-3. Server verifies JWT against Apple JWKS: signature, `iss`, `aud` (bundle / services ID), `exp`, optional `nonce` binding.
-4. Stable subject = Apple `sub` → `parent_identities.provider='apple'`, `provider_subject=sub`.
-5. Resolve or create parent per **U7** (pending human choice) → `mintSessionTx` → TokenPair.
+1. Client obtains Apple **ID token** (JWT) via Sign in with Apple.
+2. Client requests a **server nonce** (or presents a client nonce that was pre-registered) — see §4.3.
+3. `POST /v1/auth/apple` sends `id_token` + `nonce` + notice fields + optional device/surface.
+4. Server performs **all** checks in §4.2; on success, `provider='apple'`, `provider_subject=sub`.
+5. Resolve/create per **U7 Option A (recommended)** → `mintSessionTx` → TokenPair.
 
-### 4.2 Rules
+### 4.2 Mandatory verification checks
 
-- Never trust client-supplied email alone for identity binding.
-- Apple **private relay** email may appear in token claims — store minimized `verifiedContact` only if needed; **do not** use email as merge key across providers.
-- Optional Apple name on first authorization → short-lived `profile_draft` per Blueprint §36.2 / existing `ProfileDraft` model; never log Apple callback payloads.
-- Fail closed if Apple JWKS / audience config missing in staging/production.
-
-### 4.3 Production gates
-
-- Apple Developer program / Services ID / key material = **ops/legal gate** (not authorized by Accept of this ADR alone).
-- No Apple SDK purchase beyond standard Sign in with Apple client libraries already in product scope.
-
----
-
-## 5. Google ID token verification (proposed)
-
-### 5.1 Flow
-
-Symmetric to Apple: client obtains Google **ID token**; server verifies via Google JWKS (`iss`, `aud` = OAuth client IDs, `exp`, `email_verified` if used for contact only).
-
-Stable subject = Google `sub` → `provider='google'`.
-
-### 5.2 Rules
-
-- Same no-silent-merge / no email-as-PK rules as Apple.
-- Do **not** use Firebase Auth session cookies or Firebase Admin “create custom token” as LM session SoR.
-- Fail closed if Google client IDs / JWKS config missing in staging/production.
-
-### 5.3 Production gates
-
-- Google Cloud OAuth client IDs = ops gate; paid Google APIs beyond Sign-In ID token verify are **not** required for V1 proposal.
-
----
-
-## 6. Email OTP (proposed — ADR-020 principles)
-
-Email OTP reuses LM-owned OTP patterns from ADR-020 with **email-specific** security parameters (proposed numbers in §8 — need human Approve).
-
-| Concern | Phone (Accepted ADR-020) | Email OTP (**Proposed**) |
+| Check | Rule | Fail mode |
 |---|---|---|
-| Delivery port | `SmsSender` | `MailSender` (Mailpit local; production SMTP **unapproved**) |
-| Subject key | `HMAC(PHONE_SUBJECT_PEPPER, e164)` | `HMAC(EMAIL_SUBJECT_PEPPER, normalized_email)` |
-| Normalization | TR E.164 mobile only | Lowercase; trim; reject invalid; **plus-tag / alias policy** TBD (propose: preserve `+` local-part as distinct subject unless human chooses collapse) |
-| OTP format | 6-digit CSPRNG | Same **6-digit** (propose) |
-| TTL | 300 s | Propose **600 s** (email latency) — **Approve** |
-| Resend cooldown | 60 s | Propose **60 s** |
-| Max wrong attempts | 5 | Propose **5** |
-| Rate limits | SMS subject/IP/global | Separate **email** durable counters (cheaper channel ≠ free abuse) |
-| Start notice | Option A version+locale | Same Option A on **email start** |
-| Verify privacy fields | None | None |
-| Fake retrieval | Test harness only | Test harness / Mailpit only; fail-closed staging/prod |
+| JWT parse | Compact JWS; reject non-JWT / truncated | `401 invalid_token` (uniform) |
+| `typ` / header | Reject unexpected critical headers; alg must be asymmetric allowed by Apple (e.g. `RS256`); **reject `none` / HS\*** | `401 invalid_token` |
+| JWKS | Fetch/cache Apple JWKS; resolve `kid`; signature verify | Config missing staging/prod → **boot/request fail-closed**; bad sig → `401` |
+| `iss` | Exact allowlist (Apple issuer URL(s) current at implement time) | `401` |
+| `aud` | Exact match configured Services ID / bundle audience allowlist | `401` |
+| `exp` | `exp > now` with clock skew ≤ **±60 s** (proposed) | `401` |
+| `iat` | Present; `iat ≤ now + skew`; reject absurdly old `iat` beyond max token age (propose **10 min** from `iat`) | `401` |
+| `sub` | Non-empty string; used as sole provider subject | Missing → `401` |
+| `nonce` | **Mandatory**; must equal server-recorded unused nonce (§4.3) | Missing/mismatch → `401` |
+| Replay | Consume nonce atomically on success; reuse → `401` | |
+| Email claim | Optional contact only; **never** identity key; never merge | Ignore for binding |
 
-**Never hold DB locks while calling `MailSender`.** Start commits challenge then sends (same ambiguous-send / no-auto-resend lessons as ADR-020).
+**Never:** accept Apple user identifier, email, or name from client body fields as substitutes for verified token claims.
 
-Reuse `otp_challenges` with `provider='email'` (or dedicated table if migration review prefers — **implementation choice**, not Accept-blocking). Delivery attempts FK-safe retention aligned with ADR-020 U16.
+### 4.3 Nonce (mandatory) + replay
+
+- Server issues short-lived nonce (propose TTL **10 min**) bound to coarse client context OR accepts client nonce registered via a dedicated one-time bind before auth — **implementation may choose one pattern; nonce MUST be mandatory either way**.
+- Store nonce hash server-side; mark **consumed** in same txn as successful auth (or immediately before mint) so concurrent replays single-winner fail.
+- Apple token `nonce` claim MUST match (Apple’s documented hash form if applicable — implement against current Apple Sign in with Apple token docs).
+
+### 4.4 Apple-specific notes
+
+- Private relay email → optional minimized `verifiedContact` only; **not** a merge key.
+- First-auth name → `profile_drafts` (§36.2); never log raw Apple payloads.
+- Staging/prod: missing JWKS URL / audience / key config → **fail closed** at boot or first request (no soft-skip verify).
 
 ---
 
-## 7. Identity resolution rules (proposed)
+## 5. Google ID token verification (proposed — precise)
 
-### 7.1 Lookups
+Symmetric mandatory matrix to Apple:
 
-1. Lookup active `parent_identities` by `(provider, provider_subject)`.
-2. If found and parent `lifecycle=active` → sign in (`mintSessionTx`).
-3. If found but parent deleted / non-active → uniform auth failure (anti-enum).
-4. If **not** found → apply **U7 first-time create policy** (human must Approve option).
-
-### 7.2 No silent merge
-
-**Forbidden:**
-
-- Auto-linking Apple ↔ Google ↔ email ↔ phone because emails match
-- Creating a second parent then silently merging
-- Using `verifiedContact` email/phone as a unique global identity key
-
-**Allowed later (LMP-36):** explicit, authenticated linking flows with clear UX and collision tests — **out of LMP-35 Day-1**.
-
-### 7.3 U7 — First-time create (needs human Approve)
-
-| Option | Behavior | Notes |
+| Check | Rule | Fail mode |
 |---|---|---|
-| **A — Auto-create** (mirror phone ADR-020) | Unknown provider subject → create `parent_accounts` + identity (+ notice evidence) in same txn as mint | Consistent with phone U7 Option A; simplest mobile UX |
-| **B — Explicit registration** | Unknown subject → `account_not_found` / require separate register step | More friction; may reduce accidental account sprawl |
-| **C — Hybrid** | Auto-create for Apple/Google; email requires extra confirmation step | Asymmetric; harder client UX |
+| Alg / header | Asymmetric per Google; reject `none` / HS\* | `401 invalid_token` |
+| JWKS | Google JWKS + `kid` + signature | Fail-closed if config missing |
+| `iss` | Exact allowlist (`accounts.google.com` / `https://accounts.google.com` as documented) | `401` |
+| `aud` | Exact OAuth client ID allowlist (iOS/Android/web as configured) | `401` |
+| `exp` / `iat` | Same skew **±60 s**; max age from `iat` **10 min** (proposed) | `401` |
+| `sub` | Sole provider subject | Missing → `401` |
+| `nonce` | **Mandatory** + replay consume (same as §4.3) | `401` |
+| `email_verified` | If storing email contact, require `true`; still **not** merge key | |
 
-**Recommendation for review:** **Option A** for all three providers (parity with phone), with LMP-36 owning later explicit link. **This remains Proposed until human Approves.**
-
----
-
-## 8. Privacy (proposed)
-
-- Notice ≠ ToS ≠ optional consent (ADR-020 §6).
-- Present applicable privacy notice **before** collecting email or completing Apple/Google credential submit.
-- **Option A binding (proposed for Email OTP):** uniform `notice_version` + `notice_locale` on email **start**; verify has no privacy fields.
-- **Apple / Google (proposed):** same uniform notice fields on the auth request that first creates a parent (or on a preceding start/bind call). Prefer one uniform request shape to avoid account-existence oracles.
-- Server-owned catalog; staging/prod require **that exact** entry `published: true` (LMP-34 gate).
-- Legal review before production personal-data processing — **unchanged blocker**.
-- Optional consent / marketing — out of LMP-35.
+**Forbidden:** Firebase session cookies, Firebase Admin custom tokens, or client-supplied Google `sub`/email as identity without ID token verify.
 
 ---
 
-## 9. Session mint / transactions (proposed)
+## 6. Email normalization — deterministic versioned algorithm (proposed)
 
-All successful provider paths:
+### 6.1 Algorithm ID: `email_norm_v1`
+
+All Email OTP subject keys MUST use this exact pipeline. Changing rules requires **`email_norm_v2`** + migration/dual-read plan — never silent drift.
+
+| Step | Rule |
+|---|---|
+| 1. Type | Reject non-string / empty after trim |
+| 2. Trim | Strip leading/trailing Unicode whitespace |
+| 3. Length | Reject if UTF-8 byte length ∉ **[3, 320]** (propose) |
+| 4. Syntax | Single `@`; non-empty local + domain; reject spaces/control chars; basic RFC 5321-inspired structural check (not full RFC acceptance of every obsolete form) |
+| 5. IDN | Domain → ASCII via IDNA / UTS #46 (**punycode**); reject domains that fail IDNA |
+| 6. Case | Lowercase **local-part and domain** with Unicode case-fold suitable for identifiers (document ICU/JS `toLowerCase` choice in Phase B; must be stable across runtimes) |
+| 7. Plus tags | **Preserve** `+` and following tag in local-part as **distinct** subjects |
+| 8. Provider collapse | **Forbidden** in v1 — do **not** strip Gmail dots, map `googlemail.com`→`gmail.com`, or apply other provider-specific alias collapse |
+| 9. Output | Canonical string `local@domain` used **only** as HMAC input |
+
+### 6.2 Subject key
+
+```text
+provider_subject = HMAC-SHA256(EMAIL_SUBJECT_PEPPER, "email_norm_v1|" || canonical_email)
+```
+
+Pepper distinct from refresh / phone / OTP peppers. Include algorithm version prefix in HMAC message so v2 cannot collide silently.
+
+### 6.3 Normative test cases (Phase B must implement)
+
+| Input | `email_norm_v1` result |
+|---|---|
+| `  User@Example.COM ` | `user@example.com` |
+| `user+tag@example.com` | `user+tag@example.com` (distinct from `user@example.com`) |
+| `u.s.er@gmail.com` | `u.s.er@gmail.com` (**no** dot-strip) |
+| `user@bücher.de` (IDN) | `user@xn--bcher-kva.de` (or current UTS #46 equivalent — pin in tests) |
+| `not-an-email` / `@x` / `a@` / empty | **reject** |
+| length > 320 | **reject** |
+| `user@EXAMPLE.com` vs `USER@example.com` | **same** canonical → same HMAC |
+
+Anti-enum: normalization failures → uniform `400 invalid_request` (same as other invalid email shapes).
+
+---
+
+## 7. Email OTP security parameters (proposed — concrete)
+
+### 7.1 Invariants vs operational thresholds
+
+| Class | Meaning | Change policy |
+|---|---|---|
+| **Invariant** | Security property that must not be weakened without new ADR Accept | e.g. LM-owned OTP; no plaintext OTP at rest; verify only after durable send; no silent merge; HMAC subject; mandatory token checks |
+| **Operational threshold** | Numeric limit tunable with security review | e.g. 15m/24h send caps; may tighten without ADR; **loosening** requires documented review |
+
+### 7.2 Proposed numbers (Email)
+
+| Limit | Value | Class |
+|---|---|---|
+| OTP format | **6-digit** CSPRNG | Invariant family (match phone) |
+| OTP TTL | **600 s** absolute | Operational (email latency) |
+| Resend cooldown | **60 s** | Operational |
+| Wrong attempts / challenge | **5** then lock | Operational |
+| Email sends / subject / 15 min | **3** | Operational |
+| Email sends / subject / 24 h | **10** | Operational |
+| Email sends / IP / 15 min | **10** | Operational |
+| Email sends / IP / 24 h | **40** | Operational |
+| Verify requests / IP / min | **10** | Operational |
+| Global email sends / day (planning) | **2000** candidate — **not** production enablement | Gate |
+
+Phone SMS limits remain as **Accepted** in ADR-020 (unchanged).
+
+### 7.3 Durable counters + delivery gating
+
+- Prefer **PostgreSQL atomic counters** (subject / IP / global), multi-replica safe — same preference as ADR-020 §8.1.
+- **Never** hold advisory/row locks across `MailSender` I/O.
+- Challenge commit → send outside txn → persist delivery attempt → mark `deliveryState=sent` only on adapter accept.
+- **Verify authorized only if** `status=pending` **and** `deliveryState=sent` (parity with LMP-34 phone gate). `pending_send` / `failed` → uniform `otp_invalid`.
+- Adapter accept + post-send persist failure → **no auto-resend** / no duplicate billable send; `503 mail_unavailable`; stale `pending_send` supersede window (propose **90 s**, parity phone).
+- Fake/Mailpit retrieval: test harness only; fail-closed if resolved in staging/production.
+
+Reuse `otp_challenges` with `provider='email'` (or dedicated table — implementation choice). Retention FK-safe per ADR-020 U16.
+
+---
+
+## 8. Identity resolution (proposed)
+
+### 8.1 Lookup
+
+1. Active `parent_identities` by `(provider, provider_subject)`.
+2. Found + parent active → sign-in via `mintSessionTx`.
+3. Found + parent deleted/non-active → uniform auth failure.
+4. Not found → **U7 Option A (recommended)**: create parent + identity + notice evidence + mint in one txn.
+
+### 8.2 No silent merge / no silent email link
+
+**Forbidden in LMP-35 (invariant):**
+
+- Auto-link Apple ↔ Google ↔ email ↔ phone because emails match
+- Treat `verifiedContact` as global unique identity
+- “Account exists with this email — signed you into the other provider”
+
+**LMP-36** owns explicit, authenticated linking UX/API and collision tests.
+
+### 8.3 U7 — First-time create
+
+| Option | Behavior | Status |
+|---|---|---|
+| **A — Auto-create** | Unknown subject → create parent + identity (+ notice) + mint | **Recommended** — pending human **Accept** |
+| B — Explicit registration | Unknown → uniform failure / register flow | Alternative |
+| C — Hybrid | Asymmetric by provider | Alternative (discouraged) |
+
+Until Accept, Phase B MUST NOT start. Recommendation is **A** for parity with ADR-020 phone U7.
+
+---
+
+## 9. Privacy (proposed)
+
+- Notice ≠ ToS ≠ optional consent.
+- Present notice before email collect / Apple|Google credential submit.
+- Email **start**: Option A `notice_version` + `notice_locale`.
+- Apple/Google: same uniform notice fields on auth request (anti-enum).
+- Verify / token paths: **no** privacy field branching by new vs existing.
+- Catalog: staging/prod require **that exact** entry `published: true`.
+- Legal review before production personal-data processing.
+
+---
+
+## 10. Session mint / transactions (proposed)
 
 ```text
 BEGIN
-  resolve or create parent + identity (+ notice evidence if new) per U7
-  mintSessionTx(tx, …)   // ADR-019 cap + FOR UPDATE
+  resolve or create parent + identity (+ notice if new)  // U7 A recommended
+  [email: consume challenge after deliveryState=sent checks]
+  mintSessionTx(tx, …)
 COMMIT
-sign access JWT (post-commit; no rollback — same ADR-019/020 client guidance)
+sign JWT post-commit  // no rollback — ADR-019/020 client guidance
 ```
 
-- Email OTP verify: consume challenge + resolve/create + mint in **one** txn (reuse ADR-020 U13 pattern).
-- Apple/Google: no OTP consume; still one txn for identity create + mint.
-- Concurrent first-time create on same subject: unique `(provider, provider_subject)` + single-winner; loser retries as sign-in.
-- Never call Apple/Google JWKS or MailSender inside a long-held row lock beyond necessary verify reads.
+Concurrent first create: unique `(provider, provider_subject)` single-winner. JWKS/MailSender outside long lock holds.
 
 ---
 
-## 10. Decision matrix (U*) — for human approval
+## 11. Decision matrix (U*) — unambiguous security-critical items
 
-| ID | Topic | Classification | Proposal |
+Legend: **Proposed (security-critical)** = must not weaken without explicit Accept; **Recommended pending Accept** = product choice locked as recommendation; **Deferred** / **Gate** as labeled.
+
+| ID | Topic | Classification | Decision text |
 |---|---|---|---|
-| **Arch** | Provider ownership | **Proposed** | LM verifies Apple/Google ID tokens; LM-owned Email OTP; MailSender delivery-only; no Firebase/Auth0 SoR |
-| **U1** | Canonical ID | **Proposed** | `parent_accounts.id` only; `parent_identities (provider, provider_subject)` |
-| **U2** | Apple subject | **Proposed** | Apple `sub` |
-| **U3** | Google subject | **Proposed** | Google `sub` |
-| **U4** | Email subject | **Proposed** | HMAC email subject pepper over normalized email |
-| **U5** | Email normalization | **Proposed** | Lowercase + trim; plus-tag policy = preserve distinct (Approve alternative: collapse) |
-| **U6** | No silent merge | **Proposed** | Never merge/link by email match across providers in LMP-35 |
-| **U7** | First-time create | **Proposed — needs Approve** | Recommend **Option A** auto-create (phone parity); Alternatives B/C documented |
-| **U8** | Account linking | **Deferred** | **LMP-36** — out of scope |
-| **U9** | mintSessionTx | **Proposed** | Mandatory for all new provider success paths |
-| **U10** | Privacy notice | **Proposed** | Option A fields on email start / first Apple|Google auth; verify/token paths without privacy branching oracles |
-| **U11** | Email OTP format | **Proposed** | 6-digit CSPRNG |
-| **U12** | Email OTP TTL | **Proposed** | **600 s** (vs phone 300 s) |
-| **U13** | Email cooldown / attempts | **Proposed** | 60 s resend; 5 wrong attempts |
-| **U14** | Email rate limits | **Proposed** | Durable PG counters (distinct from SMS); concrete numbers Approve in Phase B |
-| **U15** | MailSender | **Proposed** | Mailpit/fake local; production SMTP **unapproved** |
-| **U16** | Anti-enumeration | **Proposed** | Uniform errors; no “email registered?” oracle |
-| **U17** | OpenAPI | **Proposed** | Live bump to **`0.6.0`** only in implementation PR; this docs PR keeps **`0.5.0`** |
-| **U18** | Apple name draft | **Proposed** | Use existing `profile_drafts`; §36.2 rules |
-| **U19** | Client ADR sync | **Deferred process** | Separate client PR after Accept + merge |
-| **U20** | Paid providers / Apple&Google ops | **Production gate** | Not authorized by docs Accept alone |
+| **Arch** | SoR / adapters | **Proposed (security-critical)** | LM verifies Apple/Google ID tokens; LM owns Email OTP; MailSender delivery-only; **no** Firebase/Auth0/Cognito SoR |
+| **U1** | Canonical ID | **Proposed (security-critical)** | `parent_accounts.id` only; identities via `(provider, provider_subject)` |
+| **U2** | Apple subject | **Proposed (security-critical)** | Verified Apple `sub` only |
+| **U3** | Google subject | **Proposed (security-critical)** | Verified Google `sub` only |
+| **U4** | Email subject | **Proposed (security-critical)** | `HMAC(EMAIL_SUBJECT_PEPPER, "email_norm_v1\|" \|\| canonical)` |
+| **U5** | Email normalization | **Proposed (security-critical)** | **`email_norm_v1`** §6 — trim/syntax/len/IDN/case/plus-preserve; **no** provider collapse |
+| **U6** | Silent merge / email link | **Proposed (security-critical)** | **Forbidden** in LMP-35 |
+| **U7** | First-time create | **Recommended pending Accept** | **Option A** auto-create (phone parity); B/C alternatives documented — **Accept required before Phase B** |
+| **U8** | Account linking | **Deferred** | **LMP-36 only** |
+| **U9** | mintSessionTx | **Proposed (security-critical)** | Mandatory on all success paths |
+| **U10** | Privacy Option A | **Proposed** | Uniform notice fields; no verify privacy oracle |
+| **U11** | Email OTP format | **Proposed (security-critical)** | 6-digit CSPRNG; hashed at rest |
+| **U12** | Email OTP TTL | **Proposed** | **600 s** |
+| **U13** | Cooldown / attempts | **Proposed** | **60 s** / **5** wrong |
+| **U14** | Email rate limits | **Proposed** | Durable PG counters; §7.2 numbers |
+| **U15** | Delivery gating | **Proposed (security-critical)** | Verify only `deliveryState=sent`; no auto-resend on persist failure; MailSender outside locks |
+| **U16** | Token verify matrix | **Proposed (security-critical)** | §4–§5 iss/aud/JWKS/exp/iat/skew/typ/nonce+replay; reject client-supplied identities |
+| **U17** | Anti-enumeration | **Proposed (security-critical)** | Uniform errors; no existence oracle |
+| **U18** | OpenAPI | **Proposed** | Impl bump **`0.6.0`**; this PR keeps **`0.5.0`** |
+| **U19** | Apple name draft | **Proposed** | `profile_drafts` / §36.2 |
+| **U20** | Client ADR sync | **Deferred process** | Separate client PR |
+| **U21** | Nonce mandatory | **Proposed (security-critical)** | Apple + Google nonce required + single-use replay protection |
+| **U22** | Paid / prod email / Apple&Google ops | **Production gate** | Not authorized by docs Accept alone |
+| **MailSender** | Local vs prod | **Proposed** | Mailpit/fake local; production SMTP **unapproved** |
 
 ---
 
-## 11. Proposed numerical limits (Email OTP — Approve)
+## 12. Non-goals
 
-| Limit | Proposed |
-|---|---|
-| OTP digits | 6 |
-| TTL | **600 s** |
-| Resend cooldown | 60 s |
-| Wrong attempts / challenge | 5 |
-| Email start / address / 15 min | **5** (candidate) |
-| Email start / address / 24 h | **20** (candidate) |
-| Email start / IP / 15 min | **10** (candidate) |
-| Verify / IP / min | **10** |
-
-SMS limits remain as Accepted in ADR-020. Candidates above need human Approve before Phase B.
-
----
-
-## 12. Non-goals (this ADR / LMP-35 Phase A)
-
-- Runtime Nest services, controllers, migrations, env secrets beyond documentation
-- Live OpenAPI path publication (stays **0.5.0**)
-- Firebase Auth / social SoR
-- Paid email vendor purchase or Apple/Google billing beyond Sign-In
-- Cross-provider **linking** UI/API (**LMP-36**)
-- Silent merge by email
-- Client repo changes / Jira Done / Accept without human decision
-- Weakening ADR-019 session rules or ADR-020 phone OTP
+- Runtime / migrations / live OpenAPI paths / SDKs in this PR
+- Accept without human decision; merge; Jira Done; client repo
+- Silent merge or LMP-36 linking APIs
+- Firebase SoR; weakening ADR-019/020
+- Provider-specific email alias collapse in `email_norm_v1`
 
 ---
 
 ## 13. Implementation prerequisites (after Accept + Phase B auth)
 
-1. Human Approves **U7** create policy and Email OTP numbers.
-2. Docs ADR merge authorization (separate from Accept).
-3. Phase B: Apple/Google verify services, EmailOtpService + MailSender, routes, OpenAPI **0.6.0**, tests (token fixtures, concurrent create, anti-enum, mint rollback).
-4. Legal published notice catalog before staging/prod personal data.
-5. Ops gates for Apple/Google client IDs and production email delivery.
+1. Human **Accept** including **U7 Option A** (or documented alternative) and §7/§11 security-critical rows.
+2. Docs merge authorization.
+3. Phase B: verification services, EmailOtpService, MailSender, routes, OpenAPI **0.6.0**, tests (JWKS fixtures, nonce replay, `email_norm_v1` table, delivery gating, concurrent create, mint rollback).
+4. Legal published notice; ops Apple/Google audiences; production email gate.
 
 ---
 
 ## 14. Consequences
 
-**Positive:** Completes F-031 multi-provider surface on the same parent/session spine; reuses ADR-019/020 patterns; keeps vendors out of SoR.
+**Positive:** Precise verify/normalization/OTP gates reduce account-takeover and alias-abuse ambiguity; clear LMP-35 vs LMP-36 boundary.
 
-**Negative / follow-ups:** U7 must be chosen before coding; email abuse differs from SMS economics; Apple private relay and missing-name edge cases need client UX; linking deferred to LMP-36 may frustrate users who expect email-matched accounts to unify automatically — product must communicate explicitly.
+**Negative / follow-ups:** Plus-tag preserve increases account sprawl vs Gmail UX expectations — product copy must explain; linking deferred to LMP-36; nonce UX adds a round-trip or pre-bind step.
 
 ---
 
 ## 15. References
 
 - Blueprint F-031, §29, §36.2
-- ADR-019, ADR-020
-- `parent_identities`, `profile_drafts` schema on `main`
-- Privacy catalog: `docs/privacy-notice-catalog.md`
+- ADR-019, ADR-020 (incl. delivery gating / ambiguous send)
+- `parent_identities`, `profile_drafts`
+- `docs/privacy-notice-catalog.md`

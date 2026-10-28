@@ -64,7 +64,7 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 
 | ADR | Title | Jira | Notes |
 |---|---|---|---|
-| **ADR-021 (Proposed)** | Multi-provider parent identity — Apple, Google, Email OTP | [LMP-35](https://little-minds-app.atlassian.net/browse/LMP-35) | LM verifies Apple/Google ID tokens; LM-owned Email OTP + delivery-only MailSender; no Firebase SoR; **no silent merge**; **U7 first-time create needs human Approve**; linking = **LMP-36**. Live OpenAPI stays **`0.5.0`**; sketch proposes future **`0.6.0`**. [Decision](./ADR-021-multi-provider-identity-adapters.md) · [Sketch](./lmp-35-multi-provider-api-contract-sketch.md). |
+| **ADR-021 (Proposed)** | Multi-provider parent identity — Apple, Google, Email OTP | [LMP-35](https://little-minds-app.atlassian.net/browse/LMP-35) | Precise ID-token verify (iss/aud/JWKS/exp/iat/skew/typ/**nonce+replay**); **`email_norm_v1`**; Email OTP limits + delivery gating; **no silent email link**; **U7 Option A recommended pending Accept**; linking = **LMP-36**. Live OpenAPI **`0.5.0`**; sketch → future **`0.6.0`**. [Decision](./ADR-021-multi-provider-identity-adapters.md) · [Sketch](./lmp-35-multi-provider-api-contract-sketch.md). |
 
 ---
 

@@ -2,121 +2,108 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Non-live companion to **Proposed** ADR-021. Live OpenAPI remains **`0.5.0`** until a future **implementation** PR publishes **`0.6.0`**. |
+| **Status** | Non-live companion to **Proposed** ADR-021. Live OpenAPI remains **`0.5.0`** until implementation proposes **`0.6.0`**. |
 | **Parent ADR** | [ADR-021](./ADR-021-multi-provider-identity-adapters.md) (**Proposed**) |
 | **Jira** | LMP-35 |
 
-> **Proposed:** Apple / Google ID token verify; LM-owned Email OTP; no silent merge; mint via ADR-019 `mintSessionTx`.  
-> **Needs human Approve:** first-time create (**U7**), Email OTP numbers.  
-> **Deferred:** account linking (LMP-36); production email vendor; client ADR sync.
+> **Proposed (security-critical):** Apple/Google ID token verify matrix (iss/aud/JWKS/exp/iat/skew/typ/**mandatory nonce+replay**); `email_norm_v1`; Email OTP limits + durable counters + **deliveryState=sent** verify gate; **no silent email link**.  
+> **Recommended pending Accept:** **U7 Option A**. Linking = **LMP-36**.
 
 ---
 
 ## Architecture note
 
-- Backend verifies Apple/Google **ID tokens** (JWKS) and owns Email OTP generate/verify.
-- `MailSender` is **delivery-only** (Mailpit/fake locally; production SMTP **unapproved**).
-- Firebase Auth / hosted OTP-verify products are **not** systems of record.
-- All success paths call `SessionIssuerService.mintSessionTx` then sign JWT post-commit.
+- LM verifies Apple/Google ID tokens; never trusts client-supplied `sub`/email/name for binding.
+- Email OTP: LM-owned; `MailSender` delivery-only; verify only after durable `sent`.
+- Sessions: ADR-019 `mintSessionTx` only.
 
 ---
 
-## Privacy notice binding (proposed)
+## Privacy
 
-- Notice ≠ ToS ≠ optional consent (ADR-020 §6).
-- Present notice before email collect / Apple|Google credential submit.
-- **Email start:** uniform `notice_version` + `notice_locale` (Option A).
-- **Apple / Google:** uniform notice fields on the auth request used for first-time create (same shape for existing/new — anti-enum).
-- Verify / token exchange responses do **not** branch on “new vs existing” privacy requirements.
-- Server catalog; staging/prod require that exact entry `published: true`.
+Option A notice fields on email start and Apple/Google auth; verify has no privacy fields; uniform invalid notice → `invalid_request`.
 
 ---
 
-## Proposed live version
+## OpenAPI version
 
-| Phase | OpenAPI |
+| Phase | Version |
 |---|---|
-| This docs PR | Keep live **`0.5.0`** (phone routes only) |
-| LMP-35 implementation PR (after Accept + auth) | Propose bump **`0.6.0`** additive paths below |
+| This docs PR | Live **`0.5.0`** unchanged |
+| Future implementation | Propose **`0.6.0`** |
 
 ---
 
 ## Paths (proposed)
 
-### `POST /v1/auth/apple`
+### `POST /v1/auth/apple` / `POST /v1/auth/google`
 
-Unauthenticated. Body: Apple ID token + notice fields + optional nonce/device.
+**Required:** `id_token`, `nonce`, `notice_version`, `notice_locale`.  
+Optional: `client_surface`, `device_id`.
+
+Server: full ADR-021 §4/§5 verify; reject unverified client identity fields if present (ignore or `400` — prefer **ignore unknown** with `additionalProperties: false` so extras fail closed).
 
 **200** `TokenPairResponse`  
-**401** `invalid_token` / generic auth failure (uniform)  
-**400** `invalid_request` (malformed / invalid notice — uniform)
+**401** `invalid_token` (uniform — covers bad sig, iss/aud, exp/iat, nonce miss/replay)  
+**400** `invalid_request` (malformed / notice)
 
-### `POST /v1/auth/google`
+### Nonce issuance (proposed companion)
 
-Same shape as Apple with Google ID token.
+`POST /v1/auth/oidc/nonce` (name TBD) — returns short-lived nonce for Apple/Google; rate-limited; **or** document client-nonce pre-registration. Nonce is **mandatory** on Apple/Google auth either way.
 
 ### `POST /v1/auth/email/start`
 
-Unauthenticated; rate-limited. Body: email + `notice_version` + `notice_locale`.
+**Required:** `email`, `notice_version`, `notice_locale`.  
+Normalize via **`email_norm_v1`**; durable counters; commit challenge; send outside txn.
 
-**200** uniform start response (`challenge_id`, `expires_in`, `resend_after`) — never returns OTP  
-**400** `invalid_request` (malformed email / notice — uniform)  
+**200** `{ challenge_id, expires_in: 600, resend_after: 60 }` — never OTP  
+**400** `invalid_request`  
 **429** `otp_cooldown` / `rate_limited`  
-**503** `mail_unavailable` (proposed parallel to `sms_unavailable`)
+**503** `mail_unavailable`
 
 ### `POST /v1/auth/email/verify`
 
-Body: `challenge_id` + `code` (+ optional device/surface) only — **no** privacy fields.
+**Required:** `challenge_id`, `code` only.  
+Gate: pending + `deliveryState=sent`.
 
 **200** `TokenPairResponse`  
 **401** `otp_invalid`  
 **429** rate limited
 
-### Explicitly **not** in LMP-35 sketch
+### Not in LMP-35
 
-- `/v1/auth/link/*` account linking — **LMP-36**
-- Public “is this email registered?” probes
-- Firebase session exchange endpoints
+- `/v1/auth/link/*` — **LMP-36**
+- Existence probes; Firebase exchange
 
 ---
 
 ## Schemas (illustrative)
 
-### AppleAuthRequest / GoogleAuthRequest
-
 ```yaml
 AppleAuthRequest:
   type: object
   additionalProperties: false
-  required: [id_token, notice_version, notice_locale]
+  required: [id_token, nonce, notice_version, notice_locale]
   properties:
     id_token: { type: string, minLength: 20, maxLength: 8192 }
-    nonce: { type: string, maxLength: 128 }
+    nonce: { type: string, minLength: 8, maxLength: 128 }
     notice_version: { type: string, maxLength: 64 }
     notice_locale: { type: string, maxLength: 16 }
     client_surface: { type: string, maxLength: 32 }
     device_id: { type: string, maxLength: 128 }
-```
 
-Google request mirrors Apple (`id_token` = Google ID token).
+# GoogleAuthRequest: identical shape
 
-### EmailOtpStartRequest
-
-```yaml
 EmailOtpStartRequest:
   type: object
   additionalProperties: false
   required: [email, notice_version, notice_locale]
   properties:
-    email: { type: string, format: email, maxLength: 320 }
+    email: { type: string, maxLength: 320 }
     notice_version: { type: string, maxLength: 64 }
     notice_locale: { type: string, maxLength: 16 }
     client_surface: { type: string, maxLength: 32 }
-```
 
-### EmailOtpVerifyRequest
-
-```yaml
 EmailOtpVerifyRequest:
   type: object
   additionalProperties: false
@@ -130,31 +117,30 @@ EmailOtpVerifyRequest:
 
 ---
 
-## Errors (proposed)
+## Email OTP limits (sketch mirror)
 
-| Code | When |
+| Limit | Value |
 |---|---|
-| `invalid_request` | Malformed body / notice / email shape (uniform) |
-| `invalid_token` | Apple/Google token failed verification (generic message) |
-| `otp_invalid` | Email OTP wrong/expired/locked/not durable-sent |
-| `otp_cooldown` | Resend too soon / in-flight |
-| `rate_limited` | Durable counter exceeded |
-| `mail_unavailable` | MailSender failure after challenge commit (no auto-resend) |
-| `session_limit_exceeded` | ADR-019 cap |
-
-Anti-enumeration: do not reveal whether email/Apple/Google subject already exists via distinct error codes on start/auth.
+| TTL / cooldown / attempts | 600 s / 60 s / 5 |
+| Sends / subject / 15m / 24h | 3 / 10 |
+| Sends / IP / 15m / 24h | 10 / 40 |
+| Verify / IP / min | 10 |
 
 ---
 
-## U7 note (non-normative until Approve)
+## Errors
 
-If human Approves **Option A**, verify/auth success for unknown subjects creates parent + identity + notice evidence + session in one txn.  
-If **Option B**, unknown subjects return a uniform failure directing clients to a future register flow — **not** sketched as live paths here.
+| Code | Use |
+|---|---|
+| `invalid_request` | Malformed / notice / email_norm reject |
+| `invalid_token` | Apple/Google verify or nonce failure |
+| `otp_invalid` | Email OTP / not durable-sent |
+| `otp_cooldown` / `rate_limited` | Limits |
+| `mail_unavailable` | Send/persist failure (no auto-resend) |
+| `session_limit_exceeded` | ADR-019 |
 
 ---
 
-## Non-goals
+## U7
 
-- Publishing these paths in live `contracts/openapi.yaml` in this docs PR
-- Linking APIs, password auth, magic-link without OTP challenge table
-- Client SDK changes
+**Recommended pending Accept:** Option A auto-create on unknown verified subject. No silent cross-provider email link.
