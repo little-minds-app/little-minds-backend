@@ -2,15 +2,15 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Proposed** — human security/product review required before implementation |
-| **Date** | 2026-10-28 |
+| **Status** | **Proposed** — revised from human-review direction; still requires explicit human **Accept** before implementation |
+| **Date** | 2026-10-28 (revised same day) |
 | **Jira** | [LMP-33](https://little-minds-app.atlassian.net/browse/LMP-33) (Epic [LMP-7](https://little-minds-app.atlassian.net/browse/LMP-7), `seq-015`) |
 | **Blueprint** | F-001, F-031 · §12 Auth · §13.1 identity tables · §29 · §31.1 / ADR-002 · §31.4 privacy · §27.4 local identity · §38 ownership |
-| **Supersedes / completes** | ADR-002 *implementation/security design* gap (architecture direction remains; this ADR proposes the missing session design) |
-| **Repos** | `little-minds-backend` only for this proposal. Client ADR index sync after human acceptance (ADR-014). |
-| **Companion sketch** | [`lmp-33-session-api-contract-sketch.md`](./lmp-33-session-api-contract-sketch.md) (non-normative until Accepted + OpenAPI bump) |
+| **Supersedes / completes** | ADR-002 *implementation/security design* gap (architecture direction remains; this ADR specifies the session design) |
+| **Repos** | `little-minds-backend` only in this PR. **After Accept**, sync the client ADR index (ADR-014) in a separate client task/PR — **not** in this backend docs PR. |
+| **Companion sketch** | [`lmp-33-session-api-contract-sketch.md`](./lmp-33-session-api-contract-sketch.md) (non-normative until Accepted; live OpenAPI stays `0.3.0` until the **implementation** PR) |
 
-> **Hard gate:** Do **not** implement production authentication, Prisma migrations for sessions, or live OpenAPI auth paths until this ADR is **Accepted** by a human reviewer. No paid auth vendors. No GSM OTP here (LMP-34).
+> **Hard gate:** Do **not** implement production authentication, Prisma session migrations, or live OpenAPI auth paths until this ADR is **Accepted** by an explicit human decision. Status remains **Proposed** until then. No paid auth vendors. No GSM OTP here (LMP-34).
 
 ---
 
@@ -25,25 +25,31 @@ LMP-33 requires a stable parent identity domain and a secure session lifecycle (
 - Nest `PrismaModule` / `PrismaService` for readiness (LMP-32)
 - Structured redacted logging, correlation IDs, allowlisted context (LMP-32 / ADR-013)
 - OpenAPI `0.3.0` health + readiness only — **no** `/v1/auth/*`
-- Env catalog reserves `JWT_SECRET` as a documentation placeholder (LMP-28) — **not** sufficient for the asymmetric design below
+- Env catalog reserves `JWT_SECRET` as a documentation placeholder (LMP-28) — **not** used by this asymmetric design
 
-**ADR-002 (resolved direction):** self-hosted NestJS `IdentityModule`, extraction-ready ports, established crypto libraries, no Supabase Auth, SMS OTP via adapter (LMP-34). Implementation/security design was explicitly left open — this ADR fills that gap for sessions.
+**ADR-002 (resolved direction):** self-hosted NestJS `IdentityModule`, extraction-ready ports, established crypto libraries, no Supabase Auth, SMS OTP via adapter (LMP-34). This ADR fills the remaining session security design gap.
 
 ---
 
-## 2. Decision summary (Proposed)
+## 2. Decision summary (Proposed — review-aligned)
 
-| Topic | Proposed decision |
+| Topic | Decision |
 |---|---|
-| Access token | Short-lived **JWT**, **15 minutes** TTL, **asymmetric** signature, `Authorization: Bearer` |
-| Refresh token | **Opaque** random secret, **30-day absolute max** lifetime, stored **hashed** server-side |
-| Sessions | One DB row per independent multi-device session; refresh rotates tokens; reuse detection invalidates family |
-| Transport | Access + refresh in JSON body / Bearer header for API clients (mobile). **No cookies in LMP-33** (web cookie strategy deferred to LMP-38) |
-| Identity key | Canonical subject is `parent_accounts.id` (UUID). Never GSM/email/provider id as PK |
-| Authorization | Every child-scoped operation checks `child.parent_id === authenticated.parent_id` |
-| Dev/test bootstrap | Deterministic, `APP_ENV=development\|test` only, hard-disabled in staging/production |
-| OTP / providers | **Out of scope** — LMP-34 (+ later LMP-35) |
-| Paid services | **Forbidden** for identity in this ADR |
+| Access token | **JWT**, **Ed25519** via `jose`, **15 minutes** TTL, `Authorization: Bearer` |
+| Refresh token | **Opaque** (≥256-bit), **peppered hash** at rest, **absolute 30-day** session/refresh expiry |
+| Sessions | Independent multi-device rows; optional `device_id`; **max 20 active** per parent |
+| Rotation | Transactional **single-winner**; bounded hash **history** for reuse detection |
+| Reuse | Revokes **that session only** |
+| Concurrent / lost refresh | No client retry of a consumed refresh token; **single-flight** client refresh; lost response → re-authenticate |
+| Transport | JSON body + Bearer for API clients. **No cookies in LMP-33** (LMP-38) |
+| Protected requests | **Always** load session row by `sid` so revoke/logout takes **immediate** effect |
+| Ownership | Internal guards/helpers + integration tests only — **no** public ownership-check API |
+| Dev bootstrap | Local/test only; **no** arbitrary impersonation on shared/remote-reachable dev hosts |
+| Logging | Never JWT, refresh tokens, credentials, or parent/child PII / raw parent identifiers |
+| Keys | Signing key + pepper = **secrets**; public verify keys = **non-secret**; **no paid KMS** in V1 |
+| OpenAPI | Live **`0.4.0` only in the implementation PR**, not this docs PR |
+| Catalog | Additive `parent_sessions` persistence is an accepted Blueprint catalog extension (on ADR Accept) |
+| OTP / paid auth | Out of scope — LMP-34+; no paid identity services |
 
 ---
 
@@ -51,139 +57,144 @@ LMP-33 requires a stable parent identity domain and a secure session lifecycle (
 
 ### 3.1 Access token (JWT)
 
-| Property | Proposed value |
+| Property | Value |
 |---|---|
 | Format | JWS compact serialization |
-| Algorithm (preferred) | **EdDSA** with **Ed25519** (`alg: EdDSA`) via maintained library (`jose` proposed). Fallback if ops cannot ship Ed25519: **RS256** (RSA-2048+) — **Unresolved #U1** until human confirms Ed25519 readiness |
-| TTL | **`exp - iat = 900` seconds (15 minutes)** — fixed; not configurable per client in V1 |
+| Algorithm | **EdDSA / Ed25519** (`alg: EdDSA`) via maintained library **`jose`** |
+| TTL | **`exp - iat = 900` seconds (15 minutes)** — fixed in V1 |
 | Clock skew | Verify with ≤ **60s** leeway |
-| Header | `alg`, `typ: JWT`, `kid` (key id for rotation) |
-| Claims (allowlist only) | See below — **no** phone, email, names, child ids, tokens |
+| Header | `alg`, `typ: JWT`, `kid` |
+| Claims | Allowlisted only — **no** phone, email, names, child ids, tokens |
 
 **Required claims:**
 
 | Claim | Meaning |
 |---|---|
-| `iss` | Stable issuer string, e.g. `little-minds-backend` (or env `JWT_ISSUER`) |
-| `aud` | `little-minds-parent` (parent API audience; admin uses a different audience later) |
+| `iss` | Stable issuer (env `JWT_ISSUER`, default `little-minds-backend`) |
+| `aud` | `little-minds-parent` (admin uses a different audience later) |
 | `sub` | `parent_accounts.id` (UUID string) |
-| `sid` | `parent_sessions.id` (session UUID) |
-| `jti` | Unique access-token id (UUID) — for future denylist if needed; **not** persisted by default in LMP-33 |
+| `sid` | `parent_sessions.id` |
+| `jti` | Unique access-token id (UUID); not persisted by default in LMP-33 |
 | `iat` / `exp` | Issued / expiry UTC epoch seconds |
 | `token_use` | Literal `access` |
 
-**Explicitly excluded from JWT:** child ids, roles beyond parent, PII, refresh material, provider subjects.
+**Verification on every protected request:**
 
-**Verification:** Nest `ParentAuthGuard` verifies signature with current + previous public keys (rotation window), `iss`/`aud`/`token_use`/`exp`, then loads session by `sid` and rejects if session revoked/expired or `parent.lifecycle !== active`.
+1. Verify JWS with current (+ optional previous) **public** keys and claim checks.
+2. **Query `parent_sessions` by `sid`** (no TTL cache that can outlive revoke in V1).
+3. Reject if session missing, `revoked_at` set, `expires_at` passed, or parent not `lifecycle = active` / soft-deleted.
+
+Immediate logout/revoke is therefore effective on the next authenticated call.
 
 ### 3.2 Refresh token (opaque)
 
-| Property | Proposed value |
+| Property | Value |
 |---|---|
-| Format | Cryptographically random **≥ 256 bits** entropy; encode as URL-safe base64 (≈43+ chars). Prefix optional `lmr1.` for version sniffing |
-| Lifetime | **Absolute max 30 days** from session `created_at`. No sliding extension past absolute expiry in V1 (**Unresolved #U2** if product wants idle sliding) |
-| Persistence | Store **only** `SHA-256` hash of `pepper \|\| token` (or HMAC-SHA256 with server pepper). **Never** store plaintext refresh tokens |
-| Presentation | Client sends refresh token on refresh/logout endpoints in JSON body field `refresh_token` |
-| Binding | Bound to `parent_sessions.id` + `parent_id`. Optional `device_id` FK when client supplies a known device (**Unresolved #U3** for mandatory device binding) |
+| Format | ≥ **256 bits** CSPRNG; URL-safe base64; optional version prefix `lmr1.` |
+| Lifetime | **Absolute** `expires_at = session.created_at + 30 days` — **no** sliding extension in V1 |
+| Persistence | **HMAC-SHA256** (or SHA-256 of `pepper \|\| token`) with server **`REFRESH_TOKEN_PEPPER`**. Never store plaintext |
+| Presentation | JSON body field `refresh_token` on refresh/logout |
+| Binding | Bound to session + parent; **`device_id` optional** |
 
-### 3.3 Why hybrid (JWT access + opaque refresh)
+### 3.3 Why hybrid
 
-- Access JWT avoids a DB hit on every read-mostly call after signature verify, while session revocation still requires a cheap `sid` lookup (or cache) for logout/compromise — **Proposed:** always check session row (or short TTL cache keyed by `sid`) so logout is immediate.
-- Opaque refresh enables server-side rotation, reuse detection, and multi-device revoke without JWT refresh pitfalls.
-- Aligns with Blueprint QA language (JWT validation) and privacy rules (never log access/refresh tokens).
+Access JWT keeps per-request crypto verify cheap; mandatory session-row check enforces revoke. Opaque refresh enables rotation, bounded history reuse detection, and multi-device logout without JWT-refresh pitfalls.
 
 ---
 
 ## 4. Session lifecycle
 
-### 4.1 Session creation (ports only in LMP-33)
+### 4.1 Session creation (ports)
 
-`IdentityModule` exposes an internal **`SessionIssuer` port** used by:
+`IdentityModule` exposes internal **`SessionIssuer`** used by:
 
-1. **LMP-34** phone verify (and later LMP-35 providers) — production mint path  
-2. **Dev/test bootstrap** (§8) — non-production only  
+1. **LMP-34** phone verify (later LMP-35 providers) — production mint  
+2. **Dev/test bootstrap** (§8) — tightly gated  
 
-LMP-33 does **not** publish public “login with password” or OTP routes.
+No public password login or OTP routes in LMP-33.
 
-On mint: create `parent_sessions` row + return `{ access_token, refresh_token, token_type, expires_in, session_id, parent_id }`.
+**Active session cap:** at most **20** sessions per parent with `revoked_at IS NULL` and `expires_at > now()`. When full, mint returns **`403`** with `error: session_limit_exceeded` (client must logout a session or logout-all). Expired rows do not count; a maintenance job may tombstone them later.
 
-### 4.2 Refresh (rotation)
+On success: create row + return token pair (`access_token`, `refresh_token`, `token_type`, `expires_in`, `session_id`, `parent_id`).
+
+### 4.2 Refresh (single-winner rotation)
 
 `POST /v1/auth/token/refresh`:
 
-1. Hash presented refresh token; lookup session by hash (constant-time compare path).
-2. Reject if missing, expired (`expires_at` / absolute max), or `revoked_at` set → `401`.
-3. **Rotate:** generate new refresh token; update hash; set `last_refreshed_at`; optionally keep previous hash in `previous_refresh_token_hash` with short grace (**Proposed: 10 seconds**) for concurrent refresh (**§4.4**).
-4. Issue new access JWT (`sid` unchanged unless policy says otherwise — **Proposed: same `sid`**).
-5. Return new token pair.
+1. Hash presented token; find session where **current** `refresh_token_hash` matches.
+2. If no current match: run **reuse detection** (§4.3).
+3. If expired or revoked → `401`.
+4. In a DB transaction:  
+   `UPDATE parent_sessions SET refresh_token_hash = :newHash, …, refresh_generation = refresh_generation + 1 WHERE id = :id AND refresh_token_hash = :presentedHash`.  
+   - **0 rows updated** → another winner already rotated → treat presented token as **consumed** → `401 invalid_token` (**do not** instruct the client to retry that token).  
+   - **1 row** → append prior hash to bounded history (§4.3); issue new access JWT (same `sid`); return new pair.
 
-### 4.3 Refresh token reuse detection
+### 4.3 Bounded refresh-token hash history (reuse detection)
 
-Each session has a **`token_family_id`** (UUID, stable for the session lifetime).
+Each session keeps a **bounded ring of prior refresh-token hashes** (not plaintext):
 
-If a refresh token hash matches neither current nor grace previous hash, but the token was previously valid in this family (detect via optional `refresh_token_hash_history` **or** simpler rule):
+| Field | Purpose |
+|---|---|
+| `refresh_token_hash` | Sole **currently valid** hash |
+| `refresh_token_hash_history` | JSON array of `{ "h": "<hash>", "g": <generation>, "at": "<iso>" }`, **max length 8** (oldest dropped) |
+| `token_family_id` | Stable per session (audit / correlation without raw parent ids) |
+| `refresh_generation` | Monotonic counter |
 
-**Proposed V1 rule (simpler):**
+**Rules:**
 
-- Only current (+ grace previous) hashes are valid.
-- Presentation of an **unknown** token → generic `401`.
-- Presentation of the **immediately superseded** token **after grace expired** → treat as **reuse**: revoke **this session** (and optionally entire family — same as session) with `revoked_reason = refresh_reuse`, return `401`.
+| Presented hash | Outcome |
+|---|---|
+| Equals current | Rotate (winner path) |
+| Found in history (any prior generation) | **Reuse** → revoke **this session only** (`revoked_reason = refresh_reuse`), clear current + history hashes, `401` `refresh_reuse` |
+| Unknown | `401` `invalid_token` (generic; no existence leak) |
 
-**Unresolved #U4:** Whether reuse also revokes **all** sessions for the parent (account-wide) vs current session only. **Proposed default: current session only** + structured security log event (no token material).
+History exists so a stolen older token cannot silently mint after rotation; presenting it burns **that** session, not every device.
 
-### 4.4 Concurrent refresh
+### 4.4 Concurrent refresh & lost responses
 
-Two parallel refresh calls with the same valid token:
+**Server**
 
-**Proposed:** transactional update `WHERE refresh_token_hash = :hash`; winner rotates; loser within **10s grace** may present the old token once and receive the **same new pair already issued** (idempotent read of rotated credentials stored encrypted-at-rest is **not** desired).  
+- Single-winner transactional update on current hash (§4.2).
+- Concurrent loser (same consumed token): `401 invalid_token` — **never** `409` that tells the client to resubmit the consumed refresh token.
+- No server path returns a previously issued plaintext refresh token.
 
-**Revised Proposed (safer, no storing plaintext new token):**
+**Client (normative guidance for implementers / OpenAPI description)**
 
-- Winner rotates; stores only new hash.
-- Loser within grace: if previous hash matches, **issue another rotation** (another new pair) only if `refresh_generation` advanced by exactly 1 and request falls inside grace — **or** return `409` with `code: refresh_in_progress` and ask client to retry with backoff.
-
-**Preferred Proposed for human review:** **strict single-winner rotation** + **409 refresh_conflict** for concurrent loser (no grace plaintext). Clients retry once with the refresh token they still hold only if they did not receive a new pair; if winner already consumed the token, loser must re-authenticate. Document client guidance in OpenAPI.
-
-Mark final concurrency choice as **Unresolved #U5** with recommended **strict single-winner + 409**.
+1. **Single-flight refresh:** at most one in-flight refresh per app process; coalesce callers on that promise.
+2. On `200`, **persist the new pair atomically** to secure storage, then discard the old refresh token.
+3. **Do not retry a refresh token** after it has been successfully used, after a `401`/`refresh_reuse`, or when the outcome of a refresh HTTP call is **unknown** (timeout / connection drop after send).
+4. **Lost-response recovery:** if the client cannot confirm that new tokens were received and persisted, clear local auth state and **re-authenticate** (LMP-34 sign-in). Retrying the old refresh token risks reuse detection and session revoke — that retry is **forbidden** by this ADR.
+5. Parallel dual-flight bugs should surface as `401` for the loser; recover via re-auth, not refresh retry.
 
 ### 4.5 Expiry
 
-- Access JWT: cryptographic `exp` (15m).
-- Session / refresh: `expires_at = created_at + 30 days` (absolute). Expired sessions fail refresh and fail guard session checks.
+- Access JWT: `exp` at 15 minutes.
+- Session/refresh: absolute 30 days from `created_at`. Guards and refresh both enforce `expires_at`.
 
 ### 4.6 Logout (single session)
 
-`POST /v1/auth/logout` with refresh token (and/or valid access token identifying `sid`):
+`POST /v1/auth/logout` — refresh body and/or Bearer access (`sid`):
 
-- Set `revoked_at = now()`, `revoked_reason = logout`.
-- Clear refresh hashes.
-- Return `204`.
-
-Idempotent: already-revoked → still `204`.
+- `revoked_at = now()`, `revoked_reason = logout`; clear current hash + history.
+- **`204` No Content** (idempotent if already revoked).
 
 ### 4.7 Logout-all
 
-`POST /v1/auth/logout-all` requires valid **access** token:
+`POST /v1/auth/logout-all` — Bearer access required:
 
-- Revoke **all** non-revoked sessions for `sub` parent with `revoked_reason = logout_all`.
-- Return `204` + optional body `{ revoked_session_count }` (**Proposed: include count**).
+- Revoke all non-revoked sessions for the authenticated parent (`revoked_reason = logout_all`).
+- **`200 OK`** with body `{ "revoked_session_count": <integer> }` — **only** this shape (not 204). Count includes rows transitioned in this call (0 if none were active).
 
-### 4.8 Revoke one session by id
+### 4.8 Revoke one session / list
 
-`DELETE /v1/auth/sessions/{sessionId}`:
-
-- Authenticated parent may revoke **own** session only.
-- Cross-account session id → `404` (no existence leak) or `403` — **Proposed: `404`**.
-
-### 4.9 List sessions
-
-`GET /v1/auth/sessions` — return minimized metadata (id, created_at, last_refreshed_at, device_id if any, user_agent_summary). **No** token material.
+- `DELETE /v1/auth/sessions/{sessionId}` → **`204`**; cross-account/unknown → **`404`**.
+- `GET /v1/auth/sessions` → minimized summaries only (no token material).
 
 ---
 
 ## 5. Prisma schema changes (Proposed)
 
-New models (additive migration; no destructive changes to existing tables).
+Additive migration only. **`parent_sessions` is an accepted catalog extension** relative to Blueprint §13.1 once this ADR is Accepted (documents secure-session persistence required by §12 / §29 / ADR-002).
 
 ```prisma
 enum ParentSessionRevokeReason {
@@ -192,29 +203,28 @@ enum ParentSessionRevokeReason {
   refresh_reuse
   admin_revoke
   account_deletion
-  expired // optional tombstone reason if job marks rows
+  expired
   security_event
+  session_limit // reserved if a future policy auto-evicts; V1 mint fails closed instead
 }
 
 model ParentSession {
-  id                         String                     @id @default(uuid()) @db.Uuid
-  parentId                   String                     @map("parent_id") @db.Uuid
-  tokenFamilyId              String                     @map("token_family_id") @db.Uuid
-  refreshTokenHash           String?                    @map("refresh_token_hash")
-  previousRefreshTokenHash   String?                    @map("previous_refresh_token_hash")
-  previousRefreshValidUntil  DateTime?                  @map("previous_refresh_valid_until") @db.Timestamptz(6)
-  refreshGeneration          Int                        @default(0) @map("refresh_generation")
-  expiresAt                  DateTime                   @map("expires_at") @db.Timestamptz(6)
-  revokedAt                  DateTime?                  @map("revoked_at") @db.Timestamptz(6)
-  revokedReason              ParentSessionRevokeReason? @map("revoked_reason")
-  deviceId                   String?                    @map("device_id") @db.Uuid
-  /// Coarse client surface only, e.g. "ios" | "android" | "web" | "unknown" — not a fingerprint
-  clientSurface              String?                    @map("client_surface")
-  /// Truncated / allowlisted UA summary; never raw full UA if it carries identifiers
-  userAgentSummary           String?                    @map("user_agent_summary")
-  createdAt                  DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                  DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
-  lastRefreshedAt            DateTime?                  @map("last_refreshed_at") @db.Timestamptz(6)
+  id                       String                     @id @default(uuid()) @db.Uuid
+  parentId                 String                     @map("parent_id") @db.Uuid
+  tokenFamilyId            String                     @map("token_family_id") @db.Uuid
+  refreshTokenHash         String?                    @map("refresh_token_hash")
+  /// Bounded ring of prior hashes for reuse detection — max 8 entries; never plaintext tokens
+  refreshTokenHashHistory  Json                       @default("[]") @map("refresh_token_hash_history")
+  refreshGeneration        Int                        @default(0) @map("refresh_generation")
+  expiresAt                DateTime                   @map("expires_at") @db.Timestamptz(6)
+  revokedAt                DateTime?                  @map("revoked_at") @db.Timestamptz(6)
+  revokedReason            ParentSessionRevokeReason? @map("revoked_reason")
+  deviceId                 String?                    @map("device_id") @db.Uuid
+  clientSurface            String?                    @map("client_surface")
+  userAgentSummary         String?                    @map("user_agent_summary")
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastRefreshedAt          DateTime?                  @map("last_refreshed_at") @db.Timestamptz(6)
 
   parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Restrict)
   device Device?       @relation(fields: [deviceId], references: [id], onDelete: SetNull)
@@ -227,214 +237,221 @@ model ParentSession {
 }
 ```
 
-Also add reverse relations on `ParentAccount` and `Device`.
-
-**Indexes / uniqueness notes:**
-
-- Unique on `refresh_token_hash` where non-null (Prisma unique allows multiple nulls in PostgreSQL).
-- Do **not** unique `previous_refresh_token_hash` globally if grace overlaps — lookup by equality in transaction scoped to session.
-
 ### 5.1 Migration strategy
 
-1. Additive Prisma migration `…_parent_sessions` only.
-2. No backfill (no existing sessions).
-3. Deploy order: migrate → deploy API that understands sessions.
-4. Rollback: drop table only if no production sessions yet; after sessions exist, forward-fix (stop issuing, revoke all) rather than destructive rollback without approval.
-5. Update `prisma/MAPPING.md` when Accepted (map `ParentSession` → §29/§31 session persistence — catalog gap called out as intentional extension).
-
-**Note:** Blueprint §13.1 does not yet list `parent_sessions`. This ADR proposes adding it as the persistence for “secure sessions” required by §12 / §29 / ADR-002. Human acceptance = product approval of that catalog extension.
+1. Additive migration `…_parent_sessions`.
+2. No backfill.
+3. Deploy migrate → then API that understands sessions.
+4. Rollback only before production sessions exist; otherwise forward-fix.
+5. Update `prisma/MAPPING.md` in the **implementation** PR.
 
 ---
 
-## 6. OpenAPI / HTTP contract (Proposed)
+## 6. OpenAPI / HTTP contract (Proposed sketch)
 
-Authoritative live contract remains `contracts/openapi.yaml` **0.3.0** until Accepted. Full request/response shapes live in the companion sketch. Summary:
+Live contract remains **`contracts/openapi.yaml` `0.3.0`** in this docs PR. After ADR **Accept**, the **implementation** PR publishes additive **`0.4.0`**. Full shapes: companion sketch.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `POST` | `/v1/auth/token/refresh` | refresh body | Rotate tokens |
-| `POST` | `/v1/auth/logout` | refresh and/or Bearer | Revoke current session |
-| `POST` | `/v1/auth/logout-all` | Bearer access | Revoke all parent sessions |
-| `GET` | `/v1/auth/sessions` | Bearer access | List own sessions |
-| `DELETE` | `/v1/auth/sessions/{sessionId}` | Bearer access | Revoke one own session |
-| `GET` | `/v1/parent/me` | Bearer access | Stable parent identity probe + guard smoke |
-| `POST` | `/v1/auth/dev/session` | none + **dev gate** | Dev/test bootstrap only |
+| `POST` | `/v1/auth/token/refresh` | refresh body | Single-winner rotate |
+| `POST` | `/v1/auth/logout` | refresh and/or Bearer | Revoke current → **204** |
+| `POST` | `/v1/auth/logout-all` | Bearer | Revoke all → **200** + count |
+| `GET` | `/v1/auth/sessions` | Bearer | List own sessions |
+| `DELETE` | `/v1/auth/sessions/{sessionId}` | Bearer | Revoke one → **204** / **404** |
+| `GET` | `/v1/parent/me` | Bearer | Parent identity probe |
+| `POST` | `/v1/auth/dev/session` | gated | Local/test bootstrap only |
 
-**Security scheme:** `http` `bearer` JWT (`parentAccessToken`).
-
-**Standard errors (problem-style or existing Nest JSON — align with health style minimally):**
+**Not published:** any `/v1/auth/ownership-check` (or similar) public route.
 
 | HTTP | When |
 |---|---|
-| `400` | Malformed body / validation |
-| `401` | Missing/invalid/expired access or refresh; reuse after revoke |
-| `403` | Authenticated but forbidden (prefer avoid for cross-account child access — use 404) |
-| `404` | Unknown session id / cross-account child or session |
-| `409` | Concurrent refresh conflict (if U5 accepted) |
-| `429` | Rate limit (**Unresolved #U6** exact limits) |
-| `503` | Misconfigured signing keys in non-dev |
+| `400` | Malformed body |
+| `401` | Invalid/expired/consumed/reused token; revoked session |
+| `403` | `session_limit_exceeded`; bootstrap disabled / policy deny |
+| `404` | Unknown or non-owned session id; non-owned child resources |
+| `429` | Rate limited |
+| `503` | Signing keys missing outside allowed local misconfig paths |
 
-**Ownership probe (LMP-33):** a protected child-scoped example is required for AC tests. **Proposed:** implement authorization helper `assertParentOwnsChild(parentId, childId)` and expose **only** a minimal internal/test route **or** `GET /v1/children/{childId}` stub that returns `{ id }` when owned else `404`. Prefer **not** inventing full child profile API — **Unresolved #U7** whether a tiny `GET /v1/children/{childId}` identity stub is in LMP-33 or deferred to child-profile task with tests using a harness endpoint under `/v1/auth/ownership-check` (dev/test only). **Recommended:** authenticated `POST /v1/auth/ownership-check` with body `{ child_id }` → `{ owned: true }` / `404` for deny — keeps child CRUD out of LMP-33.
+### 6.1 Ownership verification (no public API)
+
+Implement `assertParentOwnsChild(parentId, childId)` (and equivalents) as **internal** Nest guards/helpers used by future child-scoped controllers. LMP-33 automated tests exercise ownership via:
+
+- unit tests of the helper, and  
+- integration/e2e tests against a **test-only** harness or against `/v1/parent/me` + session APIs plus a minimal **test module route that is not part of the published OpenAPI contract** (or against the first real child-scoped route when it lands).
+
+**Do not** ship a publicly documented ownership-check endpoint.
 
 ---
 
 ## 7. Parent identity & authorization boundaries
 
-1. **Canonical id:** `parent_accounts.id` only.
-2. **Provider rows:** `parent_identities` remain the link table; LMP-33 may read them but does not create phone identities (LMP-34).
-3. **Lifecycle:** sessions mint/refresh only if `lifecycle = active` and `deleted_at IS NULL`.
-4. **Child ownership:** `ChildProfile.parentId === AuthContext.parentId`; never trust client-supplied `parent_id`.
-5. **Cross-account:** deny with `404` for child/session resources (anti-enumeration).
-6. **Admin staff auth:** out of scope (LMP-65); different audience and module.
-7. **Kids Mode device credentials:** out of scope (`KidsModeAuthorization`); distinct from parent sessions.
-8. **Account deletion:** must revoke all sessions (`revoked_reason = account_deletion`) — deletion workflow may land in a later privacy task; SessionIssuer must expose `revokeAllForParent`.
+1. Canonical id: `parent_accounts.id`.
+2. `parent_identities` readable; phone identity creation is LMP-34.
+3. Mint/refresh only when parent `lifecycle = active` and `deleted_at IS NULL`.
+4. Child ops: `child.parent_id === AuthContext.parentId`; never trust client `parent_id`.
+5. Cross-account child/session → **`404`**.
+6. Admin auth (LMP-65) and Kids Mode credentials are separate.
+7. Account deletion must `revokeAllForParent` (`account_deletion`).
 
 ---
 
 ## 8. Development / test authentication bootstrap (no OTP)
 
-| Rule | Proposed |
+| Rule | Value |
 |---|---|
 | Route | `POST /v1/auth/dev/session` |
-| Enabled when | `APP_ENV` ∈ {`development`,`test`} **AND** `AUTH_DEV_BOOTSTRAP_ENABLED=true` |
-| Disabled when | `APP_ENV` ∈ {`staging`,`production`} — **hard fail closed** even if flag true (boot should warn/reject enabling) |
-| Body | `{ "parent_id": "<uuid>" }` limited to **seed / allowlisted synthetic** parents in development; tests may create ephemeral parents in DB |
-| Effect | Calls same `SessionIssuer` as production mint |
-| OpenAPI | Documented with `x-environment: development-only` warning; generators may include but clients must not call in staging builds |
-| Logging | Log `event=dev_session_issued` with `parent_id` **hash or last-4 of uuid only** — **Unresolved #U8** whether parent UUID is allowlisted in auth security logs. Prefer `parent_id` as UUID is an internal opaque id already used in DB; still avoid logging tokens |
+| Enable | `APP_ENV ∈ {development, test}` **and** `AUTH_DEV_BOOTSTRAP_ENABLED=true` |
+| Hard deny | `APP_ENV ∈ {staging, production}` even if the flag is true (fail closed at boot or request) |
 
-No fake OTP, no Mailpit, no SMS in LMP-33.
+**Anti-impersonation / shared-host controls (required):**
+
+1. **Parent allowlist only** — request `parent_id` must be in `AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST` (default: LMP-22 seed parent UUID only). Arbitrary UUID impersonation is **rejected** (`403` / `404`).
+2. **Loopback-only by default** — when enabled, accept bootstrap only from loopback peers (`127.0.0.1` / `::1`) **or** when `AUTH_DEV_BOOTSTRAP_LISTEN=loopback` and the API is not advertised on a shared LAN/public URL. If the process is bound/reachable beyond loopback (shared remote IDE, tunnel, cloud agent with public ingress), bootstrap must remain **disabled** unless a separate, reviewed break-glass flag is explicitly approved later (default **off**; not introduced here).
+3. Automated tests use `APP_ENV=test` with allowlisted synthetic parents created in-suite — still no production OTP.
+4. OpenAPI sketch marks the route development-only; staging/production clients must never call it.
+
+Effect: same `SessionIssuer` as production mint, including the **20-session** cap.
 
 ---
 
-## 9. Secrets, keys, and rotation
+## 9. Secrets, keys, and rate limits
 
-### 9.1 Env keys (Proposed replacements)
-
-Deprecate undocumented use of reserved `JWT_SECRET` for this design. Propose:
+### 9.1 Env / secret classification
 
 | Key | Class | Purpose |
 |---|---|---|
-| `JWT_ACCESS_PRIVATE_KEY_PEM` | Secret | Ed25519 (or RSA) private PEM for signing |
-| `JWT_ACCESS_PUBLIC_KEY_PEM` | Secret or mount | Current verify key (can be derived; storing both is ok) |
-| `JWT_PREVIOUS_PUBLIC_KEY_PEM` | Secret/mount | Optional previous public key during rotation |
-| `JWT_KEY_ID` | Public | Current `kid` |
-| `JWT_PREVIOUS_KEY_ID` | Public | Previous `kid` |
-| `JWT_ISSUER` | Public | Default `little-minds-backend` |
-| `JWT_AUDIENCE` | Public | Default `little-minds-parent` |
-| `REFRESH_TOKEN_PEPPER` | Secret | Pepper for refresh hashing |
-| `AUTH_DEV_BOOTSTRAP_ENABLED` | Public flag | Dev/test only |
+| `JWT_ACCESS_PRIVATE_KEY_PEM` | **Secret** | Ed25519 signing key |
+| `JWT_ACCESS_PUBLIC_KEY_PEM` | **Non-secret** | Current verify key |
+| `JWT_PREVIOUS_PUBLIC_KEY_PEM` | **Non-secret** | Previous verify key during rotation |
+| `JWT_KEY_ID` / `JWT_PREVIOUS_KEY_ID` | Public | `kid` values |
+| `JWT_ISSUER` / `JWT_AUDIENCE` | Public | Claim defaults |
+| `REFRESH_TOKEN_PEPPER` | **Secret** | Refresh hashing pepper |
+| `AUTH_DEV_BOOTSTRAP_*` | Public flags / allowlist | Dev gate only |
 
-Update LMP-28 catalogs (`.env.example`, `env.secrets.ts`, `environments-config.md`) **during implementation**, not in this ADR-only PR beyond documentation pointers in the ADR.
+V1 key custody: **secure injected secrets or protected files** (env / secret mount). **No paid KMS** required for V1. Log `kid` only — never PEM blobs or pepper.
 
-**Unresolved #U9:** Whether public verify keys are treated as secret mounts or non-secret config. **Proposed:** treat private key + pepper as secrets; public keys may be public config but still not logged in full if PEM blobs are large — log `kid` only.
+Rotation: new key pair → sign with new `kid` → keep previous **public** key for ≥ 15m + skew → drop previous.
 
-### 9.2 Key rotation procedure
+Library: **`jose`** for JWS; Node `crypto` for random + HMAC/SHA-256. No hand-rolled JWT.
 
-1. Generate new key pair; set new `JWT_KEY_ID`.
-2. Move old public key to `JWT_PREVIOUS_*` for ≥ access TTL (15m) + skew.
-3. Sign new access tokens with new key only.
-4. Remove previous after window.
-5. Refresh tokens unaffected (opaque, DB-bound).
-6. Document runbook in implementation PR; no automatic cloud KMS required for V1 (**Unresolved #U10** KMS vs file/env PEM).
+### 9.2 Rate limits (Proposed)
 
-### 9.3 Libraries
+| Scope | Limit |
+|---|---|
+| `POST /v1/auth/token/refresh` | **30 / minute / IP** and **10 / minute / session** (session key = current hash lookup id or `sid` after resolve) |
+| `POST /v1/auth/logout` / `logout-all` | Same order of magnitude as refresh IP limit is sufficient; implementation may share IP bucket |
+| `POST /v1/auth/dev/session` | **Stricter:** **5 / minute / IP** (and still allowlist + loopback gates) |
 
-Use maintained libraries only (`jose` proposed for JWS; Node `crypto` for random + SHA-256). **Do not** hand-roll JWT or OAuth.
+Exceed → `429` `rate_limited`.
 
----
-
-## 10. Privacy-safe logging (reuse LMP-32)
-
-- Never log access tokens, refresh tokens, JWTs, Authorization headers, cookies, OTP, phone, email, child names/DOB.
-- Extend `STRUCTURED_LOG_ALLOWLIST` (implementation task) with auth events: `auth_event`, `session_id`, `token_family_id`, `revoke_reason`, `parent_id` (**if U8 allows**).
-- Existing `redact.ts` already redacts `token`, `jwt`, `bearer`, `authorization`, `refreshtoken`, `accesstoken`.
-- Failed auth: log generic `auth_failed` + reason enum (`expired`, `invalid`, `revoked`, `reuse`) — **no** token fragments.
-- Request interceptor continues to omit query strings and bodies.
+**Multi-instance limitation:** in-process / single-node counters are **best-effort** only. Multiple API replicas do not share memory; effective limits scale with instance count unless a later shared store (Redis, etc.) is approved. V1 documents this limitation; do **not** introduce a paid rate-limit SaaS. Sticky IP load balancing reduces but does not eliminate the gap. Security tests should cover the single-node behavior.
 
 ---
 
-## 11. Automated security tests (for implementation PR; not this ADR PR)
+## 10. Privacy-safe logging (LMP-32)
+
+**Never** enter structured logs (fields or messages):
+
+- Access JWTs, refresh tokens, Authorization headers, cookies  
+- Credentials, OTP, signing keys, pepper  
+- Raw **parent identifiers** (`parent_id` / `sub`), child ids/names, phone, email, DOB, free-text PII  
+
+**Allowlisted auth context examples:** `auth_event`, `session_id`, `token_family_id`, `refresh_generation`, `revoke_reason`, `error` enum, `client_surface`, rate-limit bucket class — after `allowlistAndRedactContext`. Prefer `session_id` / `token_family_id` over parent ids for correlation.
+
+Failed auth: `auth_failed` + reason enum (`expired`, `invalid`, `revoked`, `reuse`, `rate_limited`) — **no** token fragments.
+
+---
+
+## 11. Automated security tests (implementation PR)
 
 | Layer | Cases |
 |---|---|
-| Unit | Hashing; JWT sign/verify; claim allowlist; revoke state machine; reuse detection |
-| API | Refresh success; expired access → 401; expired refresh → 401; logout; logout-all; list/delete sessions |
-| AuthZ | Parent A cannot read Parent B child (`404`); ownership-check deny/allow |
-| Privacy | Logger/redaction fixtures include JWT + refresh samples → `[REDACTED]` |
-| Env gate | Dev bootstrap disabled when `APP_ENV=staging|production` |
-| Regression | Health/readiness unaffected |
-
-CI: existing Nest lint/typecheck/test/e2e + contract checks once OpenAPI bumped in implementation.
+| Unit | Ed25519 sign/verify; hashing; history reuse; single-winner race; session cap |
+| API | Refresh success; consumed token → 401; reuse → session revoked; logout **204**; logout-all **200**+count; list/delete |
+| AuthZ | Helper deny/allow; cross-account child → 404 via integration harness (**no** public ownership route) |
+| Privacy | Redaction fixtures: JWT/refresh/parent_id/child PII → redacted or dropped |
+| Env gate | Bootstrap denied for staging/production, non-allowlisted parent, non-loopback |
+| Rate limit | Single-node refresh/IP and per-session limits |
+| Regression | Health/readiness unchanged |
 
 ---
 
 ## 12. Ownership boundary with LMP-34
 
-| Concern | LMP-33 (this ADR) | LMP-34 |
+| Concern | LMP-33 | LMP-34 |
 |---|---|---|
-| Session table + issuer + guards | ✅ | consumes issuer |
-| Refresh / logout / logout-all / sessions | ✅ | — |
-| `/v1/parent/me`, ownership helper | ✅ | — |
-| Dev/test session bootstrap | ✅ | — |
-| `POST /v1/auth/phone/start` | ❌ | ✅ |
-| `POST /v1/auth/phone/verify` | ❌ | ✅ (calls SessionIssuer) |
-| OTP storage, rate limits, fake SMS, E.164 | ❌ | ✅ |
-| Apple/Google/email adapters | ❌ | LMP-35 |
-| Web cookie session UX | ❌ | LMP-38 (must use same tokens/APIs) |
-| Admin staff MFA/RBAC | ❌ | LMP-65 |
+| Session table, issuer, guards, refresh/logout/sessions | ✅ | consumes issuer |
+| `/v1/parent/me` | ✅ | — |
+| Dev/test bootstrap (gated) | ✅ | — |
+| Internal ownership helpers + tests | ✅ | — |
+| `POST /v1/auth/phone/start\|verify` | ❌ | ✅ |
+| OTP / fake SMS / E.164 / abuse limits | ❌ | ✅ |
+| Apple/Google/email | ❌ | LMP-35 |
+| Web cookies | ❌ | LMP-38 |
+| Admin MFA/RBAC | ❌ | LMP-65 |
 
-LMP-34 must not invent a second session store.
+LMP-34 must **not** invent a second session store.
 
 ---
 
 ## 13. Alternatives considered
 
-| Alternative | Why not (Proposed) |
+| Alternative | Why not |
 |---|---|
-| Opaque access tokens only | Extra DB/cache hit every request; Blueprint QA expects JWT validation |
-| JWT refresh tokens | Harder rotation/reuse detection; larger steal window |
-| Symmetric HS256 (`JWT_SECRET`) | Weaker key distribution/rotation story; ADR prefers asymmetric |
-| Supabase / Auth0 / Cognito | Paid/external; contradicts ADR-002 |
-| Cookies in LMP-33 | Web-specific; LMP-38 |
+| Opaque access only | Extra design vs Blueprint JWT QA language |
+| JWT refresh | Weak rotation/reuse story |
+| HS256 `JWT_SECRET` | Rejected — Ed25519 asymmetric |
+| Paid IdP / KMS | Contradicts ADR-002 / cost policy for V1 |
+| Public ownership-check API | Rejected — internal helpers only |
+| Client retry of consumed refresh | Rejected — causes reuse revoke; use single-flight + re-auth |
+| Cookies in LMP-33 | Deferred to LMP-38 |
 
 ---
 
-## 14. Unresolved decisions — **STOP for human review**
+## 14. U1–U15 resolution table (human-review direction)
 
-Do **not** implement until these are accepted or explicitly deferred with an owner:
+Status of this ADR document remains **Proposed** until an explicit human **Accept**. The table records the approved *direction* applied in this revision:
 
-| ID | Question | Recommendation |
+| ID | Topic | Resolution |
 |---|---|---|
-| **U1** | Ed25519 vs RS256 for access JWT? | Ed25519 (`jose`) |
-| **U2** | Absolute 30-day refresh only vs sliding idle timeout? | Absolute 30-day only for V1 |
-| **U3** | Mandatory `device_id` on sessions? | Optional in V1 |
-| **U4** | Refresh reuse → revoke one session or all parent sessions? | One session + security log |
-| **U5** | Concurrent refresh: 409 vs grace re-read? | Strict single-winner + `409` |
-| **U6** | Rate limits for refresh/logout/dev? | e.g. refresh 30/min/IP + 10/min/session — needs product/ops OK |
-| **U7** | Ownership test surface: `/v1/auth/ownership-check` vs child stub? | `/v1/auth/ownership-check` |
-| **U8** | Allow `parent_id` UUID in structured auth logs? | Yes (opaque internal id); still redact PII |
-| **U9** | Public key secret classification? | Private+pepper secret; public PEM non-secret |
-| **U10** | KMS vs env PEM for V1 keys? | Env/file PEM for local+early staging; KMS later |
-| **U11** | Accept `parent_sessions` as Blueprint catalog extension? | Yes via this ADR |
-| **U12** | OpenAPI version bump strategy on Accept? | Additive `0.4.0` in **implementation** PR, not this ADR PR |
-| **U13** | Access-path session check: always DB vs cache? | DB first; optional short cache later |
-| **U14** | Max concurrent sessions per parent? | Uncapped V1 **or** soft cap 20 — needs product call |
-| **U15** | Client ADR index update timing? | After Accept, sync client `docs/adr/README.md` (separate small task/PR) |
+| **U1** | JWT algorithm | **Ed25519** via **`jose`**; access TTL **15 minutes** |
+| **U2** | Refresh lifetime | **Absolute 30-day** session expiry; no sliding idle in V1 |
+| **U3** | Device binding | **Optional** `device_id`; sessions remain independent |
+| **U4** | Refresh reuse blast radius | Revoke **affected session only** |
+| **U5** | Concurrent refresh | Transactional **single-winner**; loser `401`; **no** client retry of consumed token; **single-flight** client refresh; lost response → **re-authenticate** |
+| **U6** | Rate limits | Refresh **30/min/IP** + **10/min/session**; bootstrap **5/min/IP**; document **multi-instance** best-effort limits |
+| **U7** | Ownership surface | **Internal** guards/helpers + integration tests; **no** public ownership-check API |
+| **U8** | Parent ids in logs | **Avoid raw parent identifiers** in security logs; use `session_id` / `token_family_id` |
+| **U9** | Key classification | **Public verify keys non-secret**; signing key + pepper **secrets** |
+| **U10** | KMS | **No paid KMS** for V1; secure injected secrets / protected files |
+| **U11** | `parent_sessions` catalog | **Accept** additive persistence extension on ADR Accept |
+| **U12** | OpenAPI bump | Live **`0.4.0` only in implementation PR** (not this docs PR) |
+| **U13** | Session check on access | **Always query** session persistence on protected requests |
+| **U14** | Max sessions | **20 active** per parent; mint **`403 session_limit_exceeded`** when full |
+| **U15** | Client ADR index | **After Accept**, sync client index in a **separate** client PR — document only here |
+
+### Remaining open items (non-blocking for Accept if deferred explicitly)
+
+| Item | Note |
+|---|---|
+| Shared rate-limit store | Optional later; V1 documents multi-instance limitation |
+| Exact Nest error JSON envelope | Align with existing Nest/HTTP conventions in implementation |
+| Test harness shape for ownership e2e | Must remain unpublished in OpenAPI |
+| Break-glass remote-dev bootstrap | Default off; requires separate review if ever needed |
 
 ---
 
-## 15. Implementation plan (after Accept only)
+## 15. Implementation plan (after explicit Accept only)
 
-1. Human marks this ADR **Accepted** (and records U1–U15 resolutions).
-2. Implementation PR on LMP-33: Prisma migration, SessionIssuer, guards, routes, OpenAPI `0.4.0`, env catalog, tests, redaction allowlist extensions.
-3. No merge / no Jira Done without green CI + human review (existing Definition of Done).
-4. LMP-34 integrates phone verify → SessionIssuer.
+1. Human flips ADR-019 to **Accepted** (or records Accept in PR review).
+2. Separate LMP-33 **implementation** PR: migration, SessionIssuer, guards, routes, OpenAPI **0.4.0**, env catalog, tests.
+3. Separate **client** PR: ADR index sync (U15).
+4. No merge-as-Done / no Jira Done from this docs PR. LMP-34 wires phone verify → SessionIssuer afterward.
 
 ---
 
 ## 16. Consequences
 
-**Positive:** Clear extraction-ready Identity boundary; revocable multi-device sessions; privacy-aligned token handling; testable without OTP; no paid auth.
+**Positive:** Clear IdentityModule session design; immediate revoke; reuse resistance with bounded history; privacy-safe logging; testable without OTP; no paid auth/KMS.
 
-**Negative / follow-ups:** Catalog extension for `parent_sessions`; key management ops burden; client must handle 15m refresh; web cookie story still open (LMP-38); deletion UX still not fully specified (ADR-002 remainder).
+**Negative / follow-ups:** Clients must single-flight refresh and re-auth on lost refresh responses; 20-session cap UX; multi-instance rate limits are approximate until a shared store exists; web cookies still LMP-38; account-deletion UX remains a later privacy task.

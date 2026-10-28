@@ -52,7 +52,7 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 
 | ADR | Title | Jira | Notes |
 |---|---|---|---|
-| **ADR-019** | Parent identity & secure session lifecycle | [LMP-33](https://little-minds-app.atlassian.net/browse/LMP-33) | Completes ADR-002 *implementation/security design* gap. **Do not implement** auth/session code until Accepted. Full text: [`ADR-019-parent-identity-secure-session-lifecycle.md`](./ADR-019-parent-identity-secure-session-lifecycle.md). API sketch (non-live): [`lmp-33-session-api-contract-sketch.md`](./lmp-33-session-api-contract-sketch.md). After Accept, sync the client ADR index (ADR-014). |
+| **ADR-019** | Parent identity & secure session lifecycle | [LMP-33](https://little-minds-app.atlassian.net/browse/LMP-33) | Completes ADR-002 *implementation/security design* gap. Human-review direction applied (U1–U15); status remains **Proposed** until explicit Accept. **Do not implement** auth/session code until Accepted. Full text: [`ADR-019-parent-identity-secure-session-lifecycle.md`](./ADR-019-parent-identity-secure-session-lifecycle.md). API sketch (non-live): [`lmp-33-session-api-contract-sketch.md`](./lmp-33-session-api-contract-sketch.md). After Accept, sync the client ADR index in a **separate client PR** (ADR-014). |
 
 ---
 
