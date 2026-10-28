@@ -48,11 +48,11 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 
 ---
 
-## Proposed (human review required — not normative yet)
+## ADR-019 — Accepted security design
 
 | ADR | Title | Jira | Notes |
 |---|---|---|---|
-| **ADR-019** | Parent identity & secure session lifecycle | [LMP-33](https://little-minds-app.atlassian.net/browse/LMP-33) | Completes ADR-002 *implementation/security design* gap. Human-review direction applied (U1–U15); status remains **Proposed** until explicit Accept. **Do not implement** auth/session code until Accepted. Full text: [`ADR-019-parent-identity-secure-session-lifecycle.md`](./ADR-019-parent-identity-secure-session-lifecycle.md). API sketch (non-live): [`lmp-33-session-api-contract-sketch.md`](./lmp-33-session-api-contract-sketch.md). After Accept, sync the client ADR index in a **separate client PR** (ADR-014). |
+| **ADR-019 (Accepted 2026-10-28)** | Parent identity & secure session lifecycle | [LMP-33](https://little-minds-app.atlassian.net/browse/LMP-33) | Completes ADR-002 session implementation/security gap. U1–U15 resolved; bounded hash history (max 8) is an accepted detection limit. [Decision](./ADR-019-parent-identity-secure-session-lifecycle.md) · [Non-live API sketch](./lmp-33-session-api-contract-sketch.md). Implementation and OpenAPI 0.4.0 in separate PR; client ADR index sync in separate client PR. |
 
 ---
 
