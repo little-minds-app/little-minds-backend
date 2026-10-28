@@ -21,6 +21,8 @@ const baseSchema = z.object({
   NODE_ENV: nodeEnvSchema.optional(),
   PORT: z.coerce.number().int().positive().max(65535).optional(),
   PUBLIC_API_BASE_URL: z.string().trim().min(1).optional(),
+  /** Public release identifier for structured logs (ADR-013 `release` field). */
+  RELEASE: z.string().trim().min(1).max(128).optional(),
   DATABASE_URL: z.string().trim().min(1).optional(),
   POSTGRES_PASSWORD: z.string().optional(),
   MINIO_ROOT_PASSWORD: z.string().optional(),
@@ -32,6 +34,8 @@ export type AppEnv = {
   NODE_ENV: z.infer<typeof nodeEnvSchema>;
   PORT: number;
   PUBLIC_API_BASE_URL: string;
+  /** Public build/release id for observability (default `dev`). */
+  RELEASE: string;
   /** Present when provided; required for staging/production Nest boot. */
   DATABASE_URL?: string;
 };
@@ -167,11 +171,17 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     parsed.data.PUBLIC_API_BASE_URL,
   );
 
+  const release =
+    parsed.data.RELEASE && parsed.data.RELEASE.length > 0
+      ? parsed.data.RELEASE
+      : 'dev';
+
   const result: AppEnv = {
     APP_ENV: appEnv,
     NODE_ENV: nodeEnv,
     PORT: port,
     PUBLIC_API_BASE_URL: publicApiBaseUrl,
+    RELEASE: release,
   };
 
   if (appEnv === 'staging' || appEnv === 'production') {

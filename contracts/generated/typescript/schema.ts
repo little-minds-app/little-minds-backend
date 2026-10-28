@@ -14,9 +14,36 @@ export interface paths {
         /**
          * Process liveness
          * @description Returns process liveness JSON. Unauthenticated. Does not probe PostgreSQL
-         *     or other dependencies (readiness arrives in a later task).
+         *     or other dependencies — use `GET /health/ready` for readiness.
          */
         get: operations["getHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dependency readiness
+         * @description Returns readiness JSON for load balancers and operator alert scrapers.
+         *     When `DATABASE_URL` is configured, probes PostgreSQL with a lightweight
+         *     `SELECT 1`. When unset, `checks.database: skipped` is allowed **only**
+         *     for `APP_ENV=development` (local Nest without Compose). Staging and
+         *     production missing `DATABASE_URL` return HTTP 503 with
+         *     `status: not_ready` and `checks.database: down`. Probe failure likewise
+         *     returns 503 (alert-ready signal; no paid monitoring required).
+         *     Schema enums are unchanged (`up` | `down` | `skipped`).
+         */
+        get: operations["getHealthReady"];
         put?: never;
         post?: never;
         delete?: never;
@@ -45,6 +72,32 @@ export interface components {
              * @description UTC ISO-8601 timestamp when the check was produced
              */
             timestamp: string;
+        };
+        ReadinessStatus: {
+            /**
+             * @description Readiness indicator (not_ready → HTTP 503)
+             * @enum {string}
+             */
+            status: "ok" | "not_ready";
+            /**
+             * @description Stable service identifier
+             * @enum {string}
+             */
+            service: "little-minds-backend";
+            /**
+             * Format: date-time
+             * @description UTC ISO-8601 timestamp when the check was produced
+             */
+            timestamp: string;
+            checks: {
+                /**
+                 * @description PostgreSQL probe result. `skipped` only when APP_ENV=development
+                 *     and DATABASE_URL is unset. Staging/production missing DATABASE_URL
+                 *     or a failed probe → `down` (forces overall not_ready).
+                 * @enum {string}
+                 */
+                database: "up" | "down" | "skipped";
+            };
         };
         /**
          * @description Product event/session schema semver. Independent from OpenAPI info.version.
@@ -168,6 +221,55 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["HealthStatus"];
+                };
+            };
+        };
+    };
+    getHealthReady: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ready to accept traffic */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": "ok",
+                     *       "service": "little-minds-backend",
+                     *       "timestamp": "2026-10-28T12:00:00.000Z",
+                     *       "checks": {
+                     *         "database": "skipped"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ReadinessStatus"];
+                };
+            };
+            /** @description Not ready (dependency failure) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": "not_ready",
+                     *       "service": "little-minds-backend",
+                     *       "timestamp": "2026-10-28T12:00:00.000Z",
+                     *       "checks": {
+                     *         "database": "down"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ReadinessStatus"];
                 };
             };
         };

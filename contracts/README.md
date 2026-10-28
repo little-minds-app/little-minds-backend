@@ -15,7 +15,8 @@ Backend is the single source of truth. Clients **must not** import a floating `m
 | `generated/dart/` | Deterministic Dart client (`openapi-generator` / `dart`) |
 
 **Current contract version:** see `VERSION`.  
-**Current path surface:** `GET /health` only. Blueprint §15 `/v1/...` routes are **not** invented here.  
+**Current path surface:** `GET /health`, `GET /health/ready`. Blueprint §15 `/v1/...` routes are **not** invented here.  
+**LMP-32:** readiness path + observability docs (logging is not OpenAPI surface).  
 **LMP-50:** OpenAPI `components.schemas` include `ActivitySessionV1` / `ActivityEventV1` (documentation). Authoritative Ajv schemas + `schema_version` **1.0.0** live under `contracts/schemas/activity/` (independent from OpenAPI `info.version`). No ingest path.
 
 ## How clients pin (no mutable `main`)

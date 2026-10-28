@@ -25,6 +25,7 @@ export const PUBLIC_ENV_KEYS = [
   'NODE_ENV',
   'PORT',
   'PUBLIC_API_BASE_URL',
+  'RELEASE',
 ] as const;
 
 export type PublicEnvKey = (typeof PUBLIC_ENV_KEYS)[number];

@@ -3,12 +3,13 @@ info:
   title: Little Minds Backend API
   description: |
     Authoritative OpenAPI contract for little-minds-backend (ADR-014).
-    Paths: process liveness (`GET /health`) only.
+    Paths: process liveness (`GET /health`) and readiness (`GET /health/ready`).
+    LMP-32 adds structured logging / correlation (not path surface) plus readiness.
     LMP-50 adds ActivitySessionV1 / ActivityEventV1 **components** for versioned
     event contracts. Live `POST /v1/events/batch` is intentionally **not** published
     here — ingest lands in a later Jira task. Authoritative Ajv JSON Schemas live under
     `contracts/schemas/activity/` (`schema_version` 1.0.0, independent of this info.version).
-  version: 0.2.0
+  version: 0.3.0
   contact:
     name: Little Minds
 servers:
@@ -16,7 +17,7 @@ servers:
     description: Local NestJS (default PORT)
 tags:
   - name: Health
-    description: Unauthenticated process liveness (no database dependency)
+    description: Unauthenticated liveness and readiness (alert-ready signals; no paid vendors)
 paths:
   /health:
     get:
@@ -26,7 +27,7 @@ paths:
       summary: Process liveness
       description: |
         Returns process liveness JSON. Unauthenticated. Does not probe PostgreSQL
-        or other dependencies (readiness arrives in a later task).
+        or other dependencies — use `GET /health/ready` for readiness.
       responses:
         '200':
           description: Process is alive
@@ -38,6 +39,46 @@ paths:
                 status: ok
                 service: little-minds-backend
                 timestamp: '2026-10-27T12:00:00.000Z'
+  /health/ready:
+    get:
+      operationId: getHealthReady
+      tags:
+        - Health
+      summary: Dependency readiness
+      description: |
+        Returns readiness JSON for load balancers and operator alert scrapers.
+        When `DATABASE_URL` is configured, probes PostgreSQL with a lightweight
+        `SELECT 1`. When unset, `checks.database: skipped` is allowed **only**
+        for `APP_ENV=development` (local Nest without Compose). Staging and
+        production missing `DATABASE_URL` return HTTP 503 with
+        `status: not_ready` and `checks.database: down`. Probe failure likewise
+        returns 503 (alert-ready signal; no paid monitoring required).
+        Schema enums are unchanged (`up` | `down` | `skipped`).
+      responses:
+        '200':
+          description: Ready to accept traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessStatus'
+              example:
+                status: ok
+                service: little-minds-backend
+                timestamp: '2026-10-28T12:00:00.000Z'
+                checks:
+                  database: skipped
+        '503':
+          description: Not ready (dependency failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessStatus'
+              example:
+                status: not_ready
+                service: little-minds-backend
+                timestamp: '2026-10-28T12:00:00.000Z'
+                checks:
+                  database: down
 components:
   schemas:
     HealthStatus:
@@ -62,6 +103,46 @@ components:
           type: string
           format: date-time
           description: UTC ISO-8601 timestamp when the check was produced
+    ReadinessStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - service
+        - timestamp
+        - checks
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - not_ready
+          description: Readiness indicator (not_ready → HTTP 503)
+        service:
+          type: string
+          enum:
+            - little-minds-backend
+          description: Stable service identifier
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC ISO-8601 timestamp when the check was produced
+        checks:
+          type: object
+          additionalProperties: false
+          required:
+            - database
+          properties:
+            database:
+              type: string
+              enum:
+                - up
+                - down
+                - skipped
+              description: |
+                PostgreSQL probe result. `skipped` only when APP_ENV=development
+                and DATABASE_URL is unset. Staging/production missing DATABASE_URL
+                or a failed probe → `down` (forces overall not_ready).
     ActivitySchemaVersion:
       type: string
       enum:

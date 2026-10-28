@@ -1,10 +1,12 @@
 # Backend domain modules (Blueprint §12.3)
 
-LMP-20 wires **Health** + thin **Identity** Nest modules. Remaining §12.3 names are directory placeholders so layout matches the Blueprint modular monolith without fake business logic.
+LMP-20 wires **Health** + thin **Identity** Nest modules. LMP-32 adds **Observability** + readiness. Remaining §12.3 names are directory placeholders so layout matches the Blueprint modular monolith without fake business logic.
 
 | Folder | Nest module status | Deferred work |
 |---|---|---|
-| `health/` | Implemented (liveness) | Readiness / DB checks later |
+| `observability/` | Implemented (LMP-32) | Admin Error Center UI; vendor adapters; operator webhook delivery |
+| `prisma/` | Minimal Nest wrapper (LMP-32 readiness) | Domain repositories with owning Jira tasks |
+| `health/` | Liveness + readiness (LMP-32) | Additional dependency checks as services land |
 | `identity/` | Empty Nest module stub | Auth, OTP, sessions |
 | `child-profile/` | Placeholder | Child profiles |
 | `content-catalog/` | Placeholder | Content catalog |

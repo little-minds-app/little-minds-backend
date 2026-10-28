@@ -7,6 +7,7 @@ describe('validateEnv', () => {
     expect(env.NODE_ENV).toBe('development');
     expect(env.PORT).toBe(3000);
     expect(env.PUBLIC_API_BASE_URL).toBe('http://localhost:3000');
+    expect(env.RELEASE).toBe('dev');
     expect(env.DATABASE_URL).toBeUndefined();
   });
 

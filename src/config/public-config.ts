@@ -3,7 +3,7 @@ import { PUBLIC_ENV_KEYS } from './env.secrets';
 
 export type PublicAppConfig = Pick<
   AppEnv,
-  'APP_ENV' | 'NODE_ENV' | 'PORT' | 'PUBLIC_API_BASE_URL'
+  'APP_ENV' | 'NODE_ENV' | 'PORT' | 'PUBLIC_API_BASE_URL' | 'RELEASE'
 >;
 
 /**
@@ -15,6 +15,7 @@ export function toPublicConfig(env: AppEnv): PublicAppConfig {
     NODE_ENV: env.NODE_ENV,
     PORT: env.PORT,
     PUBLIC_API_BASE_URL: env.PUBLIC_API_BASE_URL,
+    RELEASE: env.RELEASE,
   };
 }
 

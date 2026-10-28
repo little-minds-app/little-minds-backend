@@ -164,7 +164,8 @@ else
       EXTRA_PATHS=""
       while IFS= read -r p; do
         [[ -z "$p" ]] && continue
-        if [[ "$p" != "/health" ]]; then
+        # LMP-32: allow /health and /health/ready only (no /v1 product paths).
+        if [[ "$p" != "/health" && "$p" != "/health/ready" ]]; then
           EXTRA_PATHS="${EXTRA_PATHS}${p} "
         fi
       done <<<"$PATH_KEYS"
