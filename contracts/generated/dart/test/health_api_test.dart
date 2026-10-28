@@ -19,10 +19,19 @@ void main() {
   group('tests for HealthApi', () {
     // Process liveness
     //
-    // Returns process liveness JSON. Unauthenticated. Does not probe PostgreSQL or other dependencies (readiness arrives in a later task). 
+    // Returns process liveness JSON. Unauthenticated. Does not probe PostgreSQL or other dependencies — use `GET /health/ready` for readiness. 
     //
     //Future<HealthStatus> getHealth() async
     test('test getHealth', () async {
+      // TODO
+    });
+
+    // Dependency readiness
+    //
+    // Returns readiness JSON for load balancers and operator alert scrapers. When `DATABASE_URL` is configured, probes PostgreSQL with a lightweight `SELECT 1`. When unset (local Nest without Compose), `checks.database` is `skipped` and status remains `ok`. Failure returns HTTP 503 with `status: not_ready` (alert-ready signal; no paid monitoring required). 
+    //
+    //Future<ReadinessStatus> getHealthReady() async
+    test('test getHealthReady', () async {
       // TODO
     });
 

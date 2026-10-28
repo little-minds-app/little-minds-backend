@@ -14,6 +14,7 @@ async function bootstrap(): Promise<void> {
     NODE_ENV: config.get('NODE_ENV', { infer: true }),
     PORT: port,
     PUBLIC_API_BASE_URL: config.get('PUBLIC_API_BASE_URL', { infer: true }),
+    RELEASE: config.get('RELEASE', { infer: true }),
     DATABASE_URL: config.get('DATABASE_URL', { infer: true }),
   });
 

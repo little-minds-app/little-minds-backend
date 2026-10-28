@@ -39,6 +39,8 @@ part 'model/activity_session_provenance.dart';
 part 'model/activity_session_v1.dart';
 part 'model/consent_scope.dart';
 part 'model/health_status.dart';
+part 'model/readiness_status.dart';
+part 'model/readiness_status_checks.dart';
 
 
 /// An [ApiClient] instance that uses the default values obtained from

@@ -20,13 +20,14 @@ npm run start:dev
 
 API listens on `http://localhost:3000` by default (`PORT` overridable).
 
-### Health (liveness)
+### Health (liveness + readiness)
 
 ```bash
 curl -s http://localhost:3000/health
+curl -s http://localhost:3000/health/ready
 ```
 
-Expected JSON shape:
+Liveness JSON shape:
 
 ```json
 {
@@ -36,7 +37,7 @@ Expected JSON shape:
 }
 ```
 
-`GET /health` is unauthenticated process liveness only. Product routes will use `/v1/...` later. Database readiness probes arrive with later tasks.
+`GET /health` is unauthenticated process liveness. `GET /health/ready` probes PostgreSQL when `DATABASE_URL` is set (HTTP 503 + `status: not_ready` on failure — alert-ready without paid monitoring). Product routes will use `/v1/...` later. Structured JSON logs + `x-request-id` correlation: see [`docs/observability.md`](./docs/observability.md) (LMP-32 / ADR-013).
 
 ## OpenAPI contract (LMP-23)
 
@@ -51,7 +52,7 @@ npm run contracts:check   # validate + compatibility + generate TS/Dart + drift
 npm test -- test/openapi.negative.contract.spec.ts  # LMP-27 breakage proofs
 ```
 
-Current path surface: `GET /health` only (see `contracts/VERSION` for semver; additive schema components may bump the minor version). Blueprint §15 product routes are added with their implementing Jira tasks.
+Current path surface: `GET /health`, `GET /health/ready` (see `contracts/VERSION` for semver; additive schema components may bump the minor version). Blueprint §15 product routes are added with their implementing Jira tasks.
 
 ## Mentor card content schema (LMP-47)
 

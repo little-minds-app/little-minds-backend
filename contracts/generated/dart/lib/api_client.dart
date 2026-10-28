@@ -201,6 +201,10 @@ class ApiClient {
           return ConsentScopeTypeTransformer().decode(value);
         case 'HealthStatus':
           return HealthStatus.fromJson(value);
+        case 'ReadinessStatus':
+          return ReadinessStatus.fromJson(value);
+        case 'ReadinessStatusChecks':
+          return ReadinessStatusChecks.fromJson(value);
         default:
           dynamic match;
           if (value is List && (match = _regList.firstMatch(targetType)?.group(1)) != null) {
