@@ -8,6 +8,7 @@ const config: Config = {
     '/node_modules/',
     '/dist/',
     '<rootDir>/test/prisma-integrity\\.spec\\.ts$',
+    '<rootDir>/test/identity-session\\.db\\.spec\\.ts$',
   ],
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',

@@ -1,3 +1,4 @@
+import { stagingAuthEnv } from '../../test/fixtures/auth/keys';
 import { validateEnv } from './env.validation';
 
 describe('validateEnv', () => {
@@ -67,6 +68,7 @@ describe('validateEnv', () => {
   it('rejects staging APP_ENV with NODE_ENV=development', () => {
     expect(() =>
       validateEnv({
+        ...stagingAuthEnv,
         APP_ENV: 'staging',
         NODE_ENV: 'development',
         PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
@@ -79,6 +81,7 @@ describe('validateEnv', () => {
   it('rejects staging when DATABASE_URL is missing', () => {
     expect(() =>
       validateEnv({
+        ...stagingAuthEnv,
         APP_ENV: 'staging',
         NODE_ENV: 'production',
         PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
@@ -89,6 +92,7 @@ describe('validateEnv', () => {
   it('rejects staging DATABASE_URL targeting localhost', () => {
     expect(() =>
       validateEnv({
+        ...stagingAuthEnv,
         APP_ENV: 'staging',
         NODE_ENV: 'production',
         PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
@@ -101,6 +105,7 @@ describe('validateEnv', () => {
   it('rejects staging DATABASE_URL with local placeholder credentials', () => {
     expect(() =>
       validateEnv({
+        ...stagingAuthEnv,
         APP_ENV: 'staging',
         NODE_ENV: 'production',
         PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
@@ -113,6 +118,7 @@ describe('validateEnv', () => {
   it('rejects staging PUBLIC_API_BASE_URL with http: protocol', () => {
     expect(() =>
       validateEnv({
+        ...stagingAuthEnv,
         APP_ENV: 'staging',
         NODE_ENV: 'production',
         PUBLIC_API_BASE_URL: 'http://api.staging.example.invalid',
@@ -125,6 +131,7 @@ describe('validateEnv', () => {
   it('rejects staging PUBLIC_API_BASE_URL with ftp: protocol', () => {
     expect(() =>
       validateEnv({
+        ...stagingAuthEnv,
         APP_ENV: 'staging',
         NODE_ENV: 'production',
         PUBLIC_API_BASE_URL: 'ftp://api.staging.example.invalid',
@@ -137,6 +144,7 @@ describe('validateEnv', () => {
   it('rejects production PUBLIC_API_BASE_URL without https:', () => {
     expect(() =>
       validateEnv({
+        ...stagingAuthEnv,
         APP_ENV: 'production',
         NODE_ENV: 'production',
         PUBLIC_API_BASE_URL: 'http://api.example.invalid',
@@ -158,6 +166,7 @@ describe('validateEnv', () => {
     (publicUrl) => {
       expect(() =>
         validateEnv({
+          ...stagingAuthEnv,
           APP_ENV: 'staging',
           NODE_ENV: 'production',
           PUBLIC_API_BASE_URL: publicUrl,
@@ -186,6 +195,7 @@ describe('validateEnv', () => {
   it('does not echo raw invalid PUBLIC_API_BASE_URL values in errors', () => {
     expect(() =>
       validateEnv({
+        ...stagingAuthEnv,
         APP_ENV: 'production',
         NODE_ENV: 'production',
         PUBLIC_API_BASE_URL: 'not a url with user:sekrit@host',
@@ -195,6 +205,7 @@ describe('validateEnv', () => {
     ).toThrow(/PUBLIC_API_BASE_URL is not a valid URL$/);
     try {
       validateEnv({
+        ...stagingAuthEnv,
         APP_ENV: 'production',
         NODE_ENV: 'production',
         PUBLIC_API_BASE_URL: 'not a url with user:sekrit@host',
@@ -211,6 +222,7 @@ describe('validateEnv', () => {
   it('rejects production when POSTGRES_PASSWORD is a local placeholder', () => {
     expect(() =>
       validateEnv({
+        ...stagingAuthEnv,
         APP_ENV: 'production',
         NODE_ENV: 'production',
         PUBLIC_API_BASE_URL: 'https://api.example.invalid',
@@ -223,6 +235,7 @@ describe('validateEnv', () => {
 
   it('accepts valid staging configuration', () => {
     const env = validateEnv({
+      ...stagingAuthEnv,
       APP_ENV: 'staging',
       NODE_ENV: 'production',
       PORT: '3000',
@@ -236,6 +249,7 @@ describe('validateEnv', () => {
 
   it('accepts valid production configuration', () => {
     const env = validateEnv({
+      ...stagingAuthEnv,
       APP_ENV: 'production',
       NODE_ENV: 'production',
       PUBLIC_API_BASE_URL: 'https://api.example.invalid',
@@ -248,6 +262,7 @@ describe('validateEnv', () => {
 
   it('allows staging validation under NODE_ENV=test harness', () => {
     const env = validateEnv({
+      ...stagingAuthEnv,
       APP_ENV: 'staging',
       NODE_ENV: 'test',
       PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
@@ -256,5 +271,95 @@ describe('validateEnv', () => {
     });
     expect(env.APP_ENV).toBe('staging');
     expect(env.NODE_ENV).toBe('test');
+  });
+
+  it('rejects staging without JWT access key PEMs', () => {
+    expect(() =>
+      validateEnv({
+        APP_ENV: 'staging',
+        NODE_ENV: 'production',
+        PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds',
+        REFRESH_TOKEN_PEPPER: 'staging-refresh-pepper-strong',
+      }),
+    ).toThrow(/JWT_ACCESS_PRIVATE_KEY_PEM/);
+  });
+
+  it('rejects staging/production when AUTH_DEV_BOOTSTRAP_ENABLED is true', () => {
+    expect(() =>
+      validateEnv({
+        ...stagingAuthEnv,
+        APP_ENV: 'staging',
+        NODE_ENV: 'production',
+        PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds',
+        AUTH_DEV_BOOTSTRAP_ENABLED: 'true',
+      }),
+    ).toThrow(/AUTH_DEV_BOOTSTRAP_ENABLED must be false/);
+  });
+
+  it('rejects production local refresh pepper', () => {
+    expect(() =>
+      validateEnv({
+        ...stagingAuthEnv,
+        APP_ENV: 'production',
+        NODE_ENV: 'production',
+        PUBLIC_API_BASE_URL: 'https://api.example.invalid',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.example.invalid:5432/little_minds',
+        REFRESH_TOKEN_PEPPER: 'local-dev-refresh-pepper-not-for-prod',
+      }),
+    ).toThrow(/REFRESH_TOKEN_PEPPER/);
+  });
+
+  it('defaults LISTEN_HOST to 0.0.0.0 when bootstrap is disabled', () => {
+    const env = validateEnv({ APP_ENV: 'development' });
+    expect(env.LISTEN_HOST).toBe('0.0.0.0');
+    expect(env.AUTH_DEV_BOOTSTRAP_ENABLED).toBe(false);
+  });
+
+  it('requires loopback LISTEN_HOST when AUTH_DEV_BOOTSTRAP_ENABLED=true', () => {
+    expect(() =>
+      validateEnv({
+        APP_ENV: 'development',
+        AUTH_DEV_BOOTSTRAP_ENABLED: 'true',
+        PUBLIC_API_BASE_URL: 'http://localhost:3000',
+        LISTEN_HOST: '0.0.0.0',
+      }),
+    ).toThrow(/LISTEN_HOST must be 127\.0\.0\.1/);
+  });
+
+  it('requires local PUBLIC_API_BASE_URL when bootstrap is enabled', () => {
+    expect(() =>
+      validateEnv({
+        APP_ENV: 'development',
+        AUTH_DEV_BOOTSTRAP_ENABLED: 'true',
+        PUBLIC_API_BASE_URL: 'https://api.shared.example.invalid',
+        LISTEN_HOST: '127.0.0.1',
+      }),
+    ).toThrow(/PUBLIC_API_BASE_URL must use a local/);
+  });
+
+  it('accepts bootstrap with loopback bind + local API URL', () => {
+    const env = validateEnv({
+      APP_ENV: 'development',
+      AUTH_DEV_BOOTSTRAP_ENABLED: 'true',
+      PUBLIC_API_BASE_URL: 'http://127.0.0.1:3000',
+      LISTEN_HOST: '127.0.0.1',
+    });
+    expect(env.LISTEN_HOST).toBe('127.0.0.1');
+    expect(env.AUTH_DEV_BOOTSTRAP_ENABLED).toBe(true);
+  });
+
+  it('rejects bootstrap when LISTEN_HOST is omitted (defaults to 0.0.0.0)', () => {
+    expect(() =>
+      validateEnv({
+        APP_ENV: 'development',
+        AUTH_DEV_BOOTSTRAP_ENABLED: 'true',
+        PUBLIC_API_BASE_URL: 'http://localhost:3000',
+      }),
+    ).toThrow(/LISTEN_HOST must be 127\.0\.0\.1/);
   });
 });

@@ -71,6 +71,15 @@ export const STRUCTURED_LOG_ALLOWLIST = new Set([
   'ready',
   'database',
   'http_status',
+  // LMP-33 session lifecycle (never parent_id / tokens / PII)
+  // Avoid keys containing the segment "auth" — that triggers value redaction.
+  'session_event',
+  'session_id',
+  'token_family_id',
+  'refresh_generation',
+  'revoke_reason',
+  'client_surface',
+  'session_error',
 ]);
 
 /**

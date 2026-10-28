@@ -11,8 +11,10 @@ export const SECRET_ENV_KEYS = [
   'MINIO_ROOT_USER',
   'S3_ACCESS_KEY',
   'S3_SECRET_KEY',
-  // Reserved for later Identity / Billing LMPs — document only until required:
+  // Legacy reserved placeholder (do not use for LMP-33 Ed25519 access JWTs):
   'JWT_SECRET',
+  'JWT_ACCESS_PRIVATE_KEY_PEM',
+  'REFRESH_TOKEN_PEPPER',
   'OIDC_CLIENT_SECRET',
   'SMTP_PASSWORD',
 ] as const;
@@ -26,6 +28,15 @@ export const PUBLIC_ENV_KEYS = [
   'PORT',
   'PUBLIC_API_BASE_URL',
   'RELEASE',
+  'JWT_ISSUER',
+  'JWT_AUDIENCE',
+  'JWT_KEY_ID',
+  'JWT_PREVIOUS_KEY_ID',
+  'JWT_ACCESS_PUBLIC_KEY_PEM',
+  'JWT_PREVIOUS_PUBLIC_KEY_PEM',
+  'AUTH_DEV_BOOTSTRAP_ENABLED',
+  'AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST',
+  'LISTEN_HOST',
 ] as const;
 
 export type PublicEnvKey = (typeof PUBLIC_ENV_KEYS)[number];
@@ -108,6 +119,12 @@ function isLocalDevelopmentHost(hostname: string): boolean {
  */
 export function isLocalApiBaseHost(hostname: string): boolean {
   return isLocalDevelopmentHost(hostname);
+}
+
+/** Strict loopback bind hosts for AUTH_DEV_BOOTSTRAP_ENABLED (not 0.0.0.0 / LAN). */
+export function isLoopbackListenHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return host === '127.0.0.1' || host === '::1' || host === 'localhost';
 }
 
 /**

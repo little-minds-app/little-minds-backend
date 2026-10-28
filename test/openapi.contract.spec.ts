@@ -80,14 +80,22 @@ describe('OpenAPI contract (LMP-23)', () => {
     expect(result.status).toBe(0);
   });
 
-  it('scopes paths to health only (no invented product APIs)', () => {
+  it('scopes paths to health + LMP-33 auth allowlist (no invented product APIs)', () => {
     const compat = JSON.parse(readFileSync(COMPAT_PATH, 'utf8')) as {
       allowedPaths: string[];
     };
     expect(Object.keys(doc.paths).sort()).toEqual(
       [...compat.allowedPaths].sort(),
     );
-    expect(compat.allowedPaths.sort()).toEqual(['/health', '/health/ready']);
+    expect(compat.allowedPaths).toEqual(
+      expect.arrayContaining([
+        '/health',
+        '/health/ready',
+        '/v1/auth/token/refresh',
+        '/v1/parent/me',
+      ]),
+    );
+    expect(compat.allowedPaths).not.toContain('/v1/auth/ownership-check');
   });
 
   it('describes GET /health HealthStatus matching Nest liveness payload', () => {

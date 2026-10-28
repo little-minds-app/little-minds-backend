@@ -2,16 +2,16 @@ import {
   Injectable,
   OnModuleDestroy,
   OnModuleInit,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
 import type { AppEnv } from '../../config/env.validation';
 
 /**
- * Minimal Nest Prisma lifecycle wrapper for operational probes (LMP-32).
- * Domain repositories continue to land with their owning Jira tasks.
+ * Nest Prisma lifecycle wrapper (LMP-32 readiness + LMP-33 domain access).
  * When DATABASE_URL is unset (local Nest without Compose), the client is not
- * created and readiness reports database=skipped.
+ * created and readiness reports database=skipped. Session APIs require `db`.
  */
 @Injectable()
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
@@ -30,6 +30,20 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
 
   get isConfigured(): boolean {
     return this.client !== null;
+  }
+
+  /**
+   * Configured Prisma client for domain modules.
+   * @throws ServiceUnavailableException when DATABASE_URL is unset
+   */
+  get db(): PrismaClient {
+    if (!this.client) {
+      throw new ServiceUnavailableException({
+        error: 'database_unavailable',
+        message: 'Database is not configured',
+      });
+    }
+    return this.client;
   }
 
   async onModuleInit(): Promise<void> {

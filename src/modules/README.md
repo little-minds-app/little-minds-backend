@@ -7,7 +7,7 @@ LMP-20 wires **Health** + thin **Identity** Nest modules. LMP-32 adds **Observab
 | `observability/` | Implemented (LMP-32) | Admin Error Center UI; vendor adapters; operator webhook delivery |
 | `prisma/` | Minimal Nest wrapper (LMP-32 readiness) | Domain repositories with owning Jira tasks |
 | `health/` | Liveness + readiness (LMP-32) | Additional dependency checks as services land |
-| `identity/` | Empty Nest module stub | Auth, OTP, sessions |
+| `identity/` | Parent sessions + guards (LMP-33 / ADR-019) | GSM OTP adapters (LMP-34) |
 | `child-profile/` | Placeholder | Child profiles |
 | `content-catalog/` | Placeholder | Content catalog |
 | `learning-recommendation/` | Placeholder | Recommendations |
