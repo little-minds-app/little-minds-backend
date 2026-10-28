@@ -60,6 +60,12 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 |---|---|---|---|
 | **ADR-020 (Accepted 2026-10-28)** | GSM OTP sign-in — LM-owned OTP + delivery-only SMS adapters | [LMP-34](https://little-minds-app.atlassian.net/browse/LMP-34) | PO Accept: architecture, **U7 Option A**, KVKK notice **Option A**, **U1–U17**. **Deferred/gated:** U18–U20; paid SMS unapproved; legal review before production. Implementation = separate PR; this docs PR keeps live OpenAPI **`0.4.0`**. [Decision](./ADR-020-gsm-otp-sign-in.md) · [Sketch](./lmp-34-otp-api-contract-sketch.md). |
 
+## ADR-021 — Proposed (architecture review)
+
+| ADR | Title | Jira | Notes |
+|---|---|---|---|
+| **ADR-021 (Proposed)** | Multi-provider parent identity — Apple, Google, Email OTP | [LMP-35](https://little-minds-app.atlassian.net/browse/LMP-35) | LM verifies Apple/Google ID tokens; LM-owned Email OTP + delivery-only MailSender; no Firebase SoR; **no silent merge**; **U7 first-time create needs human Approve**; linking = **LMP-36**. Live OpenAPI stays **`0.5.0`**; sketch proposes future **`0.6.0`**. [Decision](./ADR-021-multi-provider-identity-adapters.md) · [Sketch](./lmp-35-multi-provider-api-contract-sketch.md). |
+
 ---
 
 ## LMP-19 doc tests

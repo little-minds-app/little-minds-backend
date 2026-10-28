@@ -56,3 +56,14 @@ Owned by **LMP-34**. Design ADR (**Accepted** 2026-10-28): [`docs/adr/ADR-020-gs
 - **Verify gate:** only `status=pending` **and** `deliveryState=sent` (durable adapter acceptance). `pending_send` / `failed` → uniform `otp_invalid` (no handset-delivery claim; no OTP in errors).
 - **Ambiguous SMS send:** challenge committed before SMS (SMS outside long txns). Adapter failure → `503 sms_unavailable`. Adapter accept + post-send persistence failure → **no auto-resend**; `503 sms_unavailable`; stale `pending_send` superseded after ~90s so a **new** start can proceed. Lost HTTP after mark-sent → honor cooldown / new start.
 - **Retention (U16):** boot+interval scrub — challenges ~24h (SET NULL on delivery FK), delivery attempts ~7d, stale abuse counters ~48h.
+
+## Apple / Google / Email OTP (LMP-35)
+
+Owned by **LMP-35**. Design ADR (**Proposed**): [`docs/adr/ADR-021-multi-provider-identity-adapters.md`](./adr/ADR-021-multi-provider-identity-adapters.md).
+
+- LM verifies Apple/Google **ID tokens**; Email OTP is LM-owned with delivery-only `MailSender` (Mailpit local; production SMTP unapproved).
+- **Not** Firebase Auth / hosted social SoR.
+- Canonical key remains `parent_accounts.id` via `parent_identities` — **no silent merge by email**.
+- First-time create policy (**U7**) requires **human Approve** before Phase B.
+- Account **linking** is **LMP-36** (out of LMP-35).
+- Sessions only via ADR-019 `mintSessionTx`. Live OpenAPI stays **`0.5.0`** until a future implementation proposes **`0.6.0`**.
