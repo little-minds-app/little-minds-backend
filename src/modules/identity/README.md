@@ -14,7 +14,7 @@ Parent identity session lifecycle and GSM OTP sign-in inside the Nest modular mo
 
 ## Out of scope
 
-- Apple / Google / email adapters — **LMP-35** (ADR-021 **Proposed** — docs only until Accept + Phase B)
+- Apple / Google / email adapters — **LMP-35** (ADR-021 **Accepted** — Phase B = separate implementation PR after docs merge auth)
 - Explicit account linking / recovery — **LMP-36**
 - Web cookie session UX — **LMP-38**
 - Phone change / recovery — deferred (**U18**)
@@ -26,5 +26,5 @@ Parent identity session lifecycle and GSM OTP sign-in inside the Nest modular mo
 
 - Sessions: `docs/adr/ADR-019-parent-identity-secure-session-lifecycle.md` (**Accepted**)
 - GSM OTP: `docs/adr/ADR-020-gsm-otp-sign-in.md` (**Accepted** 2026-10-28 — U7 Option A + notice Option A + U1–U17; U18–U20 deferred)
-- Multi-provider (Apple / Google / Email OTP): `docs/adr/ADR-021-multi-provider-identity-adapters.md` (**Proposed**) · sketch `docs/adr/lmp-35-multi-provider-api-contract-sketch.md`
+- Multi-provider (Apple / Google / Email OTP): `docs/adr/ADR-021-multi-provider-identity-adapters.md` (**Accepted** 2026-10-28 — U7 Option A; Apple mandatory nonce; Google nonce-or-PKCE; `email_norm_v1`; deliveryState=sent) · sketch `docs/adr/lmp-35-multi-provider-api-contract-sketch.md`
 - Privacy notice catalog (engineering placeholder / legal blocker): `docs/privacy-notice-catalog.md`

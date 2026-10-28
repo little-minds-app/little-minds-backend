@@ -2,78 +2,70 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Non-live companion to **Proposed** ADR-021. Live OpenAPI remains **`0.5.0`** until implementation proposes **`0.6.0`**. |
-| **Parent ADR** | [ADR-021](./ADR-021-multi-provider-identity-adapters.md) (**Proposed**) |
+| **Status** | Normative companion to **Accepted** ADR-021. Live OpenAPI remains **`0.5.0`** until implementation publishes **`0.6.0`**. |
+| **Parent ADR** | [ADR-021](./ADR-021-multi-provider-identity-adapters.md) (**Accepted** 2026-10-28) |
 | **Jira** | LMP-35 |
 
-> **Proposed (security-critical):** Apple/Google ID token verify matrix (iss/aud/JWKS/exp/iat/skew/typ/**mandatory nonce+replay**); `email_norm_v1`; Email OTP limits + durable counters + **deliveryState=sent** verify gate; **no silent email link**.  
-> **Recommended pending Accept:** **U7 Option A**. Linking = **LMP-36**.
+> **Accepted:** U7 Option A; Apple JWKS + mandatory nonce; Google prefer nonce else auth-code+PKCE only (fail-closed); `email_norm_v1`; Email OTP 3/10 subject, 10/40 IP, 2000/day unactivated ceiling; verify only `deliveryState=sent`; no silent email link (LMP-36).
 
 ---
 
-## Architecture note
+## Architecture
 
-- LM verifies Apple/Google ID tokens; never trusts client-supplied `sub`/email/name for binding.
-- Email OTP: LM-owned; `MailSender` delivery-only; verify only after durable `sent`.
-- Sessions: ADR-019 `mintSessionTx` only.
+- Apple: ID token + **mandatory nonce** + JWKS claim matrix.
+- Google: **prefer** ID token + nonce; else **authorization-code + PKCE** server exchange then JWKS-verify ID token — **never** ID-token-without-nonce fallback.
+- Email OTP: LM-owned; `MailSender` delivery-only; **`deliveryState=sent`** before verify.
+- Sessions: `mintSessionTx` only. Reject unverified client identity fields.
 
 ---
 
 ## Privacy
 
-Option A notice fields on email start and Apple/Google auth; verify has no privacy fields; uniform invalid notice → `invalid_request`.
+Option A `notice_version` + `notice_locale` on email start and Apple/Google auth; verify has no privacy fields.
 
 ---
 
-## OpenAPI version
+## OpenAPI
 
 | Phase | Version |
 |---|---|
-| This docs PR | Live **`0.5.0`** unchanged |
-| Future implementation | Propose **`0.6.0`** |
+| This docs PR | Live **`0.5.0`** |
+| Phase B implementation | Propose **`0.6.0`** |
 
 ---
 
-## Paths (proposed)
+## Paths (proposed for 0.6.0)
 
-### `POST /v1/auth/apple` / `POST /v1/auth/google`
+### `POST /v1/auth/apple`
 
-**Required:** `id_token`, `nonce`, `notice_version`, `notice_locale`.  
-Optional: `client_surface`, `device_id`.
+Required: `id_token`, `nonce`, `notice_version`, `notice_locale`.  
+**401** `invalid_token` on JWKS/claim/nonce/replay failure.
 
-Server: full ADR-021 §4/§5 verify; reject unverified client identity fields if present (ignore or `400` — prefer **ignore unknown** with `additionalProperties: false` so extras fail closed).
+### `POST /v1/auth/google`
 
-**200** `TokenPairResponse`  
-**401** `invalid_token` (uniform — covers bad sig, iss/aud, exp/iat, nonce miss/replay)  
-**400** `invalid_request` (malformed / notice)
+One of:
 
-### Nonce issuance (proposed companion)
+- **Nonce path:** `id_token` + `nonce` + notice fields (preferred when platform supports nonce, e.g. iOS 9+).
+- **PKCE path:** `authorization_code` + `code_verifier` (+ redirect/client metadata as required) + notice fields — server exchanges with PKCE; verifies ID token via JWKS.
 
-`POST /v1/auth/oidc/nonce` (name TBD) — returns short-lived nonce for Apple/Google; rate-limited; **or** document client-nonce pre-registration. Nonce is **mandatory** on Apple/Google auth either way.
+If neither path can be satisfied → **fail-closed** (`401` / `400`) — no weak ID-token-only acceptance.
+
+### `POST /v1/auth/oidc/nonce` (or equivalent)
+
+Issues short-lived nonce for Apple / Google nonce path; rate-limited.
 
 ### `POST /v1/auth/email/start`
 
-**Required:** `email`, `notice_version`, `notice_locale`.  
-Normalize via **`email_norm_v1`**; durable counters; commit challenge; send outside txn.
-
-**200** `{ challenge_id, expires_in: 600, resend_after: 60 }` — never OTP  
-**400** `invalid_request`  
-**429** `otp_cooldown` / `rate_limited`  
-**503** `mail_unavailable`
+Required: `email`, `notice_version`, `notice_locale`. Apply **`email_norm_v1`**.  
+**200** `{ challenge_id, expires_in: 600, resend_after: 60 }`.
 
 ### `POST /v1/auth/email/verify`
 
-**Required:** `challenge_id`, `code` only.  
-Gate: pending + `deliveryState=sent`.
-
-**200** `TokenPairResponse`  
-**401** `otp_invalid`  
-**429** rate limited
+Required: `challenge_id`, `code` only. Gate: pending + **`deliveryState=sent`**.
 
 ### Not in LMP-35
 
-- `/v1/auth/link/*` — **LMP-36**
-- Existence probes; Firebase exchange
+`/v1/auth/link/*` — **LMP-36**.
 
 ---
 
@@ -92,7 +84,30 @@ AppleAuthRequest:
     client_surface: { type: string, maxLength: 32 }
     device_id: { type: string, maxLength: 128 }
 
-# GoogleAuthRequest: identical shape
+GoogleAuthNonceRequest:
+  type: object
+  additionalProperties: false
+  required: [id_token, nonce, notice_version, notice_locale]
+  properties:
+    id_token: { type: string, minLength: 20, maxLength: 8192 }
+    nonce: { type: string, minLength: 8, maxLength: 128 }
+    notice_version: { type: string, maxLength: 64 }
+    notice_locale: { type: string, maxLength: 16 }
+    client_surface: { type: string, maxLength: 32 }
+    device_id: { type: string, maxLength: 128 }
+
+GoogleAuthCodeRequest:
+  type: object
+  additionalProperties: false
+  required: [authorization_code, code_verifier, notice_version, notice_locale]
+  properties:
+    authorization_code: { type: string, minLength: 8, maxLength: 2048 }
+    code_verifier: { type: string, minLength: 43, maxLength: 128 }
+    redirect_uri: { type: string, maxLength: 2048 }
+    notice_version: { type: string, maxLength: 64 }
+    notice_locale: { type: string, maxLength: 16 }
+    client_surface: { type: string, maxLength: 32 }
+    device_id: { type: string, maxLength: 128 }
 
 EmailOtpStartRequest:
   type: object
@@ -117,14 +132,15 @@ EmailOtpVerifyRequest:
 
 ---
 
-## Email OTP limits (sketch mirror)
+## Email OTP limits (Accepted)
 
 | Limit | Value |
 |---|---|
 | TTL / cooldown / attempts | 600 s / 60 s / 5 |
-| Sends / subject / 15m / 24h | 3 / 10 |
-| Sends / IP / 15m / 24h | 10 / 40 |
+| Sends / subject / 15m / 24h | **3** / **10** |
+| Sends / IP / 15m / 24h | **10** / **40** |
 | Verify / IP / min | 10 |
+| Global / day | **2000** unactivated ceiling |
 
 ---
 
@@ -132,8 +148,8 @@ EmailOtpVerifyRequest:
 
 | Code | Use |
 |---|---|
-| `invalid_request` | Malformed / notice / email_norm reject |
-| `invalid_token` | Apple/Google verify or nonce failure |
+| `invalid_request` | Malformed / notice / `email_norm_v1` reject |
+| `invalid_token` | Apple/Google verify, nonce, or PKCE exchange failure |
 | `otp_invalid` | Email OTP / not durable-sent |
 | `otp_cooldown` / `rate_limited` | Limits |
 | `mail_unavailable` | Send/persist failure (no auto-resend) |
@@ -143,4 +159,4 @@ EmailOtpVerifyRequest:
 
 ## U7
 
-**Recommended pending Accept:** Option A auto-create on unknown verified subject. No silent cross-provider email link.
+**Accepted Option A:** unknown verified subject → create parent + identity + notice + session in one txn. No silent cross-provider email link.
