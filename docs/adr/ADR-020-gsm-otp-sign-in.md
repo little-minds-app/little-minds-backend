@@ -2,15 +2,15 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Proposed** — awaiting explicit human **Accept**; selected arch + U7 Option A preserved; privacy design is **recommended** (not Accepted) |
-| **Date** | 2026-10-28 (privacy-alignment revision) |
+| **Status** | **Accepted** — explicit Little Minds Product Owner approval on **2026-10-28**; implementation may proceed only in a **separate** PR after this docs PR is human-authorized to merge |
+| **Date** | 2026-10-28 (Accept recorded) |
 | **Jira** | [LMP-34](https://little-minds-app.atlassian.net/browse/LMP-34) (Epic [LMP-7](https://little-minds-app.atlassian.net/browse/LMP-7), `seq-016`) |
 | **Blueprint** | F-001, F-031 · §12 Auth · §13.1 / §29 · §31.1 / ADR-002 · §31.4 privacy · §27.4 local identity · §38 ownership |
 | **Depends on** | [ADR-019](./ADR-019-parent-identity-secure-session-lifecycle.md) (**Accepted**) — sole session mint port |
-| **Repos** | `little-minds-backend` only. After Accept, client ADR index sync in a **separate** client PR (**U20**) |
-| **Companion sketch** | [`lmp-34-otp-api-contract-sketch.md`](./lmp-34-otp-api-contract-sketch.md) (non-live; OpenAPI stays **`0.4.0`** until implementation PR **`0.5.0`**) |
+| **Repos** | `little-minds-backend` only. Client ADR index sync remains a **separate** client PR (**U20**, deferred process) |
+| **Companion sketch** | [`lmp-34-otp-api-contract-sketch.md`](./lmp-34-otp-api-contract-sketch.md) (non-live until implementation; OpenAPI stays **`0.4.0`** until implementation PR **`0.5.0`**) |
 
-> **Decision gate:** Still **Proposed**. Human-selected architecture direction + **U7 Option A** are recorded below. **U1–U6 and U8–U20 remain proposals or deferrals until Accept.** Do **not** implement OTP runtime, choose/purchase a paid SMS vendor, merge-as-Done, or mark LMP-34 Done from this docs PR.
+> **Decision:** Human Accepted ADR-020 on 2026-10-28 (architecture, **U7 Option A**, KVKK notice **Option A**, **U1–U17** parameters). **U18–U20** remain deferred/gated. Paid SMS vendors remain **unapproved**. Qualified **legal review** of notice copy / lawful bases is required before production personal-data processing. **Implementation is a separate PR** (Phase B) — not authorized by Accept alone to merge this docs PR or start coding without human merge authorization / Phase B kickoff. No Jira Done from this docs PR.
 
 ---
 
@@ -126,9 +126,9 @@ Notice ≠ ToS ≠ optional consent. Full recommended KVKK engineering design: *
 
 ---
 
-## 6. Recommended KVKK / privacy design (awaiting Accept + legal review)
+## 6. Accepted KVKK / privacy design (engineering) + legal-review gate
 
-**Classification:** **Recommended proposal** for human Accept — **not** settled law and **not** blanket ADR Accept. Final notice wording, lawful bases, and production enablement require **qualified legal review** before launch. Primary reference themes (do not copy legal text): KVKK aydınlatma obligations / notice procedures; Kurul principle that **aydınlatma** and **açık rıza** texts must be arranged separately (public announcements on kvkk.gov.tr).
+**Classification:** **Accepted** for V1 engineering design (notice Option A). Final notice **wording**, lawful bases, and production enablement still require **qualified legal review** before launch — Accept does **not** replace counsel sign-off. Reference themes (do not copy legal text): KVKK aydınlatma obligations / notice procedures; Kurul principle that **aydınlatma** and **açık rıza** texts must be arranged separately (kvkk.gov.tr public announcements).
 
 ### 6.1 Fundamental separation
 
@@ -166,11 +166,11 @@ Notice must be accessible **before or at** phone collection — **not** only aft
   - **Client:** show contextual notice + link; only call start after the notice UX for that surface was presented; send only server-issued presentation material (see §6.4).
   - **Server:** validate presentation material against catalog; refuse start with **uniform** `400 invalid_request` if missing/invalid/expired; persist binding on challenge; on U7 create, copy evidence into `privacy_notice_acknowledgments` (or equivalent) in the **same** verify transaction as identity+mint.
 
-### 6.4 V1 start/verify binding — Option A (normative proposal for Accept)
+### 6.4 V1 start/verify binding — Option A (**Accepted**)
 
 **Rejected:** conditional `privacy_notice_version` on **verify** for unknown parents only — account-existence branching / **U12** oracle / notice≠consent confusion.
 
-**V1 selected shape (Option A):** uniform `notice_version` + `notice_locale` on **`POST /v1/auth/phone/start`** for every caller.
+**V1 Accepted shape (Option A):** uniform `notice_version` + `notice_locale` on **`POST /v1/auth/phone/start`** for every caller.
 
 1. Client presents notice UX **before** phone submit (contextual text + full-notice link). Active version/locale come from the **server-owned catalog** (published versions known to the app via existing/future privacy catalog access already in product scope — **no new notice-token mint endpoint** in LMP-34 V1).
 2. `POST /v1/auth/phone/start` requires uniform fields `notice_version` + `notice_locale` that must equal the server’s **currently active** published pair (plus optional coarse `presentation_surface`).
@@ -197,39 +197,39 @@ Phone OTP verifies control of a number and (under U7) may create a **parent acco
 
 ---
 
-## 7. Decision matrix U1–U20 (+ privacy)
+## 7. Decision matrix U1–U20 (+ privacy) — Accept scope
 
-| ID | Topic | Classification | Decision / proposal |
+| ID | Topic | Classification | Decision |
 |---|---|---|---|
-| **U7** | New parent | **SELECTED** | Option A — create parent + phone identity on first successful verify |
-| **Arch** | OTP ownership / SMS role | **SELECTED** | LM-owned OTP; SMS delivery-only; no Firebase Phone Auth / Twilio Verify SoR |
-| **Privacy** | KVKK notice design (§6) | **Recommended proposal** | Notice≠ToS≠optional consent; present before phone submit; **V1 Option A** `notice_version`+`notice_locale` on start; challenge-bound; uniform verify; token = future only |
-| **U1** | OTP format | **Recommended proposal** | 6-digit numeric, CSPRNG |
-| **U2** | OTP TTL | **Recommended proposal** | **300 seconds** absolute |
-| **U3** | Supersede | **Recommended proposal** | One active pending challenge per subject; new issued challenge supersedes previous |
-| **U4** | Resend cooldown | **Recommended proposal** | **60 seconds** |
-| **U5** | Attempts / rate limits | **Recommended proposal** | Max **5** wrong attempts/challenge + IP/subject limits (see §8) |
-| **U6** | SMS abuse / spend | **Recommended proposal** + **production gate** | Durable subject/IP/global limits; financial ceiling required before production SMS (price TBD) |
-| **U8** | Provider subject | **Recommended proposal** | `HMAC-SHA256(PHONE_SUBJECT_PEPPER, e164)` |
-| **U9** | Verified contact | **Recommended proposal** | Null by default; short-lived sealed destination only if needed; no plaintext E.164 at rest |
-| **U10** | Launch countries | **Recommended proposal** | Türkiye (**+90**) only for initial V1 |
-| **U11** | Templates | **Recommended proposal** | Turkish initial SMS template; vendor-neutral rendering; EN optional later |
-| **U12** | Anti-enumeration | **Recommended proposal** | Uniform start/verify contracts; no account-existence oracle (incl. privacy fields); see §10 |
-| **U13** | Consume/mint txn | **Recommended proposal** + **impl prerequisite** | Atomic consume + identity + notice evidence + session via `mintSessionTx`; see §9–§10 |
-| **U14** | OpenAPI | **Recommended proposal** | Live **`0.5.0`** only in implementation PR |
-| **U15** | Enums / errors | **Recommended proposal** | Explicit challenge/delivery states + generic `otp_invalid` / `otp_cooldown` / `sms_unavailable` |
-| **U16** | Retention | **Recommended proposal** | Challenges scrub/purge **24h**; delivery attempts **7 days** — see §13 FK-safe design (no CASCADE wipe) |
-| **U17** | Fake OTP retrieval | **Recommended proposal** | Test harness/inbox only; inaccessible staging/production |
+| **Arch** | OTP ownership / SMS role | **Accepted** | LM-owned OTP; SMS delivery-only; no Firebase Phone Auth / Twilio Verify SoR |
+| **U7** | New parent | **Accepted** | Option A — create parent + phone identity on first successful verify |
+| **Privacy** | KVKK notice design (§6) | **Accepted** (engineering) | Notice≠ToS≠optional consent; present before phone submit; **Option A** `notice_version`+`notice_locale` on start; challenge-bound; uniform verify; token = future only; **legal review before production** |
+| **U1** | OTP format | **Accepted** | 6-digit numeric, CSPRNG |
+| **U2** | OTP TTL | **Accepted** | **300 seconds** absolute |
+| **U3** | Supersede | **Accepted** | One active pending challenge per subject; new issued challenge supersedes previous |
+| **U4** | Resend cooldown | **Accepted** | **60 seconds** |
+| **U5** | Attempts / rate limits | **Accepted** | Max **5** wrong attempts/challenge + IP/subject limits (see §8) |
+| **U6** | SMS abuse / spend | **Accepted** + **production gate** | Durable subject/IP/global limits; financial ceiling still required before production SMS (vendor price TBD; SMS unapproved) |
+| **U8** | Provider subject | **Accepted** | `HMAC-SHA256(PHONE_SUBJECT_PEPPER, e164)` |
+| **U9** | Verified contact | **Accepted** | Null by default; short-lived sealed destination only if needed; no plaintext E.164 at rest |
+| **U10** | Launch countries | **Accepted** | Türkiye (**+90**) only for initial V1 |
+| **U11** | Templates | **Accepted** | Turkish initial SMS template; vendor-neutral rendering; EN optional later |
+| **U12** | Anti-enumeration | **Accepted** | Uniform start/verify contracts; no account-existence oracle (incl. privacy fields); see §10 |
+| **U13** | Consume/mint txn | **Accepted** + **impl prerequisite** | Atomic consume + identity + notice evidence + session via `mintSessionTx`; see §9–§10 |
+| **U14** | OpenAPI | **Accepted** | Live **`0.5.0`** only in **implementation** PR (this docs PR keeps **`0.4.0`**) |
+| **U15** | Enums / errors | **Accepted** | Explicit challenge/delivery states + generic `otp_invalid` / `otp_cooldown` / `sms_unavailable` |
+| **U16** | Retention | **Accepted** | Challenges scrub/purge **24h**; delivery attempts **7 days** — FK-safe design (§13.1; no CASCADE wipe) |
+| **U17** | Fake OTP retrieval | **Accepted** | Test harness/inbox only; inaccessible staging/production |
 | **U18** | Phone change / recovery | **Deferred** | Out of LMP-34 Day-1 |
-| **U19** | Staging real SMS | **Production / staging gate** | Disabled until separately approved |
-| **U20** | Client ADR sync | **Deferred process** | Separate client PR after ADR Accept |
-| **Vendor** | Netgsm / Twilio / Plivo | **Production gate** | Candidates only — not approved, purchased, or integrated |
+| **U19** | Staging real SMS | **Deferred / staging gate** | Disabled until separately approved |
+| **U20** | Client ADR sync | **Deferred process** | Separate client PR after this ADR is on `main` |
+| **Vendor** | Netgsm / Twilio / Plivo | **Production gate** | Candidates only — **not** approved, purchased, or integrated |
 
 ---
 
-## 8. Proposed numerical limits (not blanket-approved)
+## 8. Accepted numerical limits (V1 engineering)
 
-Documented for Accept review — **not** authorization to enable production SMS:
+**Accepted** abuse/OTP numbers for implementation. Still **not** authorization to enable production SMS or purchase a vendor:
 
 | Limit | Proposed value |
 |---|---|
@@ -369,7 +369,7 @@ Proposed tables (names illustrative): `otp_challenges` (incl. notice-binding col
    2. At **~7d:** delete `otp_delivery_attempts` (and any challenge stubs if using delayed hard-delete).
 5. **Future tests (implementation PR):** assert 24h challenge purge does **not** delete delivery attempts still inside 7d window; assert scrub removes secrets/PII from challenges; assert no CASCADE surprise.
 
-Retention (**U16** proposal): challenges scrub/purge **24h**; minimized delivery attempts purge **7 days** — FK-safe as above.
+Retention (**U16 Accepted**): challenges scrub/purge **24h**; minimized delivery attempts purge **7 days** — FK-safe as above.
 
 ---
 
@@ -413,18 +413,19 @@ Regression: LMP-33 refresh/logout/bootstrap unchanged.
 
 ---
 
-## 17. Implementation plan (after Accept only)
+## 17. Implementation plan (Phase B — separate PR only)
 
-1. Explicit human Accept of remaining proposals / privacy design / gates (or documented deferrals).
-2. Separate LMP-34 **implementation** PR: migrations, PhoneOtpService, FakeSmsSender, `mintSessionTx`, notice binding, routes, OpenAPI `0.5.0`, durable counters, tests — still no paid vendor unless separately approved; optional-consent subsystem **out of scope**.
-3. Client ADR index sync (**U20**).
-4. Legal review of notice copy / lawful bases before production personal-data processing.
-5. No Jira Done from this docs PR.
+1. **Completed (Phase A):** Human Accepted ADR-020 on 2026-10-28; this docs PR records that decision.
+2. **Human must authorize merge** of this docs PR before / independently of coding kickoff.
+3. Separate LMP-34 **implementation** PR (Phase B): migrations, PhoneOtpService, FakeSmsSender, `mintSessionTx`, notice Option A binding, routes, OpenAPI `0.5.0`, durable counters, FK-safe retention jobs, tests — still **no** paid vendor unless separately approved; optional-consent subsystem **out of scope**.
+4. Client ADR index sync (**U20**) in a separate client PR after Accept is on `main`.
+5. Legal review of notice copy / lawful bases before production personal-data processing.
+6. No Jira Done from this docs PR; no automatic Phase B start from Accept text alone without human Phase B authorization.
 
 ---
 
 ## 18. Consequences
 
-**Positive:** LM-owned OTP; selected U7 Option A; delivery-only SMS; U13 prerequisite clear; recommended KVKK notice design with uniform anti-enum contract.
+**Positive:** Accepted LM-owned OTP design; U7 Option A; delivery-only SMS; U1–U17 parameters locked for implementation; KVKK notice Option A; U13 `mintSessionTx` prerequisite clear.
 
-**Negative / follow-ups:** Numeric/security params + privacy design still need Accept; `mintSessionTx` required; legal validation of notice/lawful bases; optional consent + child guardianship flows deferred; production SMS financially gated.
+**Negative / follow-ups:** `mintSessionTx` refactor required in Phase B; U18–U20 deferred; legal validation of notice/lawful bases before production; optional consent + child guardianship deferred; production SMS vendor/financial gates remain closed.

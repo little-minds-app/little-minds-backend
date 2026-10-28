@@ -2,13 +2,13 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Sketch only — **not** published until ADR-020 **Accept** + implementation PR OpenAPI **`0.5.0`**. Live contract stays **`0.4.0`**. |
-| **Parent ADR** | [ADR-020](./ADR-020-gsm-otp-sign-in.md) (**Proposed**) |
+| **Status** | Sketch only — **not** published in live OpenAPI until the **implementation** PR bumps to **`0.5.0`**. Live contract stays **`0.4.0`**. Parent ADR-020 is **Accepted** (2026-10-28). |
+| **Parent ADR** | [ADR-020](./ADR-020-gsm-otp-sign-in.md) (**Accepted**) |
 | **Jira** | LMP-34 |
 
-> **Selected:** LM-owned OTP; delivery-only SMS; **U7 Option A**.  
-> **Recommended (await Accept):** numeric limits, KVKK notice binding (§ below), U12/U13 mechanics.  
-> Do **not** treat proposals as Accepted security/legal parameters.
+> **Accepted:** LM-owned OTP; delivery-only SMS; **U7 Option A**; KVKK notice **Option A**; U1–U17 params.  
+> **Deferred/gated:** U18–U20; paid SMS vendors; legal review before production.  
+> This sketch remains non-live until Phase B implementation.
 
 ---
 
@@ -25,7 +25,7 @@
 - Notice ≠ ToS ≠ optional consent.
 - Present notice **before** phone submit; bind evidence at **start**.
 - Server owns active notice catalog; clients do not invent authoritative versions.
-- **V1 Option A (normative proposal):** uniform `notice_version` + `notice_locale` on start (must match active catalog). Opaque presentation tokens / notice-token endpoints = **future only**.
+- **V1 Option A (Accepted):** uniform `notice_version` + `notice_locale` on start (must match active catalog). Opaque presentation tokens / notice-token endpoints = **future only**.
 - **Verify has no privacy fields** — avoids new-vs-existing client branching and account-existence oracles (**U12**).
 - Client-submitted version/locale proves catalog match claim, **not** cryptographic UI-render proof.
 
@@ -71,8 +71,8 @@ PhoneOtpStartRequest:
       type: string
       maxLength: 64
       description: |
-        V1 Option A — uniform for ALL callers. Must equal server active
-        published notice version. Not consent. Not required on verify.
+        Accepted V1 Option A — uniform for ALL callers. Must equal server
+        active published notice version. Not consent. Not required on verify.
     notice_locale:
       type: string
       maxLength: 16
@@ -117,9 +117,9 @@ Additive: `otp_invalid`, `otp_cooldown`, `sms_unavailable`.
 
 ---
 
-## Proposed rate / abuse numbers (not enablement)
+## Accepted rate / abuse numbers (not production SMS enablement)
 
-See ADR-020 §8: 5 attempts/challenge; 60s resend; 3 SMS/phone/15m; 10 SMS/phone/24h; 5 SMS/IP/15m; 30 SMS/IP/24h; 10 verify/IP/min; 500 SMS/day global planning candidate. Prefer PostgreSQL durable counters.
+See ADR-020 §8: 5 attempts/challenge; 60s resend; 3 SMS/phone/15m; 10 SMS/phone/24h; 5 SMS/IP/15m; 30 SMS/IP/24h; 10 verify/IP/min; 500 SMS/day global planning candidate. Prefer PostgreSQL durable counters. Paid SMS remains unapproved.
 
 ---
 

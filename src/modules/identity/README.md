@@ -21,4 +21,4 @@ Parent identity session lifecycle inside the Nest modular monolith.
 ## Design reference
 
 - Sessions: `docs/adr/ADR-019-parent-identity-secure-session-lifecycle.md` (**Accepted**)
-- GSM OTP: `docs/adr/ADR-020-gsm-otp-sign-in.md` (**Proposed** — U7 Option A selected; KVKK notice design recommended; U1–U6/U8–U20 await Accept; no runtime until then)
+- GSM OTP: `docs/adr/ADR-020-gsm-otp-sign-in.md` (**Accepted** 2026-10-28 — U7 Option A + notice Option A + U1–U17; U18–U20 deferred; implementation = separate PR; no runtime in docs PR)

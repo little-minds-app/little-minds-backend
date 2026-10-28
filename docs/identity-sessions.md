@@ -45,11 +45,11 @@ GSM OTP login mint is **LMP-34** and must call `SessionIssuerService.mintSession
 
 ## GSM OTP
 
-Owned by **LMP-34**. Design ADR (**Proposed**): [`docs/adr/ADR-020-gsm-otp-sign-in.md`](./adr/ADR-020-gsm-otp-sign-in.md).
+Owned by **LMP-34**. Design ADR (**Accepted** 2026-10-28): [`docs/adr/ADR-020-gsm-otp-sign-in.md`](./adr/ADR-020-gsm-otp-sign-in.md).
 
-- Little Minds owns OTP generate/verify; SMS providers are **delivery-only** adapters (`FakeSmsSender` locally; commercial candidates gated).
+- Little Minds owns OTP generate/verify; SMS providers are **delivery-only** adapters (`FakeSmsSender` locally; commercial candidates gated / **unapproved**).
 - **Not** Firebase Phone Auth / Twilio Verify as system of record.
-- Human-selected **U7 Option A:** first successful verify may create parent + phone identity (no silent cross-provider merge).
-- Recommended privacy **V1 Option A:** present notice before phone submit; uniform `notice_version`+`notice_locale` on **start**; **verify** has no privacy fields; notice ≠ optional consent; presentation tokens deferred.
-- After Accept, verify must call ADR-019 `SessionIssuerService` via `mintSessionTx` (ADR-020 §9). Post-commit JWT/HTTP failures are not rolled back — clients must handle ambiguous verify carefully. Do not invent a second session store.
-- Live OpenAPI phone routes land only in the LMP-34 implementation PR (`0.5.0`); this tree stays **`0.4.0`** until then.
+- **U7 Option A (Accepted):** first successful verify may create parent + phone identity (no silent cross-provider merge).
+- Privacy notice **Option A (Accepted):** present notice before phone submit; uniform `notice_version`+`notice_locale` on **start**; **verify** has no privacy fields; notice ≠ optional consent; legal review before production.
+- Implementation (Phase B) must call ADR-019 `SessionIssuerService` via `mintSessionTx` (ADR-020 §9). Post-commit JWT/HTTP failures are not rolled back — clients must handle ambiguous verify carefully. Do not invent a second session store.
+- Live OpenAPI phone routes land only in the LMP-34 **implementation** PR (`0.5.0`); docs Accept PR keeps **`0.4.0`**.
