@@ -311,6 +311,145 @@ describeDb('Phone OTP against PostgreSQL (LMP-34)', () => {
     expect(pending).toHaveLength(1);
   });
 
+  it('verify rejects pending_send / failed delivery uniformly (otp_invalid)', async () => {
+    const challengeId = randomUUID();
+    const subject = phoneSubjectKey('+905551000333', TEST_PHONE_SUBJECT_PEPPER);
+    const codeHash = 'not-used-hash';
+    await prisma.otpChallenge.create({
+      data: {
+        id: challengeId,
+        provider: PHONE_PROVIDER,
+        subjectKey: subject,
+        codeHash,
+        status: OtpChallengeStatus.pending,
+        deliveryState: OtpDeliveryState.pending_send,
+        expiresAt: new Date(Date.now() + 300_000),
+        noticeVersion: ACTIVE_PRIVACY_NOTICE_VERSION,
+        noticeLocale: ACTIVE_PRIVACY_NOTICE_LOCALE,
+        noticePresentedAt: new Date(),
+      },
+    });
+
+    await expect(
+      phoneOtp.verify(mockReq('10.0.3.3'), {
+        challengeId,
+        code: '123456',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'otp_invalid' }),
+    });
+
+    await prisma.otpChallenge.update({
+      where: { id: challengeId },
+      data: { deliveryState: OtpDeliveryState.failed },
+    });
+    await expect(
+      phoneOtp.verify(mockReq('10.0.3.4'), {
+        challengeId,
+        code: '123456',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'otp_invalid' }),
+    });
+  });
+
+  it('post-send mark-sent failure → sms_unavailable, no second SMS, verify blocked', async () => {
+    const phone = '+905551000444';
+    const original = prisma.otpChallenge.updateMany.bind(prisma.otpChallenge);
+    let updateManyCalls = 0;
+    prisma.otpChallenge.updateMany = (async (...args: unknown[]) => {
+      updateManyCalls += 1;
+      // First mark-sent after SMS accept fails once.
+      if (updateManyCalls === 1) {
+        throw new Error('injected mark-sent persistence failure');
+      }
+      return original(...(args as Parameters<typeof original>));
+    }) as typeof prisma.otpChallenge.updateMany;
+
+    const beforeSends = fakeSms.sendInvocationCountForTests();
+    let thrown: unknown;
+    try {
+      await phoneOtp.start(mockReq('10.0.4.4'), {
+        phone,
+        noticeVersion: ACTIVE_PRIVACY_NOTICE_VERSION,
+        noticeLocale: ACTIVE_PRIVACY_NOTICE_LOCALE,
+      });
+    } catch (err) {
+      thrown = err;
+    } finally {
+      prisma.otpChallenge.updateMany = original;
+    }
+
+    expect(thrown).toBeTruthy();
+    const smsErr = thrown as {
+      getStatus?: () => number;
+      getResponse?: () => { error?: string };
+      status?: number;
+      response?: { error?: string };
+    };
+    expect(smsErr.getStatus?.() ?? smsErr.status).toBe(503);
+    expect(smsErr.getResponse?.() ?? smsErr.response).toEqual(
+      expect.objectContaining({ error: 'sms_unavailable' }),
+    );
+    // Exactly one adapter send — no auto-resend / duplicate billable.
+    expect(fakeSms.sendInvocationCountForTests() - beforeSends).toBe(1);
+
+    const subject = phoneSubjectKey(phone, TEST_PHONE_SUBJECT_PEPPER);
+    const pending = await prisma.otpChallenge.findFirst({
+      where: {
+        provider: PHONE_PROVIDER,
+        subjectKey: subject,
+        status: OtpChallengeStatus.pending,
+      },
+    });
+    expect(pending?.deliveryState).toBe(OtpDeliveryState.pending_send);
+
+    // Verify unauthorized while not durable-sent.
+    await expect(
+      phoneOtp.verify(mockReq('10.0.4.5'), {
+        challengeId: pending!.id,
+        code: '000000',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'otp_invalid' }),
+    });
+  });
+
+  it('stale pending_send can be superseded without auto-resend', async () => {
+    const phone = '+905551000555';
+    const subject = phoneSubjectKey(phone, TEST_PHONE_SUBJECT_PEPPER);
+    const staleId = randomUUID();
+    const staleCreated = new Date(Date.now() - 120_000);
+    await prisma.otpChallenge.create({
+      data: {
+        id: staleId,
+        provider: PHONE_PROVIDER,
+        subjectKey: subject,
+        codeHash: 'stale',
+        status: OtpChallengeStatus.pending,
+        deliveryState: OtpDeliveryState.pending_send,
+        expiresAt: new Date(Date.now() + 300_000),
+        noticeVersion: ACTIVE_PRIVACY_NOTICE_VERSION,
+        noticeLocale: ACTIVE_PRIVACY_NOTICE_LOCALE,
+        noticePresentedAt: staleCreated,
+        createdAt: staleCreated,
+        updatedAt: staleCreated,
+      },
+    });
+
+    const before = fakeSms.sendInvocationCountForTests();
+    const start = await phoneOtp.start(mockReq('10.0.5.5'), {
+      phone,
+      noticeVersion: ACTIVE_PRIVACY_NOTICE_VERSION,
+      noticeLocale: ACTIVE_PRIVACY_NOTICE_LOCALE,
+    });
+    expect(fakeSms.sendInvocationCountForTests() - before).toBe(1);
+    expect(start.challenge_id).not.toBe(staleId);
+
+    const stale = await prisma.otpChallenge.findUnique({ where: { id: staleId } });
+    expect(stale?.status).toBe(OtpChallengeStatus.superseded);
+  });
+
   it('SMS adapter throw → sms_unavailable, failed delivery row, no pending leak', async () => {
     fakeSms.throwNextSendForTests();
     let thrown: unknown;

@@ -33,6 +33,12 @@ export const ABUSE_COUNTER_RETENTION_MS = 48 * 60 * 60 * 1000;
 /** Retention tick interval (dev/test friendly; production still fail-closed SMS). */
 export const OTP_RETENTION_INTERVAL_MS = 15 * 60 * 1000;
 
+/**
+ * Stale `pending_send` horizon: if post-SMS persistence failed (or send hung),
+ * free the pending unique slot after this age. Never auto-resends / re-bills.
+ */
+export const OTP_STALE_PENDING_SEND_MS = 90 * 1000;
+
 export {
   ACTIVE_PRIVACY_NOTICE_VERSION,
   ACTIVE_PRIVACY_NOTICE_LOCALE,

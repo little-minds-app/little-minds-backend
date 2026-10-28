@@ -24,6 +24,8 @@ export class FakeSmsSender implements SmsSender {
   private failNext = false;
   /** Test-only: next send throws (adapter crash / network). */
   private throwNext = false;
+  /** Test-only: how many times `send` was invoked. */
+  private sendInvocations = 0;
 
   constructor(private readonly config: ConfigService<AppEnv, true>) {}
 
@@ -38,6 +40,7 @@ export class FakeSmsSender implements SmsSender {
   }
 
   async send(input: SmsSendInput): Promise<SmsSendResult> {
+    this.sendInvocations += 1;
     if (this.throwNext) {
       this.throwNext = false;
       throw new Error('injected sms adapter throw — must not leak to HTTP');
@@ -91,9 +94,14 @@ export class FakeSmsSender implements SmsSender {
     this.throwNext = true;
   }
 
+  sendInvocationCountForTests(): number {
+    return this.sendInvocations;
+  }
+
   clearInboxForTests(): void {
     this.inbox.clear();
     this.failNext = false;
     this.throwNext = false;
+    this.sendInvocations = 0;
   }
 }

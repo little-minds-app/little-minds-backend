@@ -233,44 +233,52 @@ describe('validateEnv', () => {
     ).toThrow(/POSTGRES_PASSWORD must not use a local placeholder/);
   });
 
-  it('accepts valid staging configuration', () => {
-    const env = validateEnv({
-      ...stagingAuthEnv,
-      APP_ENV: 'staging',
-      NODE_ENV: 'production',
-      PORT: '3000',
-      PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
-      DATABASE_URL:
-        'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds_staging',
-    });
-    expect(env.APP_ENV).toBe('staging');
-    expect(env.DATABASE_URL).toContain('db.staging.example.invalid');
+  it('rejects staging/production while privacy notice catalog is unpublished', () => {
+    // Engineering catalog is published:false until counsel sign-off — real-user
+    // envs must not boot on the synthetic placeholder (LMP-34 final review).
+    expect(() =>
+      validateEnv({
+        ...stagingAuthEnv,
+        APP_ENV: 'staging',
+        NODE_ENV: 'production',
+        PORT: '3000',
+        PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds_staging',
+      }),
+    ).toThrow(/Privacy notice catalog has no published entry/);
+
+    expect(() =>
+      validateEnv({
+        ...stagingAuthEnv,
+        APP_ENV: 'production',
+        NODE_ENV: 'production',
+        PUBLIC_API_BASE_URL: 'https://api.example.invalid',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.example.invalid:5432/little_minds',
+      }),
+    ).toThrow(/Privacy notice catalog has no published entry/);
   });
 
-  it('accepts valid production configuration', () => {
-    const env = validateEnv({
-      ...stagingAuthEnv,
-      APP_ENV: 'production',
-      NODE_ENV: 'production',
-      PUBLIC_API_BASE_URL: 'https://api.example.invalid',
-      DATABASE_URL:
-        'postgresql://app_user:s3curePass@db.example.invalid:5432/little_minds',
-    });
-    expect(env.APP_ENV).toBe('production');
-    expect(env.PUBLIC_API_BASE_URL).toBe('https://api.example.invalid');
+  it('rejects staging under NODE_ENV=test harness while catalog unpublished', () => {
+    expect(() =>
+      validateEnv({
+        ...stagingAuthEnv,
+        APP_ENV: 'staging',
+        NODE_ENV: 'test',
+        PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds_staging',
+      }),
+    ).toThrow(/Privacy notice catalog has no published entry/);
   });
 
-  it('allows staging validation under NODE_ENV=test harness', () => {
+  it('allows unpublished synthetic notice fixtures in development/local CI', () => {
     const env = validateEnv({
-      ...stagingAuthEnv,
-      APP_ENV: 'staging',
+      APP_ENV: 'development',
       NODE_ENV: 'test',
-      PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
-      DATABASE_URL:
-        'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds_staging',
     });
-    expect(env.APP_ENV).toBe('staging');
-    expect(env.NODE_ENV).toBe('test');
+    expect(env.APP_ENV).toBe('development');
   });
 
   it('rejects staging without JWT access key PEMs', () => {

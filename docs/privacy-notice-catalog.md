@@ -14,9 +14,21 @@ be treated as counsel-approved copy.
 
 Source of truth in code: `src/modules/identity/otp/privacy-notice.catalog.ts`.
 
-## Legal blocker (production)
+## Environment gate (fail-closed)
 
-Before enabling production personal-data processing for phone OTP sign-in:
+| `APP_ENV` | Unpublished engineering fixture allowed? |
+|---|---|
+| `development` / local CI (`NODE_ENV=test`) | **Yes** — synthetic fixtures only |
+| `staging` | **No** — boot fails until a catalog entry is `published: true` |
+| `production` | **No** — boot fails until a catalog entry is `published: true` |
+
+`validateEnv` enforces this. Staging/production **cannot be activated** on the
+placeholder catalog. Flipping `published: true` without qualified legal review is
+forbidden.
+
+## Legal blocker (production / staging personal data)
+
+Before enabling real-user personal-data processing for phone OTP sign-in:
 
 1. Qualified legal review of notice **wording**, purposes, and lawful bases.
 2. Explicit publication of an active catalog pair (`published: true` in code/config).
@@ -37,3 +49,4 @@ Accept of ADR-020 and this engineering catalog **do not** replace counsel sign-o
 - Invent or paste legal text into the API or this repo as if final.
 - Bundle marketing/analytics consent into OTP auth.
 - Treat client-submitted versions as authoritative outside the server catalog.
+- Boot staging/production against an unpublished placeholder.

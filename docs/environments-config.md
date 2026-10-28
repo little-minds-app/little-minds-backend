@@ -37,6 +37,7 @@ Fail-fast validation: `src/config/env.validation.ts` (wired through Nest `Config
 | `RELEASE` | default `dev` | optional public release id for structured logs | optional public release id for structured logs |
 | `DATABASE_URL` | optional for Nest liveness; readiness may `skip` only in development | **required** at boot and for readiness (missing → 503 / `database: down`) | **required** at boot and for readiness (missing → 503 / `database: down`) |
 | Local Compose passwords (`postgres` / `minioadmin`) | allowed | **rejected** | **rejected** |
+| Privacy notice catalog (`published`) | unpublished engineering fixture OK (local/CI) | **boot fails** until counsel publishes | **boot fails** until counsel publishes |
 
 Example files:
 

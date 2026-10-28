@@ -2,6 +2,7 @@ import {
   ACTIVE_PRIVACY_NOTICE_LOCALE,
   ACTIVE_PRIVACY_NOTICE_VERSION,
   ENGINEERING_PRIVACY_NOTICE_CATALOG,
+  allowsUnpublishedPrivacyNoticeFixtures,
   isActivePrivacyNoticePair,
   isPrivacyNoticeLegallyPublished,
 } from './privacy-notice.catalog';
@@ -31,5 +32,12 @@ describe('privacy notice catalog (LMP-34 / Option A)', () => {
 
   it('reports not legally published until counsel flips published', () => {
     expect(isPrivacyNoticeLegallyPublished()).toBe(false);
+  });
+
+  it('allows unpublished fixtures only outside staging/production', () => {
+    expect(allowsUnpublishedPrivacyNoticeFixtures('development')).toBe(true);
+    expect(allowsUnpublishedPrivacyNoticeFixtures('test')).toBe(true);
+    expect(allowsUnpublishedPrivacyNoticeFixtures('staging')).toBe(false);
+    expect(allowsUnpublishedPrivacyNoticeFixtures('production')).toBe(false);
   });
 });

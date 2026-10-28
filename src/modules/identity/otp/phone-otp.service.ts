@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   OtpChallengeStatus,
@@ -34,11 +34,16 @@ import {
   verifyOtpCode,
 } from './otp-crypto';
 import { normalizeTrMobileE164 } from './phone-normalize';
-import { isActivePrivacyNoticePair } from './privacy-notice.catalog';
+import {
+  allowsUnpublishedPrivacyNoticeFixtures,
+  isActivePrivacyNoticePair,
+  isPrivacyNoticeLegallyPublished,
+} from './privacy-notice.catalog';
 import { isUuidV4OrV7 } from './otp-uuid';
 import {
   OTP_MAX_WRONG_ATTEMPTS,
   OTP_RESEND_COOLDOWN_SECONDS,
+  OTP_STALE_PENDING_SEND_MS,
   OTP_TTL_SECONDS,
   PHONE_PROVIDER,
 } from './otp.constants';
@@ -69,13 +74,18 @@ export type PhoneVerifyInput = {
 type TxClient = Prisma.TransactionClient;
 
 /**
- * Ambiguous SMS send policy (ADR-020):
+ * Ambiguous SMS send / verify policy (ADR-020):
  * - Challenge is committed **before** SMS (locks not held during send).
- * - If the adapter throws or returns failure → delivery_attempt=failed,
- *   challenge delivery_state=failed, HTTP `503 sms_unavailable`.
- * - If send succeeds but the HTTP response is lost, the challenge may still
- *   be pending/sent; clients must honor cooldown / start a new challenge
- *   rather than assuming the code was never issued.
+ * - Adapter throw/fail → delivery_attempt=failed, challenge superseded/failed,
+ *   HTTP `503 sms_unavailable` (no OTP leak).
+ * - Adapter accept but post-send persistence fails → **no auto-resend** /
+ *   no duplicate billable send; challenge may stay `pending_send`; HTTP
+ *   `503 sms_unavailable`. Stale `pending_send` is superseded after
+ *   `OTP_STALE_PENDING_SEND_MS` so a **new** start can proceed.
+ * - Verify is allowed only when `status=pending` **and** `deliveryState=sent`
+ *   (durable SMS acceptance). `pending_send` / `failed` → uniform `otp_invalid`.
+ * - Lost HTTP after successful mark-sent: clients honor cooldown / new start;
+ *   do not assume the code was never issued. Handset delivery is not confirmed.
  */
 @Injectable()
 export class PhoneOtpService {
@@ -108,6 +118,14 @@ export class PhoneOtpService {
   private assertNotice(version: string, locale: string): void {
     if (!isActivePrivacyNoticePair(version, locale)) {
       // Uniform invalid_request — same shape for all callers (U12 / Option A).
+      throwInvalidRequest('Invalid request');
+    }
+    const appEnv = this.config.get('APP_ENV', { infer: true });
+    // Defense in depth: unpublished engineering fixtures never serve real-user envs.
+    if (
+      !allowsUnpublishedPrivacyNoticeFixtures(appEnv) &&
+      !isPrivacyNoticeLegallyPublished()
+    ) {
       throwInvalidRequest('Invalid request');
     }
   }
@@ -162,18 +180,26 @@ export class PhoneOtpService {
         },
       });
       if (pending) {
-        // In-flight send (no lastSentAt yet) or within cooldown → otp_cooldown.
-        // Prevents concurrent starts from superseding mid-SMS outside the txn.
-        if (!pending.lastSentAt) {
-          throwOtpCooldown();
-        }
         const clock = await tx.$queryRaw<Array<{ now: Date }>>`
           SELECT clock_timestamp() AS now
         `;
         const dbNow = clock[0]?.now ?? now;
-        const elapsed = dbNow.getTime() - pending.lastSentAt.getTime();
-        if (elapsed < OTP_RESEND_COOLDOWN_SECONDS * 1000) {
-          throwOtpCooldown();
+        const inFlight =
+          pending.deliveryState === OtpDeliveryState.pending_send ||
+          !pending.lastSentAt;
+
+        if (inFlight) {
+          // Mid-SMS or post-send persistence gap — never auto-resend.
+          // Fresh in-flight → cooldown; stale pending_send → free the slot.
+          const ageMs = dbNow.getTime() - pending.createdAt.getTime();
+          if (ageMs < OTP_STALE_PENDING_SEND_MS) {
+            throwOtpCooldown();
+          }
+        } else {
+          const elapsed = dbNow.getTime() - pending.lastSentAt!.getTime();
+          if (elapsed < OTP_RESEND_COOLDOWN_SECONDS * 1000) {
+            throwOtpCooldown();
+          }
         }
         await tx.otpChallenge.update({
           where: { id: pending.id },
@@ -216,26 +242,50 @@ export class PhoneOtpService {
       }
     });
 
+    // SMS outside the advisory-lock txn (never hold long locks across adapter I/O).
     const sendResult = await this.safeSendSms({
       e164: normalized.e164,
       body: this.renderTrSmsBody(code),
       challengeId,
     });
 
-    await this.prisma.db.otpDeliveryAttempt.create({
-      data: {
-        id: randomUUID(),
-        challengeId,
-        challengeIdSnapshot: challengeId,
-        adapter: sendResult.adapter,
-        result: sendResult.ok ? 'sent' : 'failed',
-        providerMessageId: sendResult.providerMessageId ?? null,
-      },
-    });
-
     if (!sendResult.ok) {
-      // Free the pending unique slot so callers may retry after sms_unavailable
-      // (abuse counters still apply). Do not leave a forever-pending row.
+      await this.persistFailedDelivery(challengeId, sendResult);
+      throwSmsUnavailable();
+    }
+
+    // Adapter accepted — persist durable acceptance. Never auto-resend on failure.
+    await this.persistSuccessfulDelivery(challengeId, sendResult);
+
+    return {
+      challenge_id: challengeId,
+      expires_in: OTP_TTL_SECONDS,
+      resend_after: OTP_RESEND_COOLDOWN_SECONDS,
+    };
+  }
+
+  /** Adapter failure path — free pending slot; no OTP/PII in logs. */
+  private async persistFailedDelivery(
+    challengeId: string,
+    sendResult: SmsSendResult,
+  ): Promise<void> {
+    try {
+      await this.prisma.db.otpDeliveryAttempt.create({
+        data: {
+          id: randomUUID(),
+          challengeId,
+          challengeIdSnapshot: challengeId,
+          adapter: sendResult.adapter,
+          result: 'failed',
+          providerMessageId: sendResult.providerMessageId ?? null,
+        },
+      });
+    } catch {
+      this.logger.warn(
+        `otp_delivery_attempt_persist_failed challenge=${challengeId} result=failed`,
+      );
+    }
+    try {
       await this.prisma.db.otpChallenge.update({
         where: { id: challengeId },
         data: {
@@ -243,23 +293,66 @@ export class PhoneOtpService {
           deliveryState: OtpDeliveryState.failed,
         },
       });
+    } catch {
+      this.logger.warn(
+        `otp_challenge_fail_mark_failed challenge=${challengeId}`,
+      );
+    }
+  }
+
+  /**
+   * Durable SMS acceptance: delivery_attempt=sent + deliveryState=sent.
+   * On persistence errors after adapter accept: **do not** call SMS again
+   * (no duplicate billable send). Leave/repair without authorizing verify
+   * until `deliveryState=sent`. Caller maps failures to `sms_unavailable`.
+   */
+  private async persistSuccessfulDelivery(
+    challengeId: string,
+    sendResult: SmsSendResult,
+  ): Promise<void> {
+    try {
+      await this.prisma.db.otpDeliveryAttempt.create({
+        data: {
+          id: randomUUID(),
+          challengeId,
+          challengeIdSnapshot: challengeId,
+          adapter: sendResult.adapter,
+          result: 'sent',
+          providerMessageId: sendResult.providerMessageId ?? null,
+        },
+      });
+    } catch {
+      this.logger.warn(
+        `otp_delivery_attempt_persist_failed challenge=${challengeId} result=sent`,
+      );
+      // SMS may already be billable — never resend. Challenge stays pending_send
+      // until stale timeout; verify remains unauthorized.
       throwSmsUnavailable();
     }
 
-    await this.prisma.db.otpChallenge.updateMany({
-      where: { id: challengeId, status: OtpChallengeStatus.pending },
-      data: {
-        deliveryState: OtpDeliveryState.sent,
-        lastSentAt: new Date(),
-        sendCount: { increment: 1 },
-      },
-    });
-
-    return {
-      challenge_id: challengeId,
-      expires_in: OTP_TTL_SECONDS,
-      resend_after: OTP_RESEND_COOLDOWN_SECONDS,
-    };
+    try {
+      const marked = await this.prisma.db.otpChallenge.updateMany({
+        where: { id: challengeId, status: OtpChallengeStatus.pending },
+        data: {
+          deliveryState: OtpDeliveryState.sent,
+          lastSentAt: new Date(),
+          sendCount: { increment: 1 },
+        },
+      });
+      if (marked.count !== 1) {
+        this.logger.warn(
+          `otp_mark_sent_skipped challenge=${challengeId} count=${marked.count}`,
+        );
+        throwSmsUnavailable();
+      }
+    } catch (err) {
+      if (err instanceof HttpException && err.getStatus() === 503) {
+        throw err;
+      }
+      // Mark-sent failed after adapter accept — no resend; pending_send + stale path.
+      this.logger.warn(`otp_mark_sent_failed challenge=${challengeId}`);
+      throwSmsUnavailable();
+    }
   }
 
   /**
@@ -314,6 +407,7 @@ export class PhoneOtpService {
             subject_key: string;
             code_hash: string;
             status: OtpChallengeStatus;
+            delivery_state: OtpDeliveryState;
             attempt_count: number;
             expires_at: Date;
             notice_version: string;
@@ -322,8 +416,9 @@ export class PhoneOtpService {
             presentation_surface: string | null;
           }>
         >`
-          SELECT id, subject_key, code_hash, status, attempt_count, expires_at,
-                 notice_version, notice_locale, notice_presented_at, presentation_surface
+          SELECT id, subject_key, code_hash, status, delivery_state, attempt_count,
+                 expires_at, notice_version, notice_locale, notice_presented_at,
+                 presentation_surface
           FROM otp_challenges
           WHERE id = ${input.challengeId}::uuid
           FOR UPDATE
@@ -339,6 +434,11 @@ export class PhoneOtpService {
         const now = clock[0]?.now ?? new Date();
 
         if (row.status !== OtpChallengeStatus.pending) {
+          return { kind: 'invalid' };
+        }
+        // Durable SMS acceptance only — pending_send/failed never authorize verify.
+        // Uniform otp_invalid (no delivery-state oracle / no OTP exposure).
+        if (row.delivery_state !== OtpDeliveryState.sent) {
           return { kind: 'invalid' };
         }
         if (row.expires_at <= now) {

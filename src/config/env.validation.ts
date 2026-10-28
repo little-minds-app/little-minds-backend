@@ -6,6 +6,10 @@ import {
   isLocalDatabaseUrl,
   isLoopbackListenHost,
 } from './env.secrets';
+import {
+  allowsUnpublishedPrivacyNoticeFixtures,
+  isPrivacyNoticeLegallyPublished,
+} from '../modules/identity/otp/privacy-notice.catalog';
 
 /**
  * Canonical product environments (cross-repo contract with little-minds-client).
@@ -427,6 +431,18 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     result.DATABASE_URL = assertStagingProductionSecrets(appEnv, parsed.data);
   } else if (parsed.data.DATABASE_URL) {
     result.DATABASE_URL = parsed.data.DATABASE_URL;
+  }
+
+  // Real-user envs cannot boot on an unpublished engineering notice placeholder.
+  // Synthetic fixtures remain allowed only in local/CI (development / test).
+  // Runs after other staging/prod secret checks so those keep specific errors.
+  if (
+    !allowsUnpublishedPrivacyNoticeFixtures(appEnv) &&
+    !isPrivacyNoticeLegallyPublished()
+  ) {
+    fail(
+      `Privacy notice catalog has no published entry; APP_ENV=${appEnv} cannot process personal data until counsel publishes a catalog pair (ADR-020 / docs/privacy-notice-catalog.md)`,
+    );
   }
 
   return result;

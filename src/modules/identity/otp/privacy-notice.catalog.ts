@@ -2,8 +2,8 @@
  * Server-owned privacy notice catalog (ADR-020 KVKK Option A).
  *
  * ENGINEERING PLACEHOLDER — not a published legal aydınlatma text.
- * Production personal-data processing requires qualified legal review and an
- * explicitly published notice version/locale pair. See
+ * Staging/production boot is fail-closed until a catalog entry is
+ * `published: true` after qualified legal review. See
  * `docs/privacy-notice-catalog.md`.
  */
 
@@ -19,6 +19,7 @@ export type PrivacyNoticeCatalogEntry = {
 /**
  * Active pair for V1 OTP start binding. `published: false` until legal sign-off.
  * Clients must still send this exact pair for catalog match (Option A).
+ * Unpublished fixtures are allowed only in local/CI (`development` / test).
  */
 export const ENGINEERING_PRIVACY_NOTICE_CATALOG: readonly PrivacyNoticeCatalogEntry[] =
   [
@@ -48,4 +49,11 @@ export function isActivePrivacyNoticePair(
 
 export function isPrivacyNoticeLegallyPublished(): boolean {
   return ENGINEERING_PRIVACY_NOTICE_CATALOG.some((e) => e.published);
+}
+
+/** Unpublished synthetic catalog fixtures — local/CI only (not staging/prod). */
+export function allowsUnpublishedPrivacyNoticeFixtures(
+  appEnv: string,
+): boolean {
+  return appEnv !== 'staging' && appEnv !== 'production';
 }
