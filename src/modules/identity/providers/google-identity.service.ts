@@ -162,6 +162,8 @@ export class GoogleIdentityService {
     let idToken: string;
     let nonceMode: 'google' | 'none' = 'none';
     let rawNonce: string | undefined;
+    /** Nonce path: full allowlist. PKCE path: exact bound OAuth client only. */
+    let verifyAudiences = audiences;
 
     if (hasNoncePath) {
       idToken = input.idToken!;
@@ -197,11 +199,14 @@ export class GoogleIdentityService {
         throwUnauthorized('invalid_token', 'Invalid token');
       }
       idToken = exchanged.idToken;
+      // Exact audience binding: ID token aud must match this transaction's
+      // clientId — not any other GOOGLE_CLIENT_IDS entry.
+      verifyAudiences = [bound.clientId];
     }
 
     const verified = await verifyOidcIdToken({
       idToken,
-      audiences,
+      audiences: verifyAudiences,
       issuers: this.issuers(),
       jwks: this.jwksConfig(),
       rawNonce,

@@ -17,6 +17,7 @@ import {
   signTestIdToken,
   TEST_OIDC_AUD_APPLE,
   TEST_OIDC_AUD_GOOGLE,
+  TEST_OIDC_AUD_GOOGLE_B,
   TEST_OIDC_ISS_APPLE,
   TEST_OIDC_ISS_GOOGLE,
 } from './fixtures/oidc/test-keys';
@@ -256,5 +257,67 @@ describeOidc('POST /v1/auth/apple|google (LMP-35 e2e)', () => {
       })
       .expect(401);
     expect(replay.body.error).toBe('invalid_token');
+  });
+
+  it('Google PKCE exact audience: bound client A rejects aud B / unknown', async () => {
+    const verifier = `v${'b'.repeat(42)}`;
+    const challenge = s256Challenge(verifier);
+    const redirect = 'http://localhost/oauth/google/callback';
+
+    const startB = await request(app.getHttpServer())
+      .post('/v1/auth/google/pkce/start')
+      .send({
+        redirect_uri: redirect,
+        code_challenge: challenge,
+        client_id: TEST_OIDC_AUD_GOOGLE,
+      })
+      .expect(200);
+    expect(startB.body.client_id).toBe(TEST_OIDC_AUD_GOOGLE);
+
+    const tokenB = await signTestIdToken({
+      sub: 'google-e2e-pkce-aud-b',
+      aud: TEST_OIDC_AUD_GOOGLE_B,
+      iss: TEST_OIDC_ISS_GOOGLE,
+    });
+    fakeExchange.setNextIdTokenForTests(tokenB);
+    const rejectB = await request(app.getHttpServer())
+      .post('/v1/auth/google')
+      .send({
+        authorization_code: 'code-aud-b',
+        code_verifier: verifier,
+        redirect_uri: redirect,
+        oauth_state: startB.body.state,
+        notice_version: ACTIVE_PRIVACY_NOTICE_VERSION,
+        notice_locale: ACTIVE_PRIVACY_NOTICE_LOCALE,
+      })
+      .expect(401);
+    expect(rejectB.body.error).toBe('invalid_token');
+
+    const startU = await request(app.getHttpServer())
+      .post('/v1/auth/google/pkce/start')
+      .send({
+        redirect_uri: redirect,
+        code_challenge: challenge,
+        client_id: TEST_OIDC_AUD_GOOGLE,
+      })
+      .expect(200);
+    const tokenUnknown = await signTestIdToken({
+      sub: 'google-e2e-pkce-aud-u',
+      aud: 'unknown-google-client.apps.googleusercontent.com',
+      iss: TEST_OIDC_ISS_GOOGLE,
+    });
+    fakeExchange.setNextIdTokenForTests(tokenUnknown);
+    const rejectU = await request(app.getHttpServer())
+      .post('/v1/auth/google')
+      .send({
+        authorization_code: 'code-aud-u',
+        code_verifier: verifier,
+        redirect_uri: redirect,
+        oauth_state: startU.body.state,
+        notice_version: ACTIVE_PRIVACY_NOTICE_VERSION,
+        notice_locale: ACTIVE_PRIVACY_NOTICE_LOCALE,
+      })
+      .expect(401);
+    expect(rejectU.body.error).toBe('invalid_token');
   });
 });

@@ -8,6 +8,9 @@ import { importPKCS8, SignJWT, type KeyLike } from 'jose';
 export const TEST_OIDC_AUD_APPLE = 'com.littleminds.app.apple.test';
 export const TEST_OIDC_AUD_GOOGLE =
   'little-minds-google-test.apps.googleusercontent.com';
+/** Second allowlisted Google client for PKCE exact-audience tests. */
+export const TEST_OIDC_AUD_GOOGLE_B =
+  'little-minds-google-test-b.apps.googleusercontent.com';
 export const TEST_OIDC_ISS_APPLE = 'https://appleid.apple.com';
 export const TEST_OIDC_ISS_GOOGLE = 'https://accounts.google.com';
 
