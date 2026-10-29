@@ -344,11 +344,11 @@ describe('SessionIssuerService (LMP-33)', () => {
       revokedAt: null,
     });
     await expect(issuer.mintSession({ parentId, deviceId })).rejects.toMatchObject({
-      response: expect.objectContaining({ error: 'invalid_device' }),
+      response: expect.objectContaining({ error: 'invalid_request' }),
     });
     mem.devices.set(deviceId, { id: deviceId, parentId, revokedAt: new Date() });
     await expect(issuer.mintSession({ parentId, deviceId })).rejects.toMatchObject({
-      response: expect.objectContaining({ error: 'invalid_device' }),
+      response: expect.objectContaining({ error: 'invalid_request' }),
     });
     expect(mem.sessions.size).toBe(0);
   });
