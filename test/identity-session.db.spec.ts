@@ -3,6 +3,7 @@
  * Runs in CI prisma-checks job when DATABASE_URL is set; skipped locally otherwise.
  */
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'node:crypto';
 import { ParentAccountLifecycle, PrismaClient } from '@prisma/client';
 import type { AppEnv } from '../src/config/env.validation';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
@@ -127,6 +128,91 @@ describeDb('Identity sessions against PostgreSQL (LMP-33)', () => {
       issuer.requireActiveSession(a.session_id, SEED_IDS.parent),
     ).rejects.toBeTruthy();
     await expect(issuer.refresh(b.refresh_token)).rejects.toBeTruthy();
+  });
+
+  it('binds two independent installations to one parent in PostgreSQL', async () => {
+    const deviceIds = [randomUUID(), randomUUID()];
+    try {
+      const sessions = await Promise.all(
+        deviceIds.map((deviceId) =>
+          issuer.mintSession({
+            parentId: SEED_IDS.parent,
+            deviceId,
+            clientSurface: 'ios',
+          }),
+        ),
+      );
+      expect(new Set(sessions.map((session) => session.session_id)).size).toBe(2);
+      const rows = await prisma.device.findMany({
+        where: { id: { in: deviceIds } },
+      });
+      expect(rows).toHaveLength(2);
+      expect(rows.every((row) => row.parentId === SEED_IDS.parent)).toBe(true);
+      const minted = await prisma.parentSession.findMany({
+        where: { id: { in: sessions.map((session) => session.session_id) } },
+      });
+      expect(new Set(minted.map((session) => session.deviceId))).toEqual(
+        new Set(deviceIds),
+      );
+    } finally {
+      await prisma.parentSession.deleteMany({
+        where: { deviceId: { in: deviceIds } },
+      });
+      await prisma.device.deleteMany({ where: { id: { in: deviceIds } } });
+    }
+  });
+
+  it('serializes concurrent first-time registration of one device', async () => {
+    const deviceId = randomUUID();
+    try {
+      const sessions = await Promise.all([
+        issuer.mintSession({ parentId: SEED_IDS.parent, deviceId, clientSurface: 'ios' }),
+        issuer.mintSession({ parentId: SEED_IDS.parent, deviceId, clientSurface: 'ios' }),
+      ]);
+      expect(sessions).toHaveLength(2);
+      expect(sessions[0].session_id).not.toBe(sessions[1].session_id);
+      expect(await prisma.device.count({ where: { id: deviceId } })).toBe(1);
+      expect(await prisma.parentSession.count({
+        where: { id: { in: sessions.map((session) => session.session_id) }, deviceId },
+      })).toBe(2);
+    } finally {
+      await prisma.parentSession.deleteMany({ where: { deviceId } });
+      await prisma.device.deleteMany({ where: { id: deviceId } });
+    }
+  });
+
+  it('blocks a different parent from claiming an existing device', async () => {
+    const deviceId = randomUUID();
+    const otherParentId = randomUUID();
+    try {
+      await prisma.parentAccount.create({
+        data: {
+          id: otherParentId,
+          locale: 'tr-TR',
+          timezone: 'Europe/Istanbul',
+          lifecycle: ParentAccountLifecycle.active,
+        },
+      });
+      await issuer.mintSession({
+        parentId: SEED_IDS.parent, deviceId, clientSurface: 'ios',
+      });
+      await expect(
+        issuer.mintSession({
+          parentId: otherParentId, deviceId, clientSurface: 'ios',
+        }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ error: 'invalid_request' }),
+      });
+      const device = await prisma.device.findUniqueOrThrow({ where: { id: deviceId } });
+      expect(device.parentId).toBe(SEED_IDS.parent);
+      expect(await prisma.parentSession.count({
+        where: { parentId: otherParentId, deviceId },
+      })).toBe(0);
+    } finally {
+      await prisma.parentSession.deleteMany({ where: { deviceId } });
+      await prisma.device.deleteMany({ where: { id: deviceId } });
+      await prisma.parentAccount.deleteMany({ where: { id: otherParentId } });
+    }
   });
 
   it('rejects expired session refresh atomically', async () => {
