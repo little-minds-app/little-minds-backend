@@ -219,6 +219,10 @@ class ApiClient {
           return GooglePkceStartResponse.fromJson(value);
         case 'HealthStatus':
           return HealthStatus.fromJson(value);
+        case 'LinkIdentityRequest':
+          return LinkIdentityRequest.fromJson(value);
+        case 'LinkIdentityResponse':
+          return LinkIdentityResponse.fromJson(value);
         case 'LogoutAllResponse':
           return LogoutAllResponse.fromJson(value);
         case 'LogoutRequest':

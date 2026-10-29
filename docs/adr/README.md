@@ -66,6 +66,12 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 |---|---|---|---|
 | **ADR-021 (Accepted 2026-10-28)** | Multi-provider parent identity — Apple, Google, Email OTP | [LMP-35](https://little-minds-app.atlassian.net/browse/LMP-35) | PO Accept: **U7 Option A**; Apple JWKS + **mandatory nonce**; Google prefer nonce else **auth-code+PKCE** with **server-issued oauth_state** (fail-closed); **`email_norm_v1`** (preserve local case; reject Unicode local); Email OTP **3/10** subject, **10/40** IP, **2000/day** unactivated; **`deliveryState=sent`**; no silent email link (**LMP-36**). Live OpenAPI **`0.6.1`**. [Decision](./ADR-021-multi-provider-identity-adapters.md) · [Sketch](./lmp-35-multi-provider-api-contract-sketch.md). |
 
+## ADR-022 — Safe explicit account linking (LMP-36)
+
+| ADR | Title | Jira | Notes |
+|---|---|---|---|
+| **ADR-022 (linking core implemented 2026-10-29)** | Safe explicit account linking & collision A–E | [LMP-36](https://little-minds-app.atlassian.net/browse/LMP-36) | Derived from Blueprint §29.1 + ADR-019/020/021 invariants. Live OpenAPI **`0.7.0`** `POST /v1/auth/identities/link`. **Deferred (architecture review):** unlink, unlinked re-link, `account_recovery_cases`, phone change (U18). [Decision](./ADR-022-safe-account-linking.md) · [Sketch](./lmp-36-account-linking-api-contract-sketch.md). |
+
 ---
 
 ## LMP-19 doc tests

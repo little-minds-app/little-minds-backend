@@ -81,6 +81,17 @@ enum ParentSessionRevokeReason {
   session_limit
 }
 
+/// LMP-36 — privacy-safe account link attempt outcomes (no PII / no other-parent ids).
+enum AccountLinkOutcome {
+  linked
+  already_linked
+  collision_other_parent
+  collision_unlinked
+  collision_race
+  invalid_proof
+  rate_limited
+}
+
 /// LMP-34 / ADR-020 — OTP challenge lifecycle
 enum OtpChallengeStatus {
   pending
@@ -126,6 +137,7 @@ model ParentAccount {
   deletionRequests               DeletionRequest[]
   parentPreferences              ParentPreference[]
   sessions                       ParentSession[]
+  accountLinkAudits              AccountLinkAudit[]
 
   @@map("parent_accounts")
 }
@@ -286,6 +298,27 @@ model ParentIdentity {
   @@unique([provider, providerSubject], map: "parent_identities_provider_subject_key")
   @@index([parentId])
   @@map("parent_identities")
+}
+
+/// Restricted account-link audit (Blueprint §29.4). Never store email/phone/raw
+/// provider subjects — only a keyed hash for correlation. No public API.
+model AccountLinkAudit {
+  id                    String             @id @default(uuid()) @db.Uuid
+  parentId              String             @map("parent_id") @db.Uuid
+  sessionId             String?            @map("session_id") @db.Uuid
+  provider              String
+  /// SHA-256 hex of "link_audit_v1|" || provider || "|" || provider_subject
+  providerSubjectHash   String             @map("provider_subject_hash")
+  outcome               AccountLinkOutcome
+  identityId            String?            @map("identity_id") @db.Uuid
+  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Restrict)
+
+  @@index([parentId, createdAt], map: "account_link_audits_parent_created_idx")
+  @@index([provider, createdAt], map: "account_link_audits_provider_created_idx")
+  @@index([outcome, createdAt], map: "account_link_audits_outcome_created_idx")
+  @@map("account_link_audits")
 }
 
 /// Canonical optional parent profile (§38). Replaces §13 parent_demographics as a table.

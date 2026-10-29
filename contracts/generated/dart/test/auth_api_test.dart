@@ -53,6 +53,15 @@ void main() {
       // TODO
     });
 
+    // Explicitly link a verified provider identity (LMP-36)
+    //
+    // Authenticated parent links another provider after **fresh provider proof** (Apple/Google ID-token or PKCE, or email/phone OTP). No silent merge and no email/name/phone inference. On collision (subject already bound to another parent, or historical unlinked row), returns `409 identity_collision` without disclosing the other family. Unlink and account-recovery case workflows are deferred pending architecture review. 
+    //
+    //Future<LinkIdentityResponse> linkParentIdentity(LinkIdentityRequest linkIdentityRequest) async
+    test('test linkParentIdentity', () async {
+      // TODO
+    });
+
     // List sessions for the authenticated parent
     //
     //Future<ParentSessionListResponse> listParentSessions() async

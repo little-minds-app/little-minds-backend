@@ -23,6 +23,8 @@ doc/GooglePkceStartRequest.md
 doc/GooglePkceStartResponse.md
 doc/HealthApi.md
 doc/HealthStatus.md
+doc/LinkIdentityRequest.md
+doc/LinkIdentityResponse.md
 doc/LogoutAllResponse.md
 doc/LogoutRequest.md
 doc/OidcNonceRequest.md
@@ -69,6 +71,8 @@ lib/model/google_auth_request.dart
 lib/model/google_pkce_start_request.dart
 lib/model/google_pkce_start_response.dart
 lib/model/health_status.dart
+lib/model/link_identity_request.dart
+lib/model/link_identity_response.dart
 lib/model/logout_all_response.dart
 lib/model/logout_request.dart
 lib/model/oidc_nonce_request.dart
@@ -104,6 +108,8 @@ test/google_pkce_start_request_test.dart
 test/google_pkce_start_response_test.dart
 test/health_api_test.dart
 test/health_status_test.dart
+test/link_identity_request_test.dart
+test/link_identity_response_test.dart
 test/logout_all_response_test.dart
 test/logout_request_test.dart
 test/oidc_nonce_request_test.dart

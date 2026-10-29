@@ -108,12 +108,18 @@ export class GoogleIdentityService {
     }
   }
 
-  async authenticate(
-    _req: Request,
-    input: GoogleAuthInput,
-  ): Promise<TokenPair> {
-    this.assertNotice(input.noticeVersion, input.noticeLocale);
-
+  /**
+   * LMP-36 — verify Google proof (nonce ID-token or auth-code+PKCE) without
+   * resolve/mint. Used by explicit account linking.
+   */
+  async verifyProofForLink(input: {
+    idToken?: string | null;
+    nonce?: string | null;
+    authorizationCode?: string | null;
+    codeVerifier?: string | null;
+    redirectUri?: string | null;
+    oauthState?: string | null;
+  }): Promise<{ sub: string; verifiedContact: string | null }> {
     const audiences = this.clientIds();
     if (audiences.length === 0) {
       this.logger.warn('google_auth_misconfigured missing_client_ids');
@@ -135,7 +141,6 @@ export class GoogleIdentityService {
       typeof input.redirectUri === 'string' &&
       input.redirectUri.length > 0;
 
-    // Explicit reject: ID token without nonce (weak fallback forbidden).
     if (
       typeof input.idToken === 'string' &&
       input.idToken.length >= 20 &&
@@ -145,7 +150,6 @@ export class GoogleIdentityService {
       throwUnauthorized('invalid_token', 'Invalid token');
     }
 
-    // PKCE without server-issued state → fail-closed (no unbound code exchange).
     if (
       typeof input.authorizationCode === 'string' &&
       input.authorizationCode.length >= 8 &&
@@ -162,7 +166,6 @@ export class GoogleIdentityService {
     let idToken: string;
     let nonceMode: 'google' | 'none' = 'none';
     let rawNonce: string | undefined;
-    /** Nonce path: full allowlist. PKCE path: exact bound OAuth client only. */
     let verifyAudiences = audiences;
 
     if (hasNoncePath) {
@@ -181,7 +184,6 @@ export class GoogleIdentityService {
         throwUnauthorized('invalid_token', 'Invalid token');
       }
 
-      // Consume validates redirect + PKCE + stored client_id allowlist atomically.
       const bound = await this.pkceTx.consumeOrThrow({
         state: input.oauthState!,
         codeVerifier: input.codeVerifier!,
@@ -199,8 +201,6 @@ export class GoogleIdentityService {
         throwUnauthorized('invalid_token', 'Invalid token');
       }
       idToken = exchanged.idToken;
-      // Exact audience binding: ID token aud must match this transaction's
-      // clientId — not any other GOOGLE_CLIENT_IDS entry.
       verifyAudiences = [bound.clientId];
     }
 
@@ -221,8 +221,27 @@ export class GoogleIdentityService {
       await this.nonces.consumeAfterVerify(input.nonce!, 'google');
     }
 
-    const verifiedContact =
-      verified.email && verified.emailVerified ? verified.email : null;
+    return {
+      sub: verified.sub,
+      verifiedContact:
+        verified.email && verified.emailVerified ? verified.email : null,
+    };
+  }
+
+  async authenticate(
+    _req: Request,
+    input: GoogleAuthInput,
+  ): Promise<TokenPair> {
+    this.assertNotice(input.noticeVersion, input.noticeLocale);
+
+    const proof = await this.verifyProofForLink({
+      idToken: input.idToken,
+      nonce: input.nonce,
+      authorizationCode: input.authorizationCode,
+      codeVerifier: input.codeVerifier,
+      redirectUri: input.redirectUri,
+      oauthState: input.oauthState,
+    });
 
     const noticePresentedAt = new Date();
     const outcome = await this.prisma.db.$transaction(async (tx) => {
@@ -232,8 +251,8 @@ export class GoogleIdentityService {
       const now = clock[0]?.now ?? new Date();
       const parentId = await this.resolve.resolveOrCreateParentTx(tx, {
         provider: GOOGLE_PROVIDER,
-        providerSubject: verified.sub,
-        verifiedContact,
+        providerSubject: proof.sub,
+        verifiedContact: proof.verifiedContact,
         noticeVersion: input.noticeVersion,
         noticeLocale: input.noticeLocale,
         noticePresentedAt,

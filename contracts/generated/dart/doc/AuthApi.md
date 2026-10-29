@@ -13,6 +13,7 @@ Method | HTTP request | Description
 [**authenticateGoogle**](AuthApi.md#authenticategoogle) | **POST** /v1/auth/google | Google Sign-In nonce or auth-code+PKCE (ADR-021)
 [**createDevParentSession**](AuthApi.md#createdevparentsession) | **POST** /v1/auth/dev/session | Local/test session bootstrap (development only)
 [**issueOidcNonce**](AuthApi.md#issueoidcnonce) | **POST** /v1/auth/oidc/nonce | Issue short-lived OIDC nonce (ADR-021)
+[**linkParentIdentity**](AuthApi.md#linkparentidentity) | **POST** /v1/auth/identities/link | Explicitly link a verified provider identity (LMP-36)
 [**listParentSessions**](AuthApi.md#listparentsessions) | **GET** /v1/auth/sessions | List sessions for the authenticated parent
 [**logoutAllParentSessions**](AuthApi.md#logoutallparentsessions) | **POST** /v1/auth/logout-all | Revoke all sessions for the authenticated parent
 [**logoutParentSession**](AuthApi.md#logoutparentsession) | **POST** /v1/auth/logout | Revoke the current parent session
@@ -189,6 +190,55 @@ Name | Type | Description  | Notes
 ### Authorization
 
 No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **linkParentIdentity**
+> LinkIdentityResponse linkParentIdentity(linkIdentityRequest)
+
+Explicitly link a verified provider identity (LMP-36)
+
+Authenticated parent links another provider after **fresh provider proof** (Apple/Google ID-token or PKCE, or email/phone OTP). No silent merge and no email/name/phone inference. On collision (subject already bound to another parent, or historical unlinked row), returns `409 identity_collision` without disclosing the other family. Unlink and account-recovery case workflows are deferred pending architecture review. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+// TODO Configure HTTP Bearer authorization: parentAccessToken
+// Case 1. Use String Token
+//defaultApiClient.getAuthentication<HttpBearerAuth>('parentAccessToken').setAccessToken('YOUR_ACCESS_TOKEN');
+// Case 2. Use Function which generate token.
+// String yourTokenGeneratorFunction() { ... }
+//defaultApiClient.getAuthentication<HttpBearerAuth>('parentAccessToken').setAccessToken(yourTokenGeneratorFunction);
+
+final api_instance = AuthApi();
+final linkIdentityRequest = LinkIdentityRequest(); // LinkIdentityRequest | 
+
+try {
+    final result = api_instance.linkParentIdentity(linkIdentityRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->linkParentIdentity: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **linkIdentityRequest** | [**LinkIdentityRequest**](LinkIdentityRequest.md)|  | 
+
+### Return type
+
+[**LinkIdentityResponse**](LinkIdentityResponse.md)
+
+### Authorization
+
+[parentAccessToken](../README.md#parentAccessToken)
 
 ### HTTP request headers
 

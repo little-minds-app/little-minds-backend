@@ -244,6 +244,63 @@ class AuthApi {
     return null;
   }
 
+  /// Explicitly link a verified provider identity (LMP-36)
+  ///
+  /// Authenticated parent links another provider after **fresh provider proof** (Apple/Google ID-token or PKCE, or email/phone OTP). No silent merge and no email/name/phone inference. On collision (subject already bound to another parent, or historical unlinked row), returns `409 identity_collision` without disclosing the other family. Unlink and account-recovery case workflows are deferred pending architecture review. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [LinkIdentityRequest] linkIdentityRequest (required):
+  Future<Response> linkParentIdentityWithHttpInfo(LinkIdentityRequest linkIdentityRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/identities/link';
+
+    // ignore: prefer_final_locals
+    Object? postBody = linkIdentityRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Explicitly link a verified provider identity (LMP-36)
+  ///
+  /// Authenticated parent links another provider after **fresh provider proof** (Apple/Google ID-token or PKCE, or email/phone OTP). No silent merge and no email/name/phone inference. On collision (subject already bound to another parent, or historical unlinked row), returns `409 identity_collision` without disclosing the other family. Unlink and account-recovery case workflows are deferred pending architecture review. 
+  ///
+  /// Parameters:
+  ///
+  /// * [LinkIdentityRequest] linkIdentityRequest (required):
+  Future<LinkIdentityResponse?> linkParentIdentity(LinkIdentityRequest linkIdentityRequest, { Future<void>? abortTrigger, }) async {
+    final response = await linkParentIdentityWithHttpInfo(linkIdentityRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'LinkIdentityResponse',) as LinkIdentityResponse;
+    
+    }
+    return null;
+  }
+
   /// List sessions for the authenticated parent
   ///
   /// Note: This method returns the HTTP [Response].

@@ -20,7 +20,9 @@ export type AuthErrorCode =
   | 'otp_invalid'
   | 'otp_cooldown'
   | 'sms_unavailable'
-  | 'mail_unavailable';
+  | 'mail_unavailable'
+  /** LMP-36 — subject already bound / unlinked / race; never leaks other parent id */
+  | 'identity_collision';
 
 export function authErrorBody(
   error: AuthErrorCode,
@@ -88,5 +90,15 @@ export function throwMailUnavailable(
   throw new HttpException(
     authErrorBody('mail_unavailable', message),
     HttpStatus.SERVICE_UNAVAILABLE,
+  );
+}
+
+/** LMP-36 — halt on link collision without disclosing other family. */
+export function throwIdentityCollision(
+  message = 'This sign-in method cannot be linked',
+): never {
+  throw new HttpException(
+    authErrorBody('identity_collision', message),
+    HttpStatus.CONFLICT,
   );
 }

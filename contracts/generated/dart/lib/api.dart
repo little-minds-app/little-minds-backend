@@ -50,6 +50,8 @@ part 'model/google_auth_request.dart';
 part 'model/google_pkce_start_request.dart';
 part 'model/google_pkce_start_response.dart';
 part 'model/health_status.dart';
+part 'model/link_identity_request.dart';
+part 'model/link_identity_response.dart';
 part 'model/logout_all_response.dart';
 part 'model/logout_request.dart';
 part 'model/oidc_nonce_request.dart';

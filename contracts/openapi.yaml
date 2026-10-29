@@ -4,14 +4,15 @@ info:
   description: |
     Authoritative OpenAPI contract for little-minds-backend (ADR-014).
     Paths: health/readiness, LMP-33 parent session lifecycle, LMP-34 GSM OTP
-    (`POST /v1/auth/phone/start|verify` per ADR-020), and LMP-35 multi-provider
+    (`POST /v1/auth/phone/start|verify` per ADR-020), LMP-35 multi-provider
     auth (`POST /v1/auth/apple|google|google/pkce/start|oidc/nonce|email/start|email/verify`
-    per ADR-021). LMP-32 adds structured logging / correlation (not path surface) plus
+    per ADR-021), and LMP-36 explicit identity linking (`POST /v1/auth/identities/link`).
+    LMP-32 adds structured logging / correlation (not path surface) plus
     readiness. LMP-50 adds ActivitySessionV1 / ActivityEventV1 **components** for versioned
     event contracts. Live `POST /v1/events/batch` is intentionally **not** published
     here — ingest lands in a later Jira task. Authoritative Ajv JSON Schemas live under
     `contracts/schemas/activity/` (`schema_version` 1.0.0, independent of this info.version).
-  version: 0.6.1
+  version: 0.7.0
 
   contact:
     name: Little Minds
@@ -24,7 +25,7 @@ tags:
   - name: Auth
     description: |
       Parent session lifecycle (ADR-019 / LMP-33), GSM OTP (ADR-020 / LMP-34),
-      and Apple / Google / Email OTP (ADR-021 / LMP-35)
+      Apple / Google / Email OTP (ADR-021 / LMP-35), and explicit linking (LMP-36)
   - name: Parent
     description: Authenticated parent identity probe
 paths:
@@ -565,6 +566,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthError'
+  /v1/auth/identities/link:
+    post:
+      operationId: linkParentIdentity
+      tags: [Auth]
+      summary: Explicitly link a verified provider identity (LMP-36)
+      description: |
+        Authenticated parent links another provider after **fresh provider proof**
+        (Apple/Google ID-token or PKCE, or email/phone OTP). No silent merge and
+        no email/name/phone inference. On collision (subject already bound to
+        another parent, or historical unlinked row), returns `409 identity_collision`
+        without disclosing the other family. Unlink and account-recovery case
+        workflows are deferred pending architecture review.
+      security:
+        - parentAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkIdentityRequest'
+      responses:
+        '200':
+          description: Identity linked (or already linked to this parent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkIdentityResponse'
+        '400':
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '401':
+          description: Missing/invalid session or provider proof
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '409':
+          description: Identity collision (halt; no merge)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
   /v1/auth/dev/session:
     post:
       operationId: createDevParentSession
@@ -725,6 +777,72 @@ components:
         revoked_session_count:
           type: integer
           minimum: 0
+
+    LinkIdentityRequest:
+      type: object
+      additionalProperties: false
+      required: [provider]
+      properties:
+        provider:
+          type: string
+          enum: [apple, google, email, phone]
+          description: Provider to link; proof fields must match provider
+        id_token:
+          type: string
+          minLength: 20
+          maxLength: 8192
+          description: Apple or Google ID token (nonce path)
+        nonce:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: Server-issued nonce (Apple/Google nonce path)
+        authorization_code:
+          type: string
+          minLength: 8
+          maxLength: 2048
+          description: Google authorization code (PKCE path)
+        code_verifier:
+          type: string
+          minLength: 43
+          maxLength: 128
+        redirect_uri:
+          type: string
+          maxLength: 2048
+        oauth_state:
+          type: string
+          minLength: 8
+          maxLength: 256
+          description: Server-issued oauth_state from google/pkce/start
+        challenge_id:
+          type: string
+          format: uuid
+          description: Email or phone OTP challenge id
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+          description: Email or phone OTP code
+    LinkIdentityResponse:
+      type: object
+      additionalProperties: false
+      required: [parent_id, provider, identity_id, linked_at, already_linked]
+      properties:
+        parent_id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          enum: [apple, google, email, phone]
+        identity_id:
+          type: string
+          format: uuid
+        linked_at:
+          type: string
+          format: date-time
+        already_linked:
+          type: boolean
+          description: True when subject was already linked to this parent (idempotent)
+
     AuthError:
       type: object
       additionalProperties: false
@@ -745,6 +863,7 @@ components:
             - otp_cooldown
             - sms_unavailable
             - mail_unavailable
+            - identity_collision
         message:
           type: string
     OidcNonceRequest:
