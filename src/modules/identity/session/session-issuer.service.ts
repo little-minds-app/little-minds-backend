@@ -23,6 +23,7 @@ import {
 } from './refresh-token';
 import {
   throwForbidden,
+  throwInvalidRequest,
   throwUnauthorized,
 } from './auth.errors';
 
@@ -126,7 +127,7 @@ export class SessionIssuerService {
       });
       if (existingDevice) {
         if (existingDevice.parentId !== input.parentId || existingDevice.revokedAt) {
-          throwForbidden('invalid_device', 'Device is not available for this account');
+          throwInvalidRequest('Device is not available for this account');
         }
       } else {
         await tx.device.create({
