@@ -32,6 +32,7 @@ type SessionRow = {
 
 function memoryDb() {
   const sessions = new Map<string, SessionRow>();
+  const devices = new Map<string, { id: string; parentId: string; revokedAt: Date | null }>();
   const hashLookups = new Map<string, { hash: string; sessionId: string }>();
   const parents = new Map<
     string,
@@ -258,6 +259,16 @@ function memoryDb() {
     findUnique: async ({ where: { id } }: { where: { id: string } }) =>
       parents.get(id) ?? null,
   };
+  db.device = {
+    findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+      devices.get(id) ?? null,
+    create: async ({ data }: { data: { id: string; parentId: string; platform: string } }) => {
+      if (devices.has(data.id)) throw new Error('duplicate device');
+      const row = { id: data.id, parentId: data.parentId, revokedAt: null };
+      devices.set(data.id, row);
+      return { ...row, platform: data.platform };
+    },
+  };
   db.parentSession = parentSession;
   db.parentSessionRefreshHashLookup = parentSessionRefreshHashLookup;
   db.$transaction = async <T>(fn: (tx: typeof db) => Promise<T>): Promise<T> =>
@@ -281,7 +292,7 @@ function memoryDb() {
     return [];
   };
 
-  return { db, sessions, parents, hashLookups };
+  return { db, sessions, parents, hashLookups, devices };
 }
 
 describe('SessionIssuerService (LMP-33)', () => {
@@ -311,6 +322,36 @@ describe('SessionIssuerService (LMP-33)', () => {
     const issuer = new SessionIssuerService(prisma, jwt, config);
     return { issuer, mem, jwt };
   }
+
+  it('registers an unknown device for the verified parent before session mint', async () => {
+    const { issuer, mem } = await build();
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const deviceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const pair = await issuer.mintSession({ parentId, deviceId, clientSurface: 'ios' });
+    expect(mem.devices.get(deviceId)?.parentId).toBe(parentId);
+    expect(mem.sessions.get(pair.session_id)?.deviceId).toBe(deviceId);
+    await issuer.mintSession({ parentId, deviceId, clientSurface: 'ios' });
+    expect(mem.devices.size).toBe(1);
+  });
+
+  it('rejects a device owned by another parent or revoked', async () => {
+    const { issuer, mem } = await build();
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const deviceId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    mem.devices.set(deviceId, {
+      id: deviceId,
+      parentId: '22222222-2222-4222-8222-222222222222',
+      revokedAt: null,
+    });
+    await expect(issuer.mintSession({ parentId, deviceId })).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'invalid_request' }),
+    });
+    mem.devices.set(deviceId, { id: deviceId, parentId, revokedAt: new Date() });
+    await expect(issuer.mintSession({ parentId, deviceId })).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'invalid_request' }),
+    });
+    expect(mem.sessions.size).toBe(0);
+  });
 
   it('mints and refreshes with single-winner rotation', async () => {
     const { issuer } = await build();

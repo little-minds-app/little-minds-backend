@@ -23,6 +23,7 @@ import {
 } from './refresh-token';
 import {
   throwForbidden,
+  throwInvalidRequest,
   throwUnauthorized,
 } from './auth.errors';
 
@@ -115,6 +116,30 @@ export class SessionIssuerService {
         'session_limit_exceeded',
         'Maximum active sessions reached',
       );
+    }
+
+    // The client-supplied installation UUID is not an existing device record.
+    // Bind it to the verified parent in this transaction before session mint.
+    // Never reassign an existing device to another parent or revive revocation.
+    if (input.deviceId) {
+      const existingDevice = await tx.device.findUnique({
+        where: { id: input.deviceId },
+      });
+      if (existingDevice) {
+        if (existingDevice.parentId !== input.parentId || existingDevice.revokedAt) {
+          throwInvalidRequest('Device is not available for this account');
+        }
+      } else {
+        await tx.device.create({
+          data: {
+            id: input.deviceId,
+            parentId: input.parentId,
+            platform: input.clientSurface === 'ios' || input.clientSurface === 'android'
+              ? input.clientSurface
+              : 'unknown',
+          },
+        });
+      }
     }
 
     await tx.parentSession.create({
