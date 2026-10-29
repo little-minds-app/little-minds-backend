@@ -9,6 +9,7 @@ import { ParentController } from './controllers/parent.controller';
 import { PhoneAuthController } from './controllers/phone-auth.controller';
 import { ParentAuthGuard } from './auth/parent-auth.guard';
 import { AccountLinkingService } from './linking/account-linking.service';
+import { StepUpService } from './linking/step-up.service';
 import { DisabledProductionMailSender } from './mail/disabled-production-mail.sender';
 import { FakeMailSender } from './mail/fake-mail.sender';
 import { MAIL_SENDER } from './mail/mail-sender';
@@ -55,6 +56,7 @@ import { SMS_SENDER } from './sms/sms-sender';
     PhoneOtpService,
     EmailOtpService,
     IdentityResolveService,
+    StepUpService,
     AccountLinkingService,
     OidcNonceService,
     GooglePkceTransactionService,

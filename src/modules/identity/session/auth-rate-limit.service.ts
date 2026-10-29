@@ -4,6 +4,10 @@ import {
   RATE_LIMIT_LINK_PER_PARENT,
 } from '../linking/account-linking.constants';
 import {
+  RATE_LIMIT_STEP_UP_PER_IP,
+  RATE_LIMIT_STEP_UP_PER_PARENT,
+} from '../linking/step-up.constants';
+import {
   RATE_LIMIT_BOOTSTRAP_PER_IP,
   RATE_LIMIT_REFRESH_PER_IP,
   RATE_LIMIT_REFRESH_PER_SESSION,
@@ -40,6 +44,15 @@ export class AuthRateLimitService {
 
   consumeLinkParent(parentId: string): void {
     this.consume(`link:parent:${parentId}`, RATE_LIMIT_LINK_PER_PARENT);
+  }
+
+  /** LMP-36 P1 recent-auth / step-up issue. */
+  consumeStepUpIp(ip: string): void {
+    this.consume(`stepup:ip:${ip}`, RATE_LIMIT_STEP_UP_PER_IP);
+  }
+
+  consumeStepUpParent(parentId: string): void {
+    this.consume(`stepup:parent:${parentId}`, RATE_LIMIT_STEP_UP_PER_PARENT);
   }
 
   /** Test helper — clear all buckets. */

@@ -166,7 +166,23 @@ describe('Account linking HTTP (LMP-36)', () => {
     const res = await request(app.getHttpServer())
       .post('/v1/auth/identities/link')
       .set('Authorization', `Bearer ${accessToken}`)
-      .send({ provider: 'facebook' });
+      .send({
+        step_up_token: 'lms1.' + 'x'.repeat(40),
+        provider: 'facebook',
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_request');
+  });
+
+  it('rejects link missing step_up_token with 400 when authenticated', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/v1/auth/identities/link')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        provider: 'apple',
+        id_token: 'x'.repeat(40),
+        nonce: 'n'.repeat(16),
+      });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('invalid_request');
   });
@@ -175,7 +191,10 @@ describe('Account linking HTTP (LMP-36)', () => {
     const res = await request(app.getHttpServer())
       .post('/v1/auth/identities/link')
       .set('Authorization', `Bearer ${accessToken}`)
-      .send({ provider: 'apple' });
+      .send({
+        step_up_token: 'lms1.' + 'y'.repeat(40),
+        provider: 'apple',
+      });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('invalid_request');
   });

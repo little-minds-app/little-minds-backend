@@ -13,7 +13,7 @@ Authoritative design: [`docs/adr/ADR-019-parent-identity-secure-session-lifecycl
 | Cap | Max 20 active sessions per parent (`FOR UPDATE` on parent row) |
 | Client IP | Transport peer only — **never** trusts `X-Forwarded-For` for bootstrap/rate limits |
 | Dev bootstrap | Flag + allowlist + loopback **peer** + loopback **LISTEN_HOST** + local `PUBLIC_API_BASE_URL`; **rejects proxied** requests (XFF/Forwarded) |
-| OpenAPI | `contracts/VERSION` **0.7.0** (phone + Apple/Google/Email OTP + explicit identities/link) |
+| OpenAPI | `contracts/VERSION` **0.7.1** (phone + Apple/Google/Email OTP + identities/step-up + link) |
 
 ## Environment
 
@@ -65,4 +65,4 @@ Owned by **LMP-35**. Design ADR (**Accepted** 2026-10-28): [`docs/adr/ADR-021-mu
 - **Google:** prefer ID-token + nonce (e.g. iOS 9+); else **authorization-code + PKCE only** — no weak ID-token-without-nonce; fail-closed.
 - **Email OTP:** LM-owned; `MailSender` delivery-only; **`email_norm_v1`** (preserve local-part case; reject Unicode local; no provider collapse); verify only **`deliveryState=sent`**; limits 3/10 subject, 10/40 IP, 2000/day unactivated ceiling.
 - **U7 Option A (Accepted):** first success may create parent + identity (no silent cross-provider email link).
-- Account **linking** is **LMP-36** (ADR-022): explicit `POST /v1/auth/identities/link` with active session + fresh provider proof; collision cases A–E; no silent merge. Unlink / recovery cases deferred. Sessions via ADR-019 `mintSessionTx`. Live OpenAPI **`0.7.0`**: sign-in paths plus identities/link. FakeMailSender only in development/test; paid providers / production SMTP unapproved.
+- Account **linking** is **LMP-36** (ADR-022): `step-up` (recent auth of an existing identity on this parent) then `link` with fresh target proof; collision A–E; shared subject lock with GSM create; no silent merge. Unlink / recovery deferred. Live OpenAPI **`0.7.1`**. FakeMailSender only in development/test; paid providers / production SMTP unapproved.

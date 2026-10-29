@@ -65,6 +65,8 @@ part 'model/phone_otp_verify_request.dart';
 part 'model/readiness_status.dart';
 part 'model/readiness_status_checks.dart';
 part 'model/refresh_token_request.dart';
+part 'model/step_up_request.dart';
+part 'model/step_up_response.dart';
 part 'model/token_pair_response.dart';
 
 

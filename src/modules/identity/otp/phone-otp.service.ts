@@ -43,6 +43,7 @@ import {
   OTP_TTL_SECONDS,
   PHONE_PROVIDER,
 } from './otp.constants';
+import { identitySubjectLockKey } from '../resolve/identity-subject-lock';
 
 export type PhoneStartInput = {
   phone: string;
@@ -594,6 +595,11 @@ export class PhoneOtpService {
     return this.sessions.signTokenPair(outcome.minted);
   }
 
+  /**
+   * Identity resolve/create under the shared `identity:provider:subject`
+   * advisory lock (same family as LMP-35 resolve + LMP-36 link) so concurrent
+   * GSM verify vs explicit link cannot create duplicate parents for one phone.
+   */
   private async resolveOrCreateParentTx(
     tx: TxClient,
     args: {
@@ -605,6 +611,9 @@ export class PhoneOtpService {
       now: Date;
     },
   ): Promise<string> {
+    const lockKey = identitySubjectLockKey(PHONE_PROVIDER, args.subjectKey);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
+
     const existing = await tx.parentIdentity.findFirst({
       where: {
         provider: PHONE_PROVIDER,
@@ -624,36 +633,60 @@ export class PhoneOtpService {
       return existing.parentId;
     }
 
-    const parentId = randomUUID();
-    await tx.parentAccount.create({
-      data: {
-        id: parentId,
-        locale: 'tr-TR',
-        timezone: 'Europe/Istanbul',
-        lifecycle: ParentAccountLifecycle.active,
-      },
-    });
-    await tx.parentIdentity.create({
-      data: {
-        id: randomUUID(),
-        parentId,
+    // Unlinked historical row still occupies unique (provider, subject) —
+    // do not silently relink (LMP-36). Uniform otp_invalid.
+    const anyRow = await tx.parentIdentity.findFirst({
+      where: {
         provider: PHONE_PROVIDER,
         providerSubject: args.subjectKey,
-        verifiedContact: null,
-        verifiedAt: args.now,
       },
+      select: { id: true },
     });
-    await tx.privacyNoticeAcknowledgment.create({
-      data: {
-        id: randomUUID(),
-        parentId,
-        noticeVersion: args.noticeVersion,
-        locale: args.noticeLocale,
-        presentedAt: args.noticePresentedAt,
-        acknowledgedAt: args.now,
-        surface: args.presentationSurface ?? 'phone_start',
-      },
-    });
-    return parentId;
+    if (anyRow) {
+      throwOtpInvalid();
+    }
+
+    const parentId = randomUUID();
+    try {
+      await tx.parentAccount.create({
+        data: {
+          id: parentId,
+          locale: 'tr-TR',
+          timezone: 'Europe/Istanbul',
+          lifecycle: ParentAccountLifecycle.active,
+        },
+      });
+      await tx.parentIdentity.create({
+        data: {
+          id: randomUUID(),
+          parentId,
+          provider: PHONE_PROVIDER,
+          providerSubject: args.subjectKey,
+          verifiedContact: null,
+          verifiedAt: args.now,
+        },
+      });
+      await tx.privacyNoticeAcknowledgment.create({
+        data: {
+          id: randomUUID(),
+          parentId,
+          noticeVersion: args.noticeVersion,
+          locale: args.noticeLocale,
+          presentedAt: args.noticePresentedAt,
+          acknowledgedAt: args.now,
+          surface: args.presentationSurface ?? 'phone_start',
+        },
+      });
+      return parentId;
+    } catch (err) {
+      const code =
+        err && typeof err === 'object' && 'code' in err
+          ? (err as { code?: string }).code
+          : undefined;
+      this.logger.warn(
+        `phone_identity_create_failed code=${code ?? 'unknown'}`,
+      );
+      throwOtpInvalid();
+    }
   }
 }

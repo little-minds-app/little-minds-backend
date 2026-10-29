@@ -70,7 +70,7 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 
 | ADR | Title | Jira | Notes |
 |---|---|---|---|
-| **ADR-022 (linking core implemented 2026-10-29)** | Safe explicit account linking & collision A–E | [LMP-36](https://little-minds-app.atlassian.net/browse/LMP-36) | Derived from Blueprint §29.1 + ADR-019/020/021 invariants. Live OpenAPI **`0.7.0`** `POST /v1/auth/identities/link`. **Deferred (architecture review):** unlink, unlinked re-link, `account_recovery_cases`, phone change (U18). [Decision](./ADR-022-safe-account-linking.md) · [Sketch](./lmp-36-account-linking-api-contract-sketch.md). |
+| **ADR-022 (linking core implemented 2026-10-29)** | Safe explicit account linking & collision A–E | [LMP-36](https://little-minds-app.atlassian.net/browse/LMP-36) | Derived from Blueprint §29.1 + ADR-019/020/021 invariants. Live OpenAPI **`0.7.1`** `POST /v1/auth/identities/step-up\|link` (server-issued recent-auth + target proof). Shared identity subject lock with GSM create. **Deferred:** unlink, unlinked re-link, `account_recovery_cases`, phone change (U18). [Decision](./ADR-022-safe-account-linking.md) · [Sketch](./lmp-36-account-linking-api-contract-sketch.md). |
 
 ---
 

@@ -24,16 +24,20 @@ import {
   throwUnauthorized,
 } from '../session/auth.errors';
 import { AuthRateLimitService } from '../session/auth-rate-limit.service';
+import { identitySubjectLockKey } from '../resolve/identity-subject-lock';
 import {
   LINK_AUDIT_SUBJECT_PREFIX,
   type LinkableProvider,
 } from './account-linking.constants';
+import { StepUpService } from './step-up.service';
 
 type TxClient = Prisma.TransactionClient;
 
 export type LinkIdentityInput = {
   parentId: string;
   sessionId: string;
+  /** Server-issued recent-auth token (proof of existing identity on this parent). */
+  stepUpToken: string;
   provider: LinkableProvider;
   /** Apple / Google nonce path */
   idToken?: string | null;
@@ -78,8 +82,12 @@ type LinkTxnOutcome =
 /**
  * Explicit account linking (LMP-36 / Blueprint §29.1).
  *
- * Requires active parent session + fresh verified provider proof.
- * Never merges by email/name/phone inference.
+ * Requires:
+ * 1. Active parent session
+ * 2. Server-issued recent-auth / step-up (proof of an identity already on this parent)
+ * 3. Fresh verified proof of the *target* provider to link
+ *
+ * Access-token refresh alone is NOT recent auth. Never merges by email/name/phone.
  *
  * Collision cases A–E (derived from unique `(provider, subject)` +
  * no silent merge / no silent relink):
@@ -98,18 +106,12 @@ export class AccountLinkingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rateLimit: AuthRateLimitService,
+    private readonly stepUp: StepUpService,
     private readonly apple: AppleIdentityService,
     private readonly google: GoogleIdentityService,
     private readonly emailOtp: EmailOtpService,
     private readonly phoneOtp: PhoneOtpService,
   ) {}
-
-  private subjectLockKey(provider: string, subject: string): number {
-    const digest = createHash('sha256')
-      .update(`identity:${provider}:${subject}`)
-      .digest();
-    return digest.readInt32BE(0);
-  }
 
   private subjectAuditHash(provider: string, subject: string): string {
     return createHash('sha256')
@@ -125,9 +127,23 @@ export class AccountLinkingService {
     this.rateLimit.consumeLinkIp(ip);
     this.rateLimit.consumeLinkParent(input.parentId);
 
+    if (
+      typeof input.stepUpToken !== 'string' ||
+      input.stepUpToken.length < 16
+    ) {
+      throwInvalidRequest('Invalid request');
+    }
+
+    // Target provider proof (independent of step-up — both required).
     const proof = await this.verifyFreshProof(req, input);
 
     const txnOutcome = await this.prisma.db.$transaction(async (tx) => {
+      // Consume step-up first (single-use); replay / cross-parent / stale → 401.
+      await this.stepUp.consumeIdentityLinkTx(tx, {
+        stepUpToken: input.stepUpToken,
+        parentId: input.parentId,
+        sessionId: input.sessionId,
+      });
       return this.linkVerifiedSubjectTx(tx, {
         parentId: input.parentId,
         sessionId: input.sessionId,
@@ -189,7 +205,10 @@ export class AccountLinkingService {
       throwUnauthorized('invalid_token', 'Parent account is not active');
     }
 
-    const lockKey = this.subjectLockKey(proof.provider, proof.providerSubject);
+    const lockKey = identitySubjectLockKey(
+      proof.provider,
+      proof.providerSubject,
+    );
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
     const existing = await tx.parentIdentity.findFirst({

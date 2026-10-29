@@ -166,7 +166,7 @@ else
         [[ -z "$p" ]] && continue
         # LMP-32 health + LMP-33 parent session paths (ADR-019). No other /v1 invent.
         case "$p" in
-          /health|/health/ready|/v1/auth/token/refresh|/v1/auth/logout|/v1/auth/logout-all|/v1/auth/sessions|/v1/auth/sessions/{sessionId}|/v1/parent/me|/v1/auth/dev/session|/v1/auth/phone/start|/v1/auth/phone/verify|/v1/auth/oidc/nonce|/v1/auth/google/pkce/start|/v1/auth/apple|/v1/auth/google|/v1/auth/email/start|/v1/auth/email/verify|/v1/auth/identities/link)
+          /health|/health/ready|/v1/auth/token/refresh|/v1/auth/logout|/v1/auth/logout-all|/v1/auth/sessions|/v1/auth/sessions/{sessionId}|/v1/parent/me|/v1/auth/dev/session|/v1/auth/phone/start|/v1/auth/phone/verify|/v1/auth/oidc/nonce|/v1/auth/google/pkce/start|/v1/auth/apple|/v1/auth/google|/v1/auth/email/start|/v1/auth/email/verify|/v1/auth/identities/step-up|/v1/auth/identities/link)
             ;;
           *)
             EXTRA_PATHS="${EXTRA_PATHS}${p} "

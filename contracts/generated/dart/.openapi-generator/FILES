@@ -39,6 +39,8 @@ doc/PhoneOtpVerifyRequest.md
 doc/ReadinessStatus.md
 doc/ReadinessStatusChecks.md
 doc/RefreshTokenRequest.md
+doc/StepUpRequest.md
+doc/StepUpResponse.md
 doc/TokenPairResponse.md
 git_push.sh
 lib/api.dart
@@ -86,6 +88,8 @@ lib/model/phone_otp_verify_request.dart
 lib/model/readiness_status.dart
 lib/model/readiness_status_checks.dart
 lib/model/refresh_token_request.dart
+lib/model/step_up_request.dart
+lib/model/step_up_response.dart
 lib/model/token_pair_response.dart
 pubspec.yaml
 test/activity_event_provenance_test.dart
@@ -124,4 +128,6 @@ test/phone_otp_verify_request_test.dart
 test/readiness_status_checks_test.dart
 test/readiness_status_test.dart
 test/refresh_token_request_test.dart
+test/step_up_request_test.dart
+test/step_up_response_test.dart
 test/token_pair_response_test.dart

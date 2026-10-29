@@ -16,6 +16,12 @@ void main() {
   // final instance = LinkIdentityRequest();
 
   group('test LinkIdentityRequest', () {
+    // Opaque one-time token from POST /v1/auth/identities/step-up
+    // String stepUpToken
+    test('to test the property `stepUpToken`', () async {
+      // TODO
+    });
+
     // Provider to link; proof fields must match provider
     // String provider
     test('to test the property `provider`', () async {

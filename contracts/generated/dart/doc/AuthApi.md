@@ -12,6 +12,7 @@ Method | HTTP request | Description
 [**authenticateApple**](AuthApi.md#authenticateapple) | **POST** /v1/auth/apple | Apple Sign In with JWKS + mandatory nonce (ADR-021)
 [**authenticateGoogle**](AuthApi.md#authenticategoogle) | **POST** /v1/auth/google | Google Sign-In nonce or auth-code+PKCE (ADR-021)
 [**createDevParentSession**](AuthApi.md#createdevparentsession) | **POST** /v1/auth/dev/session | Local/test session bootstrap (development only)
+[**createIdentityLinkStepUp**](AuthApi.md#createidentitylinkstepup) | **POST** /v1/auth/identities/step-up | Issue recent-auth step-up token for identity linking (LMP-36)
 [**issueOidcNonce**](AuthApi.md#issueoidcnonce) | **POST** /v1/auth/oidc/nonce | Issue short-lived OIDC nonce (ADR-021)
 [**linkParentIdentity**](AuthApi.md#linkparentidentity) | **POST** /v1/auth/identities/link | Explicitly link a verified provider identity (LMP-36)
 [**listParentSessions**](AuthApi.md#listparentsessions) | **GET** /v1/auth/sessions | List sessions for the authenticated parent
@@ -155,6 +156,55 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+# **createIdentityLinkStepUp**
+> StepUpResponse createIdentityLinkStepUp(stepUpRequest)
+
+Issue recent-auth step-up token for identity linking (LMP-36)
+
+Authenticated parent proves control of an identity **already linked** to their account (Apple/Google/email/phone proof). Server returns a short-lived opaque `step_up_token` bound to parent + session + purpose `identity_link`. Access-token refresh alone is **not** recent auth. Token is single-use; stale/replayed/cross-parent consume fails closed. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+// TODO Configure HTTP Bearer authorization: parentAccessToken
+// Case 1. Use String Token
+//defaultApiClient.getAuthentication<HttpBearerAuth>('parentAccessToken').setAccessToken('YOUR_ACCESS_TOKEN');
+// Case 2. Use Function which generate token.
+// String yourTokenGeneratorFunction() { ... }
+//defaultApiClient.getAuthentication<HttpBearerAuth>('parentAccessToken').setAccessToken(yourTokenGeneratorFunction);
+
+final api_instance = AuthApi();
+final stepUpRequest = StepUpRequest(); // StepUpRequest | 
+
+try {
+    final result = api_instance.createIdentityLinkStepUp(stepUpRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->createIdentityLinkStepUp: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **stepUpRequest** | [**StepUpRequest**](StepUpRequest.md)|  | 
+
+### Return type
+
+[**StepUpResponse**](StepUpResponse.md)
+
+### Authorization
+
+[parentAccessToken](../README.md#parentAccessToken)
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
 # **issueOidcNonce**
 > OidcNonceResponse issueOidcNonce(oidcNonceRequest)
 
@@ -203,7 +253,7 @@ No authorization required
 
 Explicitly link a verified provider identity (LMP-36)
 
-Authenticated parent links another provider after **fresh provider proof** (Apple/Google ID-token or PKCE, or email/phone OTP). No silent merge and no email/name/phone inference. On collision (subject already bound to another parent, or historical unlinked row), returns `409 identity_collision` without disclosing the other family. Unlink and account-recovery case workflows are deferred pending architecture review. 
+Authenticated parent links another provider after **server-issued step-up** (`step_up_token` from `POST /v1/auth/identities/step-up`) **and** fresh target-provider proof (Apple/Google ID-token or PKCE, or email/phone OTP). Access-token refresh alone is not recent auth. No silent merge and no email/name/phone inference. On collision returns `409 identity_collision` without disclosing the other family. Unlink/recovery deferred. 
 
 ### Example
 ```dart

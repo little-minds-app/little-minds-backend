@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ParentAccountLifecycle, type Prisma } from '@prisma/client';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { throwOtpInvalid, throwUnauthorized } from '../session/auth.errors';
+import { identitySubjectLockKey } from './identity-subject-lock';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -35,13 +36,6 @@ export type ResolveIdentityInput = {
 export class IdentityResolveService {
   private readonly logger = new Logger(IdentityResolveService.name);
 
-  private subjectLockKey(provider: string, subject: string): number {
-    const digest = createHash('sha256')
-      .update(`identity:${provider}:${subject}`)
-      .digest();
-    return digest.readInt32BE(0);
-  }
-
   private failAuth(otpStyle?: boolean): never {
     if (otpStyle) {
       throwOtpInvalid();
@@ -53,7 +47,10 @@ export class IdentityResolveService {
     tx: TxClient,
     args: ResolveIdentityInput,
   ): Promise<string> {
-    const lockKey = this.subjectLockKey(args.provider, args.providerSubject);
+    const lockKey = identitySubjectLockKey(
+      args.provider,
+      args.providerSubject,
+    );
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
     const existing = await tx.parentIdentity.findFirst({

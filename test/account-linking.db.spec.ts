@@ -24,6 +24,7 @@ describeDb('Account linking against PostgreSQL (LMP-36)', () => {
     linking = new AccountLinkingService(
       prismaService,
       {} as never,
+      {} as never, // stepUp — linkVerifiedSubjectTx path only in these tests
       {} as never,
       {} as never,
       {} as never,

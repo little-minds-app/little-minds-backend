@@ -6,13 +6,13 @@ info:
     Paths: health/readiness, LMP-33 parent session lifecycle, LMP-34 GSM OTP
     (`POST /v1/auth/phone/start|verify` per ADR-020), LMP-35 multi-provider
     auth (`POST /v1/auth/apple|google|google/pkce/start|oidc/nonce|email/start|email/verify`
-    per ADR-021), and LMP-36 explicit identity linking (`POST /v1/auth/identities/link`).
+    per ADR-021), and LMP-36 explicit identity linking (`POST /v1/auth/identities/step-up|link`).
     LMP-32 adds structured logging / correlation (not path surface) plus
     readiness. LMP-50 adds ActivitySessionV1 / ActivityEventV1 **components** for versioned
     event contracts. Live `POST /v1/events/batch` is intentionally **not** published
     here — ingest lands in a later Jira task. Authoritative Ajv JSON Schemas live under
     `contracts/schemas/activity/` (`schema_version` 1.0.0, independent of this info.version).
-  version: 0.7.0
+  version: 0.7.1
 
   contact:
     name: Little Minds
@@ -566,18 +566,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthError'
+  /v1/auth/identities/step-up:
+    post:
+      operationId: createIdentityLinkStepUp
+      tags: [Auth]
+      summary: Issue recent-auth step-up token for identity linking (LMP-36)
+      description: |
+        Authenticated parent proves control of an identity **already linked**
+        to their account (Apple/Google/email/phone proof). Server returns a
+        short-lived opaque `step_up_token` bound to parent + session + purpose
+        `identity_link`. Access-token refresh alone is **not** recent auth.
+        Token is single-use; stale/replayed/cross-parent consume fails closed.
+      security:
+        - parentAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepUpRequest'
+      responses:
+        '200':
+          description: Step-up token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepUpResponse'
+        '400':
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '401':
+          description: Missing/invalid session or existing-identity proof
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
   /v1/auth/identities/link:
     post:
       operationId: linkParentIdentity
       tags: [Auth]
       summary: Explicitly link a verified provider identity (LMP-36)
       description: |
-        Authenticated parent links another provider after **fresh provider proof**
-        (Apple/Google ID-token or PKCE, or email/phone OTP). No silent merge and
-        no email/name/phone inference. On collision (subject already bound to
-        another parent, or historical unlinked row), returns `409 identity_collision`
-        without disclosing the other family. Unlink and account-recovery case
-        workflows are deferred pending architecture review.
+        Authenticated parent links another provider after **server-issued step-up**
+        (`step_up_token` from `POST /v1/auth/identities/step-up`) **and** fresh
+        target-provider proof (Apple/Google ID-token or PKCE, or email/phone OTP).
+        Access-token refresh alone is not recent auth. No silent merge and no
+        email/name/phone inference. On collision returns `409 identity_collision`
+        without disclosing the other family. Unlink/recovery deferred.
       security:
         - parentAccessToken: []
       requestBody:
@@ -778,11 +822,70 @@ components:
           type: integer
           minimum: 0
 
-    LinkIdentityRequest:
+
+    StepUpRequest:
       type: object
       additionalProperties: false
       required: [provider]
       properties:
+        provider:
+          type: string
+          enum: [apple, google, email, phone]
+          description: Existing linked provider to re-prove for recent auth
+        id_token:
+          type: string
+          minLength: 20
+          maxLength: 8192
+        nonce:
+          type: string
+          minLength: 8
+          maxLength: 128
+        authorization_code:
+          type: string
+          minLength: 8
+          maxLength: 2048
+        code_verifier:
+          type: string
+          minLength: 43
+          maxLength: 128
+        redirect_uri:
+          type: string
+          maxLength: 2048
+        oauth_state:
+          type: string
+          minLength: 8
+          maxLength: 256
+        challenge_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+    StepUpResponse:
+      type: object
+      additionalProperties: false
+      required: [step_up_token, expires_in, purpose]
+      properties:
+        step_up_token:
+          type: string
+          description: Opaque one-time token; present on link within TTL
+        expires_in:
+          type: integer
+          enum: [300]
+        purpose:
+          type: string
+          enum: [identity_link]
+
+    LinkIdentityRequest:
+      type: object
+      additionalProperties: false
+      required: [step_up_token, provider]
+      properties:
+        step_up_token:
+          type: string
+          minLength: 16
+          maxLength: 256
+          description: Opaque one-time token from POST /v1/auth/identities/step-up
         provider:
           type: string
           enum: [apple, google, email, phone]

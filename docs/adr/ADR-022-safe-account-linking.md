@@ -8,7 +8,7 @@
 | **Blueprint** | F-001, F-031 · §29.1 · §29.4 · §38.2 ownership |
 | **Depends on** | ADR-019, ADR-020, ADR-021 (**Accepted**) |
 | **Companion sketch** | [`lmp-36-account-linking-api-contract-sketch.md`](./lmp-36-account-linking-api-contract-sketch.md) |
-| **Live OpenAPI** | **`0.7.0`** (`POST /v1/auth/identities/link`) |
+| **Live OpenAPI** | **`0.7.1`** (`POST /v1/auth/identities/step-up\|link`) |
 
 > **Decision (derived, no silent merge):** Explicit linking attaches a freshly verified provider subject to the **authenticated** parent only. Email/name/phone are never merge keys. Collision cases A–E halt without disclosing another family. Unlink APIs and recovery-case ownership are **not** accepted here — document for architecture review.
 
@@ -33,12 +33,13 @@ ADR-019/020/021 do **not** Accept unlink semantics, recovery-case ownership, or 
 | Topic | Decision |
 |---|---|
 | Entry | `POST /v1/auth/identities/link` with Bearer access (active session) |
-| Step-up | Fresh provider proof only (Apple/Google verify; email/phone OTP consume). No email/name/phone inference |
+| Recent auth / step-up | `POST /v1/auth/identities/step-up` — prove control of an identity **already on** this parent; server issues one-time `step_up_token` bound to parent + session + purpose `identity_link` (TTL 300s). Access-token refresh ≠ recent auth. Link requires step-up consume + fresh **target** provider proof |
 | Canonical id | `parent_accounts.id` unchanged |
 | Unique key | `(provider, provider_subject)` — unchanged |
+| Identity lock | Shared `identity:provider:subject` `pg_advisory_xact_lock` across resolve, phone create, and link |
 | Success | Attach identity to authenticated parent; preserve parent id |
 | Audit | `account_link_audits` with hashed subject; no raw PII; no public read API |
-| OpenAPI | Additive **`0.7.0`** |
+| OpenAPI | Additive **`0.7.1`** (`step-up` + required `step_up_token` on link) |
 
 ### Collision cases A–E
 

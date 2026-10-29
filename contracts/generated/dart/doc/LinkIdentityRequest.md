@@ -8,6 +8,7 @@ import 'package:little_minds_api/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**stepUpToken** | **String** | Opaque one-time token from POST /v1/auth/identities/step-up | 
 **provider** | **String** | Provider to link; proof fields must match provider | 
 **idToken** | **String** | Apple or Google ID token (nonce path) | [optional] 
 **nonce** | **String** | Server-issued nonce (Apple/Google nonce path) | [optional] 

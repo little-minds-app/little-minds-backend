@@ -1,12 +1,16 @@
 # LMP-36 — Account linking API contract sketch
 
-> Live OpenAPI **`0.7.0`**. Normative for linking core per ADR-022. Unlink / recovery routes are **not** published.
+> Live OpenAPI **`0.7.1`**. Normative for linking core per ADR-022. Unlink / recovery routes are **not** published.
+
+## `POST /v1/auth/identities/step-up`
+
+**Auth:** Bearer. Prove control of an identity **already linked** to this parent (same proof shapes as sign-in for that provider). Returns `{ step_up_token, expires_in: 300, purpose: identity_link }`. Bound to parent + session + purpose; single-use; hashed at rest. Access-token refresh alone does **not** issue step-up.
 
 ## `POST /v1/auth/identities/link`
 
 **Auth:** Bearer parent access JWT (ADR-019 guard — session row always loaded).
 
-**Step-up:** Request must include a **fresh** verified proof for the target provider:
+**Required:** `step_up_token` (consume atomically) **and** a **fresh** verified proof for the **target** provider to link:
 
 | Provider | Proof |
 |---|---|

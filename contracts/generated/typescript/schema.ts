@@ -340,6 +340,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/identities/step-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue recent-auth step-up token for identity linking (LMP-36)
+         * @description Authenticated parent proves control of an identity **already linked**
+         *     to their account (Apple/Google/email/phone proof). Server returns a
+         *     short-lived opaque `step_up_token` bound to parent + session + purpose
+         *     `identity_link`. Access-token refresh alone is **not** recent auth.
+         *     Token is single-use; stale/replayed/cross-parent consume fails closed.
+         */
+        post: operations["createIdentityLinkStepUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/identities/link": {
         parameters: {
             query?: never;
@@ -351,12 +375,12 @@ export interface paths {
         put?: never;
         /**
          * Explicitly link a verified provider identity (LMP-36)
-         * @description Authenticated parent links another provider after **fresh provider proof**
-         *     (Apple/Google ID-token or PKCE, or email/phone OTP). No silent merge and
-         *     no email/name/phone inference. On collision (subject already bound to
-         *     another parent, or historical unlinked row), returns `409 identity_collision`
-         *     without disclosing the other family. Unlink and account-recovery case
-         *     workflows are deferred pending architecture review.
+         * @description Authenticated parent links another provider after **server-issued step-up**
+         *     (`step_up_token` from `POST /v1/auth/identities/step-up`) **and** fresh
+         *     target-provider proof (Apple/Google ID-token or PKCE, or email/phone OTP).
+         *     Access-token refresh alone is not recent auth. No silent merge and no
+         *     email/name/phone inference. On collision returns `409 identity_collision`
+         *     without disclosing the other family. Unlink/recovery deferred.
          */
         post: operations["linkParentIdentity"];
         delete?: never;
@@ -453,7 +477,33 @@ export interface components {
         LogoutAllResponse: {
             revoked_session_count: number;
         };
+        StepUpRequest: {
+            /**
+             * @description Existing linked provider to re-prove for recent auth
+             * @enum {string}
+             */
+            provider: "apple" | "google" | "email" | "phone";
+            id_token?: string;
+            nonce?: string;
+            authorization_code?: string;
+            code_verifier?: string;
+            redirect_uri?: string;
+            oauth_state?: string;
+            /** Format: uuid */
+            challenge_id?: string;
+            code?: string;
+        };
+        StepUpResponse: {
+            /** @description Opaque one-time token; present on link within TTL */
+            step_up_token: string;
+            /** @enum {integer} */
+            expires_in: 300;
+            /** @enum {string} */
+            purpose: "identity_link";
+        };
         LinkIdentityRequest: {
+            /** @description Opaque one-time token from POST /v1/auth/identities/step-up */
+            step_up_token: string;
             /**
              * @description Provider to link; proof fields must match provider
              * @enum {string}
@@ -1407,6 +1457,57 @@ export interface operations {
             };
             /** @description Session limit exceeded */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    createIdentityLinkStepUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpRequest"];
+            };
+        };
+        responses: {
+            /** @description Step-up token issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepUpResponse"];
+                };
+            };
+            /** @description Malformed body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description Missing/invalid session or existing-identity proof */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

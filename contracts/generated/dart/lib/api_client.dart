@@ -249,6 +249,10 @@ class ApiClient {
           return ReadinessStatusChecks.fromJson(value);
         case 'RefreshTokenRequest':
           return RefreshTokenRequest.fromJson(value);
+        case 'StepUpRequest':
+          return StepUpRequest.fromJson(value);
+        case 'StepUpResponse':
+          return StepUpResponse.fromJson(value);
         case 'TokenPairResponse':
           return TokenPairResponse.fromJson(value);
         default:

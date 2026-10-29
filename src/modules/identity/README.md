@@ -13,7 +13,7 @@ and **explicit account linking** inside the Nest modular monolith.
 - Strictly gated `POST /v1/auth/dev/session` (local/test only)
 - GSM OTP `POST /v1/auth/phone/start|verify` (LMP-34) — LM-owned OTP + delivery-only `SmsSender`
 - Apple / Google / Email OTP (LMP-35) — JWKS+nonce, nonce-or-PKCE, `email_norm_v1`, `MailSender`
-- Explicit linking `POST /v1/auth/identities/link` (LMP-36) — active session + fresh proof; collision A–E; `account_link_audits`
+- Explicit linking (LMP-36) — `POST /v1/auth/identities/step-up` then `link` (server-issued recent-auth of an existing identity + fresh target proof); collision A–E; shared subject lock with GSM create; `account_link_audits`
 
 ## Out of scope
 
@@ -31,4 +31,4 @@ and **explicit account linking** inside the Nest modular monolith.
 - Multi-provider: `docs/adr/ADR-021-multi-provider-identity-adapters.md` (**Accepted** 2026-10-28) · sketch `docs/adr/lmp-35-multi-provider-api-contract-sketch.md`
 - Linking: `docs/adr/ADR-022-safe-account-linking.md` · sketch `docs/adr/lmp-36-account-linking-api-contract-sketch.md`
 - Privacy notice catalog: `docs/privacy-notice-catalog.md`
-- Live OpenAPI: **`0.7.0`** (includes `POST /v1/auth/identities/link`)
+- Live OpenAPI: **`0.7.1`** (`POST /v1/auth/identities/step-up|link`)

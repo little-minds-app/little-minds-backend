@@ -13,6 +13,7 @@ part of openapi.api;
 class LinkIdentityRequest {
   /// Returns a new [LinkIdentityRequest] instance.
   LinkIdentityRequest({
+    required this.stepUpToken,
     required this.provider,
     this.idToken,
     this.nonce,
@@ -23,6 +24,9 @@ class LinkIdentityRequest {
     this.challengeId,
     this.code,
   });
+
+  /// Opaque one-time token from POST /v1/auth/identities/step-up
+  String stepUpToken;
 
   /// Provider to link; proof fields must match provider
   LinkIdentityRequestProviderEnum provider;
@@ -99,6 +103,7 @@ class LinkIdentityRequest {
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is LinkIdentityRequest &&
+    other.stepUpToken == stepUpToken &&
     other.provider == provider &&
     other.idToken == idToken &&
     other.nonce == nonce &&
@@ -112,6 +117,7 @@ class LinkIdentityRequest {
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
+    (stepUpToken.hashCode) +
     (provider.hashCode) +
     (idToken == null ? 0 : idToken!.hashCode) +
     (nonce == null ? 0 : nonce!.hashCode) +
@@ -123,10 +129,11 @@ class LinkIdentityRequest {
     (code == null ? 0 : code!.hashCode);
 
   @override
-  String toString() => 'LinkIdentityRequest[provider=$provider, idToken=$idToken, nonce=$nonce, authorizationCode=$authorizationCode, codeVerifier=$codeVerifier, redirectUri=$redirectUri, oauthState=$oauthState, challengeId=$challengeId, code=$code]';
+  String toString() => 'LinkIdentityRequest[stepUpToken=$stepUpToken, provider=$provider, idToken=$idToken, nonce=$nonce, authorizationCode=$authorizationCode, codeVerifier=$codeVerifier, redirectUri=$redirectUri, oauthState=$oauthState, challengeId=$challengeId, code=$code]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
+      json[r'step_up_token'] = this.stepUpToken;
       json[r'provider'] = this.provider;
     if (this.idToken != null) {
       json[r'id_token'] = this.idToken;
@@ -182,12 +189,15 @@ class LinkIdentityRequest {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
+        assert(json.containsKey(r'step_up_token'), 'Required key "LinkIdentityRequest[step_up_token]" is missing from JSON.');
+        assert(json[r'step_up_token'] != null, 'Required key "LinkIdentityRequest[step_up_token]" has a null value in JSON.');
         assert(json.containsKey(r'provider'), 'Required key "LinkIdentityRequest[provider]" is missing from JSON.');
         assert(json[r'provider'] != null, 'Required key "LinkIdentityRequest[provider]" has a null value in JSON.');
         return true;
       }());
 
       return LinkIdentityRequest(
+        stepUpToken: mapValueOfType<String>(json, r'step_up_token')!,
         provider: LinkIdentityRequestProviderEnum.fromJson(json[r'provider'])!,
         idToken: mapValueOfType<String>(json, r'id_token'),
         nonce: mapValueOfType<String>(json, r'nonce'),
@@ -244,6 +254,7 @@ class LinkIdentityRequest {
 
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
+    'step_up_token',
     'provider',
   };
 }

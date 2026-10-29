@@ -96,6 +96,7 @@ describe('AccountLinkingService collision A–E (unit)', () => {
     service = new AccountLinkingService(
       {} as never,
       {} as never,
+      {} as never, // stepUp unused in linkVerifiedSubjectTx unit path
       {} as never,
       {} as never,
       {} as never,
