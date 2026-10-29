@@ -17,6 +17,13 @@ describe('toPublicConfig', () => {
       SMS_SENDER: 'production',
       OTP_PEPPER: 'staging-otp-pepper-strong-value!!',
       PHONE_SUBJECT_PEPPER: 'staging-phone-subject-pepper!!',
+      MAIL_SENDER: 'production',
+      EMAIL_SUBJECT_PEPPER: 'staging-email-subject-pepper!!',
+      APPLE_CLIENT_IDS: [],
+      GOOGLE_CLIENT_IDS: [],
+      GOOGLE_ISSUERS: [],
+      GOOGLE_REDIRECT_URIS: [],
+      GOOGLE_PKCE_ENABLED: false,
     };
 
     expect(toPublicConfig(env)).toEqual({
@@ -28,6 +35,8 @@ describe('toPublicConfig', () => {
       LISTEN_HOST: '0.0.0.0',
       AUTH_DEV_BOOTSTRAP_ENABLED: false,
       SMS_SENDER: 'production',
+      MAIL_SENDER: 'production',
+      GOOGLE_PKCE_ENABLED: false,
     });
     expect(JSON.stringify(toPublicConfig(env))).not.toContain('s3curePass');
     expect(JSON.stringify(toPublicConfig(env))).not.toContain('otp-pepper');
@@ -38,7 +47,9 @@ describe('toPublicConfig', () => {
     expect(isPublicEnvKey('RELEASE')).toBe(true);
     expect(isPublicEnvKey('LISTEN_HOST')).toBe(true);
     expect(isPublicEnvKey('SMS_SENDER')).toBe(true);
+    expect(isPublicEnvKey('MAIL_SENDER')).toBe(true);
     expect(isPublicEnvKey('DATABASE_URL')).toBe(false);
     expect(isPublicEnvKey('OTP_PEPPER')).toBe(false);
+    expect(isPublicEnvKey('EMAIL_SUBJECT_PEPPER')).toBe(false);
   });
 });

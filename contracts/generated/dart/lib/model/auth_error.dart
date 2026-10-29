@@ -128,6 +128,7 @@ enum AuthErrorErrorEnum {
   otpInvalid._(r'otp_invalid'),
   otpCooldown._(r'otp_cooldown'),
   smsUnavailable._(r'sms_unavailable'),
+  mailUnavailable._(r'mail_unavailable'),
   ;
 
   /// Instantiate a new enum with the provided value.
@@ -197,6 +198,7 @@ class AuthErrorErrorEnumTypeTransformer {
         case r'otp_invalid': return AuthErrorErrorEnum.otpInvalid;
         case r'otp_cooldown': return AuthErrorErrorEnum.otpCooldown;
         case r'sms_unavailable': return AuthErrorErrorEnum.smsUnavailable;
+        case r'mail_unavailable': return AuthErrorErrorEnum.mailUnavailable;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

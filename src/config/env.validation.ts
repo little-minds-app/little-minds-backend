@@ -24,6 +24,7 @@ const appEnvSchema = z.enum(APP_ENV_VALUES);
 const LOCAL_REFRESH_PEPPER = 'local-dev-refresh-pepper-not-for-prod';
 const LOCAL_OTP_PEPPER = 'local-dev-otp-pepper-not-for-prod!!';
 const LOCAL_PHONE_SUBJECT_PEPPER = 'local-dev-phone-subject-pepper!!';
+const LOCAL_EMAIL_SUBJECT_PEPPER = 'local-dev-email-subject-pepper!!';
 
 const baseSchema = z.object({
   APP_ENV: appEnvSchema.optional(),
@@ -66,6 +67,34 @@ const baseSchema = z.object({
   PHONE_SUBJECT_PEPPER: z.string().optional(),
   /** Optional sealed-destination key (U9); unused when destinations stay null. */
   OTP_DESTINATION_KEY: z.string().optional(),
+  // LMP-35 / ADR-021 multi-provider
+  MAIL_SENDER: z.enum(['fake', 'production']).optional(),
+  EMAIL_SUBJECT_PEPPER: z.string().optional(),
+  APPLE_CLIENT_IDS: z.string().optional(),
+  APPLE_ISSUER: z.string().optional(),
+  APPLE_JWKS_URL: z.string().optional(),
+  /** Local JWKS JSON override (tests / offline). Forbidden in staging/production. */
+  APPLE_JWKS_JSON: z.string().optional(),
+  GOOGLE_CLIENT_IDS: z.string().optional(),
+  GOOGLE_ISSUERS: z.string().optional(),
+  GOOGLE_JWKS_URL: z.string().optional(),
+  GOOGLE_JWKS_JSON: z.string().optional(),
+  GOOGLE_TOKEN_URL: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URIS: z.string().optional(),
+  /** When false/absent, Google PKCE path fail-closed. */
+  GOOGLE_PKCE_ENABLED: z
+    .union([z.string(), z.boolean()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined) {
+        return false;
+      }
+      if (typeof value === 'boolean') {
+        return value;
+      }
+      return value === '1' || value.toLowerCase() === 'true';
+    }),
 });
 
 export type AppEnv = {
@@ -93,7 +122,31 @@ export type AppEnv = {
   OTP_PEPPER: string;
   PHONE_SUBJECT_PEPPER: string;
   OTP_DESTINATION_KEY?: string;
+  MAIL_SENDER: 'fake' | 'production';
+  EMAIL_SUBJECT_PEPPER: string;
+  APPLE_CLIENT_IDS: string[];
+  APPLE_ISSUER?: string;
+  APPLE_JWKS_URL?: string;
+  APPLE_JWKS_JSON?: string;
+  GOOGLE_CLIENT_IDS: string[];
+  GOOGLE_ISSUERS: string[];
+  GOOGLE_JWKS_URL?: string;
+  GOOGLE_JWKS_JSON?: string;
+  GOOGLE_TOKEN_URL?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REDIRECT_URIS: string[];
+  GOOGLE_PKCE_ENABLED: boolean;
 };
+
+function parseCsvList(raw: string | undefined): string[] {
+  if (!raw || raw.trim().length === 0) {
+    return [];
+  }
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
 
 function fail(details: string): never {
   throw new Error(`Environment validation failed: ${details}`);
@@ -257,14 +310,21 @@ function assertOtpSecrets(
     SMS_SENDER?: 'fake' | 'production';
     OTP_PEPPER?: string;
     PHONE_SUBJECT_PEPPER?: string;
+    MAIL_SENDER?: 'fake' | 'production';
+    EMAIL_SUBJECT_PEPPER?: string;
   },
 ): {
   SMS_SENDER: 'fake' | 'production';
   OTP_PEPPER: string;
   PHONE_SUBJECT_PEPPER: string;
+  MAIL_SENDER: 'fake' | 'production';
+  EMAIL_SUBJECT_PEPPER: string;
 } {
   const smsSender =
     config.SMS_SENDER ??
+    (appEnv === 'development' ? 'fake' : 'production');
+  const mailSender =
+    config.MAIL_SENDER ??
     (appEnv === 'development' ? 'fake' : 'production');
 
   if (
@@ -272,6 +332,12 @@ function assertOtpSecrets(
     smsSender === 'fake'
   ) {
     fail(`SMS_SENDER=fake is forbidden when APP_ENV=${appEnv}`);
+  }
+  if (
+    (appEnv === 'staging' || appEnv === 'production') &&
+    mailSender === 'fake'
+  ) {
+    fail(`MAIL_SENDER=fake is forbidden when APP_ENV=${appEnv}`);
   }
 
   if (appEnv === 'staging' || appEnv === 'production') {
@@ -292,15 +358,30 @@ function assertOtpSecrets(
       );
     }
     if (
-      config.OTP_PEPPER === config.PHONE_SUBJECT_PEPPER ||
-      config.OTP_PEPPER === LOCAL_REFRESH_PEPPER
+      !config.EMAIL_SUBJECT_PEPPER ||
+      config.EMAIL_SUBJECT_PEPPER.length < 16 ||
+      config.EMAIL_SUBJECT_PEPPER === LOCAL_EMAIL_SUBJECT_PEPPER
     ) {
-      fail('OTP_PEPPER must be distinct from PHONE_SUBJECT_PEPPER / refresh pepper');
+      fail(
+        `EMAIL_SUBJECT_PEPPER must be a strong non-local secret when APP_ENV=${appEnv}`,
+      );
+    }
+    if (
+      config.OTP_PEPPER === config.PHONE_SUBJECT_PEPPER ||
+      config.OTP_PEPPER === LOCAL_REFRESH_PEPPER ||
+      config.OTP_PEPPER === config.EMAIL_SUBJECT_PEPPER ||
+      config.PHONE_SUBJECT_PEPPER === config.EMAIL_SUBJECT_PEPPER
+    ) {
+      fail(
+        'OTP_PEPPER / PHONE_SUBJECT_PEPPER / EMAIL_SUBJECT_PEPPER must be distinct',
+      );
     }
     return {
       SMS_SENDER: smsSender,
       OTP_PEPPER: config.OTP_PEPPER,
       PHONE_SUBJECT_PEPPER: config.PHONE_SUBJECT_PEPPER,
+      MAIL_SENDER: mailSender,
+      EMAIL_SUBJECT_PEPPER: config.EMAIL_SUBJECT_PEPPER,
     };
   }
 
@@ -313,11 +394,68 @@ function assertOtpSecrets(
     config.PHONE_SUBJECT_PEPPER.trim().length >= 16
       ? config.PHONE_SUBJECT_PEPPER.trim()
       : LOCAL_PHONE_SUBJECT_PEPPER;
+  const emailPepper =
+    config.EMAIL_SUBJECT_PEPPER &&
+    config.EMAIL_SUBJECT_PEPPER.trim().length >= 16
+      ? config.EMAIL_SUBJECT_PEPPER.trim()
+      : LOCAL_EMAIL_SUBJECT_PEPPER;
 
   return {
     SMS_SENDER: smsSender,
     OTP_PEPPER: otpPepper,
     PHONE_SUBJECT_PEPPER: phonePepper,
+    MAIL_SENDER: mailSender,
+    EMAIL_SUBJECT_PEPPER: emailPepper,
+  };
+}
+
+function assertOidcProviderConfig(
+  appEnv: AppEnvironment,
+  config: {
+    APPLE_CLIENT_IDS?: string;
+    APPLE_JWKS_JSON?: string;
+    GOOGLE_CLIENT_IDS?: string;
+    GOOGLE_JWKS_JSON?: string;
+    GOOGLE_CLIENT_SECRET?: string;
+    GOOGLE_REDIRECT_URIS?: string;
+    GOOGLE_PKCE_ENABLED: boolean;
+  },
+): {
+  APPLE_CLIENT_IDS: string[];
+  APPLE_JWKS_JSON?: string;
+  GOOGLE_CLIENT_IDS: string[];
+  GOOGLE_ISSUERS: string[];
+  GOOGLE_JWKS_JSON?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REDIRECT_URIS: string[];
+  GOOGLE_PKCE_ENABLED: boolean;
+} {
+  const appleIds = parseCsvList(config.APPLE_CLIENT_IDS);
+  const googleIds = parseCsvList(config.GOOGLE_CLIENT_IDS);
+  const googleRedirects = parseCsvList(config.GOOGLE_REDIRECT_URIS);
+
+  if (appEnv === 'staging' || appEnv === 'production') {
+    // Local JWKS JSON overrides are forbidden in real-user envs (fail-closed).
+    if (config.APPLE_JWKS_JSON || config.GOOGLE_JWKS_JSON) {
+      fail(
+        `APPLE_JWKS_JSON / GOOGLE_JWKS_JSON are forbidden when APP_ENV=${appEnv}`,
+      );
+    }
+    // Providers may be unconfigured (paid/ops gate) — requests fail-closed.
+    // Boot does not require client IDs until ops authorize production enablement.
+  }
+
+  return {
+    APPLE_CLIENT_IDS: appleIds,
+    APPLE_JWKS_JSON:
+      appEnv === 'development' ? config.APPLE_JWKS_JSON : undefined,
+    GOOGLE_CLIENT_IDS: googleIds,
+    GOOGLE_ISSUERS: [],
+    GOOGLE_JWKS_JSON:
+      appEnv === 'development' ? config.GOOGLE_JWKS_JSON : undefined,
+    GOOGLE_CLIENT_SECRET: config.GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URIS: googleRedirects,
+    GOOGLE_PKCE_ENABLED: config.GOOGLE_PKCE_ENABLED,
   };
 }
 
@@ -405,7 +543,20 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     SMS_SENDER: parsed.data.SMS_SENDER,
     OTP_PEPPER: parsed.data.OTP_PEPPER,
     PHONE_SUBJECT_PEPPER: parsed.data.PHONE_SUBJECT_PEPPER,
+    MAIL_SENDER: parsed.data.MAIL_SENDER,
+    EMAIL_SUBJECT_PEPPER: parsed.data.EMAIL_SUBJECT_PEPPER,
   });
+
+  const oidc = assertOidcProviderConfig(appEnv, {
+    APPLE_CLIENT_IDS: parsed.data.APPLE_CLIENT_IDS,
+    APPLE_JWKS_JSON: parsed.data.APPLE_JWKS_JSON,
+    GOOGLE_CLIENT_IDS: parsed.data.GOOGLE_CLIENT_IDS,
+    GOOGLE_JWKS_JSON: parsed.data.GOOGLE_JWKS_JSON,
+    GOOGLE_CLIENT_SECRET: parsed.data.GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URIS: parsed.data.GOOGLE_REDIRECT_URIS,
+    GOOGLE_PKCE_ENABLED: parsed.data.GOOGLE_PKCE_ENABLED ?? false,
+  });
+  const googleIssuers = parseCsvList(parsed.data.GOOGLE_ISSUERS);
 
   const result: AppEnv = {
     APP_ENV: appEnv,
@@ -429,6 +580,20 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     OTP_PEPPER: otpSecrets.OTP_PEPPER,
     PHONE_SUBJECT_PEPPER: otpSecrets.PHONE_SUBJECT_PEPPER,
     OTP_DESTINATION_KEY: parsed.data.OTP_DESTINATION_KEY,
+    MAIL_SENDER: otpSecrets.MAIL_SENDER,
+    EMAIL_SUBJECT_PEPPER: otpSecrets.EMAIL_SUBJECT_PEPPER,
+    APPLE_CLIENT_IDS: oidc.APPLE_CLIENT_IDS,
+    APPLE_ISSUER: parsed.data.APPLE_ISSUER,
+    APPLE_JWKS_URL: parsed.data.APPLE_JWKS_URL,
+    APPLE_JWKS_JSON: oidc.APPLE_JWKS_JSON,
+    GOOGLE_CLIENT_IDS: oidc.GOOGLE_CLIENT_IDS,
+    GOOGLE_ISSUERS: googleIssuers,
+    GOOGLE_JWKS_URL: parsed.data.GOOGLE_JWKS_URL,
+    GOOGLE_JWKS_JSON: oidc.GOOGLE_JWKS_JSON,
+    GOOGLE_TOKEN_URL: parsed.data.GOOGLE_TOKEN_URL,
+    GOOGLE_CLIENT_SECRET: oidc.GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URIS: oidc.GOOGLE_REDIRECT_URIS,
+    GOOGLE_PKCE_ENABLED: oidc.GOOGLE_PKCE_ENABLED,
   };
 
   if (appEnv === 'staging' || appEnv === 'production') {

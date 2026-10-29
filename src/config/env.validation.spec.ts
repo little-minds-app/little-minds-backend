@@ -64,6 +64,45 @@ describe('validateEnv', () => {
       ).toThrow(/SMS_SENDER=fake is forbidden/);
     });
 
+    it('blocks MAIL_SENDER=fake when APP_ENV=staging (explicit)', () => {
+      expect(() =>
+        validateEnv({
+          ...stagingAuthEnv,
+          APP_ENV: 'staging',
+          NODE_ENV: 'production',
+          PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
+          DATABASE_URL:
+            'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds_staging',
+          SMS_SENDER: 'production',
+          MAIL_SENDER: 'fake',
+        }),
+      ).toThrow(/MAIL_SENDER=fake is forbidden/);
+    });
+
+    it('defaults MAIL_SENDER=fake in development', () => {
+      const env = validateEnv({ APP_ENV: 'development' });
+      expect(env.MAIL_SENDER).toBe('fake');
+      expect(env.EMAIL_SUBJECT_PEPPER.length).toBeGreaterThanOrEqual(16);
+      expect(env.APPLE_CLIENT_IDS).toEqual([]);
+      expect(env.GOOGLE_PKCE_ENABLED).toBe(false);
+    });
+
+    it('forbids local JWKS JSON overrides in staging', () => {
+      expect(() =>
+        validateEnv({
+          ...stagingAuthEnv,
+          APP_ENV: 'staging',
+          NODE_ENV: 'production',
+          PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
+          DATABASE_URL:
+            'postgresql://app_user:s3curePass@db.staging.example.invalid:5432/little_minds_staging',
+          SMS_SENDER: 'production',
+          MAIL_SENDER: 'production',
+          APPLE_JWKS_JSON: '{"keys":[]}',
+        }),
+      ).toThrow(/APPLE_JWKS_JSON \/ GOOGLE_JWKS_JSON are forbidden/);
+    });
+
     it('blocks unpublished privacy catalog when APP_ENV=staging (explicit)', () => {
       expect(() =>
         validateEnv({

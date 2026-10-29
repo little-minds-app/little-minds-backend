@@ -9,15 +9,107 @@ All URIs are relative to *http://localhost:3000*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
+[**authenticateApple**](AuthApi.md#authenticateapple) | **POST** /v1/auth/apple | Apple Sign In with JWKS + mandatory nonce (ADR-021)
+[**authenticateGoogle**](AuthApi.md#authenticategoogle) | **POST** /v1/auth/google | Google Sign-In nonce or auth-code+PKCE (ADR-021)
 [**createDevParentSession**](AuthApi.md#createdevparentsession) | **POST** /v1/auth/dev/session | Local/test session bootstrap (development only)
+[**issueOidcNonce**](AuthApi.md#issueoidcnonce) | **POST** /v1/auth/oidc/nonce | Issue short-lived OIDC nonce (ADR-021)
 [**listParentSessions**](AuthApi.md#listparentsessions) | **GET** /v1/auth/sessions | List sessions for the authenticated parent
 [**logoutAllParentSessions**](AuthApi.md#logoutallparentsessions) | **POST** /v1/auth/logout-all | Revoke all sessions for the authenticated parent
 [**logoutParentSession**](AuthApi.md#logoutparentsession) | **POST** /v1/auth/logout | Revoke the current parent session
 [**refreshParentSession**](AuthApi.md#refreshparentsession) | **POST** /v1/auth/token/refresh | Rotate parent access and refresh tokens
 [**revokeParentSession**](AuthApi.md#revokeparentsession) | **DELETE** /v1/auth/sessions/{sessionId} | Revoke one owned session
+[**startEmailOtp**](AuthApi.md#startemailotp) | **POST** /v1/auth/email/start | Start Email OTP challenge (ADR-021)
+[**startGooglePkce**](AuthApi.md#startgooglepkce) | **POST** /v1/auth/google/pkce/start | Issue one-time Google PKCE OAuth transaction/state (ADR-021)
 [**startPhoneOtp**](AuthApi.md#startphoneotp) | **POST** /v1/auth/phone/start | Start GSM OTP challenge (ADR-020)
+[**verifyEmailOtp**](AuthApi.md#verifyemailotp) | **POST** /v1/auth/email/verify | Verify Email OTP and mint parent session (ADR-021)
 [**verifyPhoneOtp**](AuthApi.md#verifyphoneotp) | **POST** /v1/auth/phone/verify | Verify GSM OTP and mint parent session (ADR-020)
 
+
+# **authenticateApple**
+> TokenPairResponse authenticateApple(appleAuthRequest)
+
+Apple Sign In with JWKS + mandatory nonce (ADR-021)
+
+Verifies Apple ID token via JWKS (asymmetric), issuer/audience/exp/iat/sub, and mandatory single-use server nonce. U7 Option A creates parent on first success via mintSessionTx. Never trusts client-supplied Apple user id/email/name. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final appleAuthRequest = AppleAuthRequest(); // AppleAuthRequest | 
+
+try {
+    final result = api_instance.authenticateApple(appleAuthRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->authenticateApple: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **appleAuthRequest** | [**AppleAuthRequest**](AppleAuthRequest.md)|  | 
+
+### Return type
+
+[**TokenPairResponse**](TokenPairResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **authenticateGoogle**
+> TokenPairResponse authenticateGoogle(googleAuthRequest)
+
+Google Sign-In nonce or auth-code+PKCE (ADR-021)
+
+Prefer ID token + mandatory nonce. Else authorization_code + code_verifier + redirect_uri + **oauth_state** (from `POST /v1/auth/google/pkce/start`) — server atomically consumes the PKCE transaction, exchanges the code, then JWKS-verifies. Never accepts ID-token-without-nonce or unbound auth-code exchange. Fail-closed when Google config / PKCE disabled. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final googleAuthRequest = GoogleAuthRequest(); // GoogleAuthRequest | 
+
+try {
+    final result = api_instance.authenticateGoogle(googleAuthRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->authenticateGoogle: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **googleAuthRequest** | [**GoogleAuthRequest**](GoogleAuthRequest.md)|  | 
+
+### Return type
+
+[**TokenPairResponse**](TokenPairResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **createDevParentSession**
 > TokenPairResponse createDevParentSession(devSessionRequest)
@@ -50,6 +142,49 @@ Name | Type | Description  | Notes
 ### Return type
 
 [**TokenPairResponse**](TokenPairResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **issueOidcNonce**
+> OidcNonceResponse issueOidcNonce(oidcNonceRequest)
+
+Issue short-lived OIDC nonce (ADR-021)
+
+Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple or Google ID-token paths (`provider` required: apple|google). Single-use; TTL 600s. Rate-limited per IP. Cross-provider consume is rejected. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final oidcNonceRequest = OidcNonceRequest(); // OidcNonceRequest | 
+
+try {
+    final result = api_instance.issueOidcNonce(oidcNonceRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->issueOidcNonce: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **oidcNonceRequest** | [**OidcNonceRequest**](OidcNonceRequest.md)|  | 
+
+### Return type
+
+[**OidcNonceResponse**](OidcNonceResponse.md)
 
 ### Authorization
 
@@ -279,6 +414,92 @@ void (empty response body)
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+# **startEmailOtp**
+> EmailOtpStartResponse startEmailOtp(emailOtpStartRequest)
+
+Start Email OTP challenge (ADR-021)
+
+Unauthenticated. Applies email_norm_v1. Requires notice_version + notice_locale (KVKK Option A). Never returns OTP. deliveryState=sent required before verify. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final emailOtpStartRequest = EmailOtpStartRequest(); // EmailOtpStartRequest | 
+
+try {
+    final result = api_instance.startEmailOtp(emailOtpStartRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->startEmailOtp: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **emailOtpStartRequest** | [**EmailOtpStartRequest**](EmailOtpStartRequest.md)|  | 
+
+### Return type
+
+[**EmailOtpStartResponse**](EmailOtpStartResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **startGooglePkce**
+> GooglePkceStartResponse startGooglePkce(googlePkceStartRequest)
+
+Issue one-time Google PKCE OAuth transaction/state (ADR-021)
+
+Unauthenticated. Returns a server-issued opaque `state` bound to allowlisted `client_id`, `redirect_uri`, and PKCE `code_challenge` (S256). Single-use; TTL 600s. Required before `POST /v1/auth/google` authorization-code path (`oauth_state`). Fail-closed when PKCE disabled / Google misconfigured. Rate-limited per IP. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final googlePkceStartRequest = GooglePkceStartRequest(); // GooglePkceStartRequest | 
+
+try {
+    final result = api_instance.startGooglePkce(googlePkceStartRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->startGooglePkce: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **googlePkceStartRequest** | [**GooglePkceStartRequest**](GooglePkceStartRequest.md)|  | 
+
+### Return type
+
+[**GooglePkceStartResponse**](GooglePkceStartResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
 # **startPhoneOtp**
 > PhoneOtpStartResponse startPhoneOtp(phoneOtpStartRequest)
 
@@ -310,6 +531,49 @@ Name | Type | Description  | Notes
 ### Return type
 
 [**PhoneOtpStartResponse**](PhoneOtpStartResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **verifyEmailOtp**
+> TokenPairResponse verifyEmailOtp(emailOtpVerifyRequest)
+
+Verify Email OTP and mint parent session (ADR-021)
+
+Gate: status=pending and deliveryState=sent. U7 Option A creates parent on first success. No privacy fields on verify. No silent email link (LMP-36). 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final emailOtpVerifyRequest = EmailOtpVerifyRequest(); // EmailOtpVerifyRequest | 
+
+try {
+    final result = api_instance.verifyEmailOtp(emailOtpVerifyRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->verifyEmailOtp: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **emailOtpVerifyRequest** | [**EmailOtpVerifyRequest**](EmailOtpVerifyRequest.md)|  | 
+
+### Return type
+
+[**TokenPairResponse**](TokenPairResponse.md)
 
 ### Authorization
 

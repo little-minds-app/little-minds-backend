@@ -176,13 +176,15 @@ jobs:
         env:
           LM_PHONE_OTP_E2E: "1"
 
-      - name: Phone OTP HTTP e2e against Postgres
-        run: npm run test:e2e -- --ci --testPathPatterns=phone-otp
+      - name: Phone / Email / OIDC auth HTTP e2e against Postgres
+        run: npm run test:e2e -- --ci --testPathPatterns='phone-otp|email-otp|multi-provider-oidc'
         env:
           LM_PHONE_OTP_E2E: "1"
           SMS_SENDER: "fake"
+          MAIL_SENDER: "fake"
           OTP_PEPPER: "ci-otp-pepper-not-for-prod!!!!!!"
           PHONE_SUBJECT_PEPPER: "ci-phone-subject-pepper!!!!!"
+          EMAIL_SUBJECT_PEPPER: "ci-email-subject-pepper!!!!!"
           APP_ENV: development
           NODE_ENV: test
           AUTH_DEV_BOOTSTRAP_ENABLED: "false"

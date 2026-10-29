@@ -8,7 +8,7 @@
 | **Blueprint** | F-031 · §12 Auth · §13.1 / §29 · §31.1 / ADR-002 · §31.4 privacy · §36.2 Apple name draft · §38 ownership |
 | **Depends on** | [ADR-019](./ADR-019-parent-identity-secure-session-lifecycle.md) (**Accepted**) — sole session mint port · [ADR-020](./ADR-020-gsm-otp-sign-in.md) (**Accepted**) — OTP / notice / delivery-gating patterns for Email OTP |
 | **Repos** | `little-minds-backend` only. Client ADR index sync = separate client PR (deferred process) |
-| **Companion sketch** | [`lmp-35-multi-provider-api-contract-sketch.md`](./lmp-35-multi-provider-api-contract-sketch.md) (non-live; live OpenAPI stays **`0.5.0`** until a future implementation PR proposes **`0.6.0`**) |
+| **Companion sketch** | [`lmp-35-multi-provider-api-contract-sketch.md`](./lmp-35-multi-provider-api-contract-sketch.md) (live OpenAPI **`0.6.1`**) |
 
 > **Decision:** Human Accepted ADR-021 on 2026-10-28: architecture; **U7 Option A**; Apple **mandatory nonce + JWKS** ID-token verify; Google **prefer nonce** (e.g. iOS 9+) else **authorization-code + PKCE only** (no weak ID-token-without-nonce fallback; fail-closed); **`email_norm_v1`** (preserve local-part case; reject Unicode local; no provider collapse); Email OTP limits **3/10 subject**, **10/40 IP**, **2000/day** unactivated ceiling; verify only **`deliveryState=sent`**; no silent email link (**LMP-36** owns linking). Paid providers / production email remain **unapproved**. **Phase B is not authorized** by Accept alone — requires human merge of this docs PR + separate Phase B kickoff. No Jira Done from this docs PR.
 
@@ -239,7 +239,7 @@ All success paths use `mintSessionTx` in the same DB txn as identity create/cons
 | **U15** | Delivery gating | **Accepted** | Verify only `deliveryState=sent`; no auto-resend |
 | **U16** | Apple verify | **Accepted** | JWKS + **mandatory nonce** + claim matrix §4 |
 | **U17** | Anti-enumeration | **Accepted** | Uniform errors |
-| **U18** | OpenAPI | **Accepted** | Impl **`0.6.0`**; this PR keeps **`0.5.0`** |
+| **U18** | OpenAPI | **Accepted** | Phase B **`0.6.0`**; remediation **`0.6.1`** (`pkce/start` + provider-bound nonce) |
 | **U19** | Apple name draft | **Accepted** | `profile_drafts` / §36.2 |
 | **U20** | Client ADR sync | **Deferred process** | Separate client PR |
 | **U21** | Google path | **Accepted** | Prefer nonce ID-token; else **auth-code+PKCE only**; no weak ID-token-without-nonce; fail-closed |

@@ -19,7 +19,8 @@ export type AuthErrorCode =
   | 'database_unavailable'
   | 'otp_invalid'
   | 'otp_cooldown'
-  | 'sms_unavailable';
+  | 'sms_unavailable'
+  | 'mail_unavailable';
 
 export function authErrorBody(
   error: AuthErrorCode,
@@ -77,6 +78,15 @@ export function throwOtpCooldown(message = 'Please wait before requesting anothe
 export function throwSmsUnavailable(message = 'SMS temporarily unavailable'): never {
   throw new HttpException(
     authErrorBody('sms_unavailable', message),
+    HttpStatus.SERVICE_UNAVAILABLE,
+  );
+}
+
+export function throwMailUnavailable(
+  message = 'Mail temporarily unavailable',
+): never {
+  throw new HttpException(
+    authErrorBody('mail_unavailable', message),
     HttpStatus.SERVICE_UNAVAILABLE,
   );
 }

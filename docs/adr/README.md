@@ -64,7 +64,7 @@ See the [canonical client ADR index](https://github.com/little-minds-app/little-
 
 | ADR | Title | Jira | Notes |
 |---|---|---|---|
-| **ADR-021 (Accepted 2026-10-28)** | Multi-provider parent identity — Apple, Google, Email OTP | [LMP-35](https://little-minds-app.atlassian.net/browse/LMP-35) | PO Accept: **U7 Option A**; Apple JWKS + **mandatory nonce**; Google prefer nonce else **auth-code+PKCE only** (fail-closed); **`email_norm_v1`** (preserve local case; reject Unicode local); Email OTP **3/10** subject, **10/40** IP, **2000/day** unactivated; **`deliveryState=sent`**; no silent email link (**LMP-36**). Live OpenAPI **`0.5.0`**; impl sketch **`0.6.0`**. Phase B = separate PR after docs merge auth. [Decision](./ADR-021-multi-provider-identity-adapters.md) · [Sketch](./lmp-35-multi-provider-api-contract-sketch.md). |
+| **ADR-021 (Accepted 2026-10-28)** | Multi-provider parent identity — Apple, Google, Email OTP | [LMP-35](https://little-minds-app.atlassian.net/browse/LMP-35) | PO Accept: **U7 Option A**; Apple JWKS + **mandatory nonce**; Google prefer nonce else **auth-code+PKCE** with **server-issued oauth_state** (fail-closed); **`email_norm_v1`** (preserve local case; reject Unicode local); Email OTP **3/10** subject, **10/40** IP, **2000/day** unactivated; **`deliveryState=sent`**; no silent email link (**LMP-36**). Live OpenAPI **`0.6.1`**. [Decision](./ADR-021-multi-provider-identity-adapters.md) · [Sketch](./lmp-35-multi-provider-api-contract-sketch.md). |
 
 ---
 
