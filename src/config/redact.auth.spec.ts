@@ -25,4 +25,20 @@ describe('auth privacy redaction (LMP-33)', () => {
       session_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     });
   });
+
+  it('allows LMP-36 link audit context without parent_id / subject leak', () => {
+    const projected = allowlistAndRedactContext({
+      link_event: 'account_link_collision',
+      link_outcome: 'collision_other_parent',
+      link_provider: 'apple',
+      parent_id: '11111111-1111-4111-8111-111111111111',
+      provider_subject: 'raw-sub-must-drop',
+    });
+    expect(projected).toEqual({
+      link_event: 'account_link_collision',
+      link_outcome: 'collision_other_parent',
+      link_provider: 'apple',
+    });
+  });
 });
+

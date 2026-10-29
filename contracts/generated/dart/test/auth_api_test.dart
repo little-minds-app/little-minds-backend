@@ -44,12 +44,30 @@ void main() {
       // TODO
     });
 
+    // Issue recent-auth step-up token for identity linking (LMP-36)
+    //
+    // Authenticated parent proves control of an identity **already linked** to their account (Apple/Google/email/phone proof). Server returns a short-lived opaque `step_up_token` bound to parent + session + purpose `identity_link`. Access-token refresh alone is **not** recent auth. Token is single-use; stale/replayed/cross-parent consume fails closed. 
+    //
+    //Future<StepUpResponse> createIdentityLinkStepUp(StepUpRequest stepUpRequest) async
+    test('test createIdentityLinkStepUp', () async {
+      // TODO
+    });
+
     // Issue short-lived OIDC nonce (ADR-021)
     //
     // Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple or Google ID-token paths (`provider` required: apple|google). Single-use; TTL 600s. Rate-limited per IP. Cross-provider consume is rejected. 
     //
     //Future<OidcNonceResponse> issueOidcNonce(OidcNonceRequest oidcNonceRequest) async
     test('test issueOidcNonce', () async {
+      // TODO
+    });
+
+    // Explicitly link a verified provider identity (LMP-36)
+    //
+    // Authenticated parent links another provider after **server-issued step-up** (`step_up_token` from `POST /v1/auth/identities/step-up`) **and** fresh target-provider proof (Apple/Google ID-token or PKCE, or email/phone OTP). Access-token refresh alone is not recent auth. No silent merge and no email/name/phone inference. On collision returns `409 identity_collision` without disclosing the other family. Unlink/recovery deferred. 
+    //
+    //Future<LinkIdentityResponse> linkParentIdentity(LinkIdentityRequest linkIdentityRequest) async
+    test('test linkParentIdentity', () async {
       // TODO
     });
 

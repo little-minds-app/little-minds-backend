@@ -23,6 +23,8 @@ doc/GooglePkceStartRequest.md
 doc/GooglePkceStartResponse.md
 doc/HealthApi.md
 doc/HealthStatus.md
+doc/LinkIdentityRequest.md
+doc/LinkIdentityResponse.md
 doc/LogoutAllResponse.md
 doc/LogoutRequest.md
 doc/OidcNonceRequest.md
@@ -37,6 +39,8 @@ doc/PhoneOtpVerifyRequest.md
 doc/ReadinessStatus.md
 doc/ReadinessStatusChecks.md
 doc/RefreshTokenRequest.md
+doc/StepUpRequest.md
+doc/StepUpResponse.md
 doc/TokenPairResponse.md
 git_push.sh
 lib/api.dart
@@ -69,6 +73,8 @@ lib/model/google_auth_request.dart
 lib/model/google_pkce_start_request.dart
 lib/model/google_pkce_start_response.dart
 lib/model/health_status.dart
+lib/model/link_identity_request.dart
+lib/model/link_identity_response.dart
 lib/model/logout_all_response.dart
 lib/model/logout_request.dart
 lib/model/oidc_nonce_request.dart
@@ -82,6 +88,8 @@ lib/model/phone_otp_verify_request.dart
 lib/model/readiness_status.dart
 lib/model/readiness_status_checks.dart
 lib/model/refresh_token_request.dart
+lib/model/step_up_request.dart
+lib/model/step_up_response.dart
 lib/model/token_pair_response.dart
 pubspec.yaml
 test/activity_event_provenance_test.dart
@@ -104,6 +112,8 @@ test/google_pkce_start_request_test.dart
 test/google_pkce_start_response_test.dart
 test/health_api_test.dart
 test/health_status_test.dart
+test/link_identity_request_test.dart
+test/link_identity_response_test.dart
 test/logout_all_response_test.dart
 test/logout_request_test.dart
 test/oidc_nonce_request_test.dart
@@ -118,4 +128,6 @@ test/phone_otp_verify_request_test.dart
 test/readiness_status_checks_test.dart
 test/readiness_status_test.dart
 test/refresh_token_request_test.dart
+test/step_up_request_test.dart
+test/step_up_response_test.dart
 test/token_pair_response_test.dart

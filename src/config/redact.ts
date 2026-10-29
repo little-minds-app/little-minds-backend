@@ -80,6 +80,10 @@ export const STRUCTURED_LOG_ALLOWLIST = new Set([
   'revoke_reason',
   'client_surface',
   'session_error',
+  // LMP-36 account linking (never parent_id / provider subjects / PII)
+  'link_event',
+  'link_outcome',
+  'link_provider',
 ]);
 
 /**

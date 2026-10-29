@@ -324,6 +324,104 @@ export class EmailOtpService {
     }
   }
 
+  /** LMP-36 — consume email OTP and return subject for explicit linking (own txn). */
+  async consumeVerifiedSubjectForLink(
+    req: Request,
+    input: { challengeId: string; code: string },
+  ): Promise<string> {
+    if (!/^[0-9]{6}$/.test(input.code)) {
+      throwInvalidRequest('Invalid request');
+    }
+    if (!isUuidV4OrV7(input.challengeId)) {
+      throwOtpInvalid();
+    }
+
+    const ip = clientIp(req);
+    await this.abuse.assertAndIncrementEmailVerifyIp(ip);
+
+    const outcome = await this.prisma.db.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<
+        Array<{
+          id: string;
+          provider: string;
+          subject_key: string;
+          code_hash: string;
+          status: OtpChallengeStatus;
+          delivery_state: OtpDeliveryState;
+          attempt_count: number;
+          expires_at: Date;
+        }>
+      >`
+        SELECT id, provider, subject_key, code_hash, status, delivery_state,
+               attempt_count, expires_at
+        FROM otp_challenges
+        WHERE id = ${input.challengeId}::uuid
+        FOR UPDATE
+      `;
+      if (locked.length === 0) {
+        return { kind: 'invalid' as const };
+      }
+      const row = locked[0];
+      if (row.provider !== EMAIL_PROVIDER) {
+        return { kind: 'invalid' as const };
+      }
+      const clock = await tx.$queryRaw<Array<{ now: Date }>>`
+        SELECT clock_timestamp() AS now
+      `;
+      const now = clock[0]?.now ?? new Date();
+      if (row.status !== OtpChallengeStatus.pending) {
+        return { kind: 'invalid' as const };
+      }
+      if (row.delivery_state !== OtpDeliveryState.sent) {
+        return { kind: 'invalid' as const };
+      }
+      if (row.expires_at <= now) {
+        await tx.otpChallenge.update({
+          where: { id: row.id },
+          data: { status: OtpChallengeStatus.expired },
+        });
+        return { kind: 'invalid' as const };
+      }
+      const ok = verifyOtpCode(
+        this.otpPepper(),
+        row.id,
+        row.subject_key,
+        input.code,
+        row.code_hash,
+      );
+      if (!ok) {
+        const nextAttempts = row.attempt_count + 1;
+        await tx.otpChallenge.update({
+          where: { id: row.id },
+          data: {
+            attemptCount: nextAttempts,
+            status:
+              nextAttempts >= EMAIL_OTP_MAX_WRONG_ATTEMPTS
+                ? OtpChallengeStatus.locked
+                : OtpChallengeStatus.pending,
+          },
+        });
+        return nextAttempts >= EMAIL_OTP_MAX_WRONG_ATTEMPTS
+          ? { kind: 'locked' as const }
+          : { kind: 'invalid' as const };
+      }
+      await tx.otpChallenge.update({
+        where: { id: row.id },
+        data: {
+          status: OtpChallengeStatus.consumed,
+          consumedAt: now,
+          codeHash: '',
+        },
+      });
+      return { kind: 'ok' as const, subjectKey: row.subject_key };
+    });
+
+    if (outcome.kind !== 'ok') {
+      throwOtpInvalid();
+    }
+    return outcome.subjectKey;
+  }
+
   async verify(req: Request, input: EmailVerifyInput): Promise<TokenPair> {
     if (!/^[0-9]{6}$/.test(input.code)) {
       throwInvalidRequest('Invalid request');
@@ -451,4 +549,5 @@ export class EmailOtpService {
     }
     return this.sessions.signTokenPair(outcome.minted);
   }
+
 }

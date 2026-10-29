@@ -84,16 +84,20 @@ export class AppleIdentityService {
     }
   }
 
-  async authenticate(_req: Request, input: AppleAuthInput): Promise<TokenPair> {
-    this.assertNotice(input.noticeVersion, input.noticeLocale);
-
+  /**
+   * LMP-36 — verify Apple ID token + consume nonce without resolve/mint.
+   * Used by explicit account linking (fresh provider proof / step-up).
+   */
+  async verifyProofForLink(input: {
+    idToken: string;
+    nonce: string;
+  }): Promise<{ sub: string }> {
     const audiences = this.audiences();
     if (audiences.length === 0) {
       this.logger.warn('apple_auth_misconfigured missing_client_ids');
       throwUnauthorized('invalid_token', 'Invalid token');
     }
 
-    // 1) Verify ID token + nonce claim first (does not consume server nonce).
     const verified = await verifyOidcIdToken({
       idToken: input.idToken,
       audiences,
@@ -109,8 +113,17 @@ export class AppleIdentityService {
       throwUnauthorized('invalid_token', 'Invalid token');
     }
 
-    // 2) Atomically consume provider-bound nonce (single-use / cross-provider reject).
     await this.nonces.consumeAfterVerify(input.nonce, 'apple');
+    return { sub: verified.sub };
+  }
+
+  async authenticate(_req: Request, input: AppleAuthInput): Promise<TokenPair> {
+    this.assertNotice(input.noticeVersion, input.noticeLocale);
+
+    const { sub } = await this.verifyProofForLink({
+      idToken: input.idToken,
+      nonce: input.nonce,
+    });
 
     const noticePresentedAt = new Date();
     const outcome = await this.prisma.db.$transaction(async (tx) => {
@@ -120,7 +133,7 @@ export class AppleIdentityService {
       const now = clock[0]?.now ?? new Date();
       const parentId = await this.resolve.resolveOrCreateParentTx(tx, {
         provider: APPLE_PROVIDER,
-        providerSubject: verified.sub,
+        providerSubject: sub,
         verifiedContact: null,
         noticeVersion: input.noticeVersion,
         noticeLocale: input.noticeLocale,

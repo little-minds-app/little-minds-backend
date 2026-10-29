@@ -43,6 +43,7 @@ import {
   OTP_TTL_SECONDS,
   PHONE_PROVIDER,
 } from './otp.constants';
+import { identitySubjectLockKey } from '../resolve/identity-subject-lock';
 
 export type PhoneStartInput = {
   phone: string;
@@ -368,6 +369,104 @@ export class PhoneOtpService {
     }
   }
 
+  /** LMP-36 — consume phone OTP and return subject for explicit linking (own txn). */
+  async consumeVerifiedSubjectForLink(
+    req: Request,
+    input: { challengeId: string; code: string },
+  ): Promise<string> {
+    if (!/^[0-9]{6}$/.test(input.code)) {
+      throwInvalidRequest('Invalid request');
+    }
+    if (!isUuidV4OrV7(input.challengeId)) {
+      throwOtpInvalid();
+    }
+
+    const ip = clientIp(req);
+    await this.abuse.assertAndIncrementVerifyIp(ip);
+
+    const outcome = await this.prisma.db.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<
+        Array<{
+          id: string;
+          provider: string;
+          subject_key: string;
+          code_hash: string;
+          status: OtpChallengeStatus;
+          delivery_state: OtpDeliveryState;
+          attempt_count: number;
+          expires_at: Date;
+        }>
+      >`
+        SELECT id, provider, subject_key, code_hash, status, delivery_state,
+               attempt_count, expires_at
+        FROM otp_challenges
+        WHERE id = ${input.challengeId}::uuid
+        FOR UPDATE
+      `;
+      if (locked.length === 0) {
+        return { kind: 'invalid' as const };
+      }
+      const row = locked[0];
+      if (row.provider !== PHONE_PROVIDER) {
+        return { kind: 'invalid' as const };
+      }
+      const clock = await tx.$queryRaw<Array<{ now: Date }>>`
+        SELECT clock_timestamp() AS now
+      `;
+      const now = clock[0]?.now ?? new Date();
+      if (row.status !== OtpChallengeStatus.pending) {
+        return { kind: 'invalid' as const };
+      }
+      if (row.delivery_state !== OtpDeliveryState.sent) {
+        return { kind: 'invalid' as const };
+      }
+      if (row.expires_at <= now) {
+        await tx.otpChallenge.update({
+          where: { id: row.id },
+          data: { status: OtpChallengeStatus.expired },
+        });
+        return { kind: 'invalid' as const };
+      }
+      const ok = verifyOtpCode(
+        this.otpPepper(),
+        row.id,
+        row.subject_key,
+        input.code,
+        row.code_hash,
+      );
+      if (!ok) {
+        const nextAttempts = row.attempt_count + 1;
+        await tx.otpChallenge.update({
+          where: { id: row.id },
+          data: {
+            attemptCount: nextAttempts,
+            status:
+              nextAttempts >= OTP_MAX_WRONG_ATTEMPTS
+                ? OtpChallengeStatus.locked
+                : OtpChallengeStatus.pending,
+          },
+        });
+        return nextAttempts >= OTP_MAX_WRONG_ATTEMPTS
+          ? { kind: 'locked' as const }
+          : { kind: 'invalid' as const };
+      }
+      await tx.otpChallenge.update({
+        where: { id: row.id },
+        data: {
+          status: OtpChallengeStatus.consumed,
+          consumedAt: now,
+          codeHash: '',
+        },
+      });
+      return { kind: 'ok' as const, subjectKey: row.subject_key };
+    });
+
+    if (outcome.kind !== 'ok') {
+      throwOtpInvalid();
+    }
+    return outcome.subjectKey;
+  }
+
   async verify(req: Request, input: PhoneVerifyInput): Promise<TokenPair> {
     if (!/^[0-9]{6}$/.test(input.code)) {
       throwInvalidRequest('Invalid request');
@@ -496,6 +595,11 @@ export class PhoneOtpService {
     return this.sessions.signTokenPair(outcome.minted);
   }
 
+  /**
+   * Identity resolve/create under the shared `identity:provider:subject`
+   * advisory lock (same family as LMP-35 resolve + LMP-36 link) so concurrent
+   * GSM verify vs explicit link cannot create duplicate parents for one phone.
+   */
   private async resolveOrCreateParentTx(
     tx: TxClient,
     args: {
@@ -507,6 +611,9 @@ export class PhoneOtpService {
       now: Date;
     },
   ): Promise<string> {
+    const lockKey = identitySubjectLockKey(PHONE_PROVIDER, args.subjectKey);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
+
     const existing = await tx.parentIdentity.findFirst({
       where: {
         provider: PHONE_PROVIDER,
@@ -526,36 +633,60 @@ export class PhoneOtpService {
       return existing.parentId;
     }
 
-    const parentId = randomUUID();
-    await tx.parentAccount.create({
-      data: {
-        id: parentId,
-        locale: 'tr-TR',
-        timezone: 'Europe/Istanbul',
-        lifecycle: ParentAccountLifecycle.active,
-      },
-    });
-    await tx.parentIdentity.create({
-      data: {
-        id: randomUUID(),
-        parentId,
+    // Unlinked historical row still occupies unique (provider, subject) —
+    // do not silently relink (LMP-36). Uniform otp_invalid.
+    const anyRow = await tx.parentIdentity.findFirst({
+      where: {
         provider: PHONE_PROVIDER,
         providerSubject: args.subjectKey,
-        verifiedContact: null,
-        verifiedAt: args.now,
       },
+      select: { id: true },
     });
-    await tx.privacyNoticeAcknowledgment.create({
-      data: {
-        id: randomUUID(),
-        parentId,
-        noticeVersion: args.noticeVersion,
-        locale: args.noticeLocale,
-        presentedAt: args.noticePresentedAt,
-        acknowledgedAt: args.now,
-        surface: args.presentationSurface ?? 'phone_start',
-      },
-    });
-    return parentId;
+    if (anyRow) {
+      throwOtpInvalid();
+    }
+
+    const parentId = randomUUID();
+    try {
+      await tx.parentAccount.create({
+        data: {
+          id: parentId,
+          locale: 'tr-TR',
+          timezone: 'Europe/Istanbul',
+          lifecycle: ParentAccountLifecycle.active,
+        },
+      });
+      await tx.parentIdentity.create({
+        data: {
+          id: randomUUID(),
+          parentId,
+          provider: PHONE_PROVIDER,
+          providerSubject: args.subjectKey,
+          verifiedContact: null,
+          verifiedAt: args.now,
+        },
+      });
+      await tx.privacyNoticeAcknowledgment.create({
+        data: {
+          id: randomUUID(),
+          parentId,
+          noticeVersion: args.noticeVersion,
+          locale: args.noticeLocale,
+          presentedAt: args.noticePresentedAt,
+          acknowledgedAt: args.now,
+          surface: args.presentationSurface ?? 'phone_start',
+        },
+      });
+      return parentId;
+    } catch (err) {
+      const code =
+        err && typeof err === 'object' && 'code' in err
+          ? (err as { code?: string }).code
+          : undefined;
+      this.logger.warn(
+        `phone_identity_create_failed code=${code ?? 'unknown'}`,
+      );
+      throwOtpInvalid();
+    }
   }
 }

@@ -187,6 +187,63 @@ class AuthApi {
     return null;
   }
 
+  /// Issue recent-auth step-up token for identity linking (LMP-36)
+  ///
+  /// Authenticated parent proves control of an identity **already linked** to their account (Apple/Google/email/phone proof). Server returns a short-lived opaque `step_up_token` bound to parent + session + purpose `identity_link`. Access-token refresh alone is **not** recent auth. Token is single-use; stale/replayed/cross-parent consume fails closed. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [StepUpRequest] stepUpRequest (required):
+  Future<Response> createIdentityLinkStepUpWithHttpInfo(StepUpRequest stepUpRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/identities/step-up';
+
+    // ignore: prefer_final_locals
+    Object? postBody = stepUpRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Issue recent-auth step-up token for identity linking (LMP-36)
+  ///
+  /// Authenticated parent proves control of an identity **already linked** to their account (Apple/Google/email/phone proof). Server returns a short-lived opaque `step_up_token` bound to parent + session + purpose `identity_link`. Access-token refresh alone is **not** recent auth. Token is single-use; stale/replayed/cross-parent consume fails closed. 
+  ///
+  /// Parameters:
+  ///
+  /// * [StepUpRequest] stepUpRequest (required):
+  Future<StepUpResponse?> createIdentityLinkStepUp(StepUpRequest stepUpRequest, { Future<void>? abortTrigger, }) async {
+    final response = await createIdentityLinkStepUpWithHttpInfo(stepUpRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'StepUpResponse',) as StepUpResponse;
+    
+    }
+    return null;
+  }
+
   /// Issue short-lived OIDC nonce (ADR-021)
   ///
   /// Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple or Google ID-token paths (`provider` required: apple|google). Single-use; TTL 600s. Rate-limited per IP. Cross-provider consume is rejected. 
@@ -239,6 +296,63 @@ class AuthApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'OidcNonceResponse',) as OidcNonceResponse;
+    
+    }
+    return null;
+  }
+
+  /// Explicitly link a verified provider identity (LMP-36)
+  ///
+  /// Authenticated parent links another provider after **server-issued step-up** (`step_up_token` from `POST /v1/auth/identities/step-up`) **and** fresh target-provider proof (Apple/Google ID-token or PKCE, or email/phone OTP). Access-token refresh alone is not recent auth. No silent merge and no email/name/phone inference. On collision returns `409 identity_collision` without disclosing the other family. Unlink/recovery deferred. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [LinkIdentityRequest] linkIdentityRequest (required):
+  Future<Response> linkParentIdentityWithHttpInfo(LinkIdentityRequest linkIdentityRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/identities/link';
+
+    // ignore: prefer_final_locals
+    Object? postBody = linkIdentityRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Explicitly link a verified provider identity (LMP-36)
+  ///
+  /// Authenticated parent links another provider after **server-issued step-up** (`step_up_token` from `POST /v1/auth/identities/step-up`) **and** fresh target-provider proof (Apple/Google ID-token or PKCE, or email/phone OTP). Access-token refresh alone is not recent auth. No silent merge and no email/name/phone inference. On collision returns `409 identity_collision` without disclosing the other family. Unlink/recovery deferred. 
+  ///
+  /// Parameters:
+  ///
+  /// * [LinkIdentityRequest] linkIdentityRequest (required):
+  Future<LinkIdentityResponse?> linkParentIdentity(LinkIdentityRequest linkIdentityRequest, { Future<void>? abortTrigger, }) async {
+    final response = await linkParentIdentityWithHttpInfo(linkIdentityRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'LinkIdentityResponse',) as LinkIdentityResponse;
     
     }
     return null;
