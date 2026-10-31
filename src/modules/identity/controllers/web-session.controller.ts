@@ -1,4 +1,6 @@
 import { Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { AppEnv } from '../../../config/env.validation';
 import type { Request } from 'express';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { throwUnauthorized } from '../session/auth.errors';
@@ -7,7 +9,7 @@ import { WebParentSessionService } from '../session/web-parent-session.service';
 
 @Controller('v1/auth/web')
 export class WebSessionController {
-  constructor(private readonly webSessions: WebParentSessionService) {}
+  constructor(private readonly webSessions: WebParentSessionService, private readonly config: ConfigService<AppEnv, true>) {}
 
   /** Called only by the Next.js BFF after it verifies OTP on the backend. */
   @Post('session')
@@ -15,7 +17,7 @@ export class WebSessionController {
   @UseGuards(ParentAuthGuard)
   async create(@Req() request: Request) {
     // Require a separate BFF-to-backend secret, not merely a web bearer token.
-    const expected = process.env.LM_WEB_BFF_SECRET;
+    const expected = this.config.get('LM_WEB_BFF_SECRET', { infer: true });
     const supplied = request.headers['x-lm-bff-secret'];
     if (!expected || expected.length < 32 || typeof supplied !== 'string') {
       throwUnauthorized('invalid_token', 'Untrusted web session exchange');
