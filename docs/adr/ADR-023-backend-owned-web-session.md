@@ -1,6 +1,6 @@
-# ADR-023 — Backend-owned opaque parent web session (DECISION FOR HUMAN APPROVAL)
+# ADR-023 — Backend-owned opaque parent web session (ACCEPTED SECURITY DECISION)
 
-**Status: Proposed — security/product decision awaiting explicit human approval (NOT Accepted).**\n\n**Jira:** LMP-38 · **Blueprint:** canonical client `docs/LITTLE_MINDS_PRODUCT_BLUEPRINT_v2.6.md` (V2.7 baseline), F-001, F-015, F-031, §§12, 21, 29, 31, 38 · **Accepted dependencies:** ADR-014 (canonical docs/contract ownership), ADR-019 (sessions), ADR-020 (GSM OTP/privacy), ADR-021 (multi-provider) · **Implementation PRs:** backend #22 + client #16 (both Draft).\n\n**Decision request:** Accept the proposed backend-owned web session boundary plus the *proposed* 30-minute inactivity timeout defined below. This is a material change from the existing implementation: **the current backend checks absolute expiration, but does not enforce the 30-minute idle timeout.** Approval is not permission to merge unfinished code.
+**Status: Accepted — explicit Product Owner approval on 2026-10-31. Implementation and merge remain separate gates.**\n\n**Jira:** LMP-38 · **Blueprint:** canonical client `docs/LITTLE_MINDS_PRODUCT_BLUEPRINT_v2.6.md` (V2.7 baseline), F-001, F-015, F-031, §§12, 21, 29, 31, 38 · **Accepted dependencies:** ADR-014 (canonical docs/contract ownership), ADR-019 (sessions), ADR-020 (GSM OTP/privacy), ADR-021 (multi-provider) · **Implementation PRs:** backend #22 + client #16 (both Draft).\n\n**Approved decision:** Backend-owned web session boundary and **30-minute meaningful-activity inactivity timeout** were explicitly accepted by the Product Owner on 2026-10-31. This is a material change from the existing implementation: **the current backend checks absolute expiration, but does not enforce the 30-minute idle timeout.** Approval is not permission to merge unfinished code.
 
 ## Security model
 
@@ -10,9 +10,9 @@
 4. On `GET /v1/auth/web/me`, the backend hashes the opaque handle with a domain-separated HMAC key and looks up the durable record in PostgreSQL. Every request rechecks the bound parent account and parent session's active/expiry state. **No refresh occurs.** Multiple Next/backend replicas can authorize simultaneously without rotating the same token. This avoids the cross-replica replay race by design.
 5. `POST /v1/auth/web/logout` revokes the opaque handle and its underlying parent session, idempotently. Existing logout-all and account deletion invalidate linked web sessions by invalidating their parent sessions. Expiry is bounded by the original parent session's absolute lifetime (30 days).
 
-## Proposed normative session lifetime and security policy (awaiting PO/security approval)
+## Accepted normative session lifetime and security policy
 
-| Property | Proposed decision | Verification |
+| Property | Accepted decision | Verification |
 |---|---|---|
 | Absolute lifetime | 30 days from the original `parent_sessions.created_at`; **never** extended by activity | Time-travel / DB expiry and browser denial |
 | Inactivity timeout | **30 minutes** since most recent successful authenticated web activity, independent of absolute expiry | At 29m59s authorized; at 30m+ denied; clock skew boundary tests |
@@ -31,14 +31,14 @@
 ### Decision and approval record
 
 - **Proposal owner:** LMP-38 implementation team.
-- **Product owner/security decision:** **PENDING**. A message authorizing preparation is **not** an explicit Accept of the timeout/session design.
-- **Human acceptance required:** Explicit approval of (a) 30-day non-sliding absolute lifetime; (b) 30-minute meaningful-activity inactivity timeout; (c) opaque backend session/BFF boundary; (d) follow-up implementation and testing gates.
-- **Upon acceptance:** Record approver/date and decision in this ADR and the Jira issue, synchronize the canonical client ADR index under ADR-014, then implement and test the resulting specification. Keep PRs Draft until all acceptance evidence passes.
+- **Product owner decision:** **ACCEPTED 2026-10-31** — user explicitly approved 30-day absolute lifetime, 30-minute inactivity timeout and documented security conditions. Independent deployment/security verification remains required.
+- **Human acceptance recorded:** Explicit approval of (a) 30-day non-sliding absolute lifetime; (b) 30-minute meaningful-activity inactivity timeout; (c) opaque backend session/BFF boundary; (d) follow-up implementation and testing gates.
+- **After acceptance:** Record the decision in Jira, synchronize canonical client ADR index under ADR-014, and implement/test the specified policy. Keep PRs Draft until all acceptance evidence passes.
 
 ## Tradeoffs
 
 - A stolen opaque handle remains a bearer credential until revoked/expired; cookie security, CSRF protection, TLS, short reasonable absolute expiry, and session revocation are required.
-- No extension of absolute lifetime: on expiry the parent signs in again. **Proposed 30-minute meaningful-activity inactivity policy** is separate and currently unimplemented; do not confuse an idle activity clock with refresh token rotation.
+- No extension of absolute lifetime: on expiry the parent signs in again. **Accepted 30-minute meaningful-activity inactivity policy** is separate and currently unimplemented; do not confuse an idle activity clock with refresh token rotation.
 - A backend outage is not equivalent to an invalid session; Next must show retry instead of clearing the cookie on 503.
 - The existing OTP verify API still returns native credentials to its *trusted server caller*. This does not imply a browser may receive those tokens; Next must keep this exchange server-side.
 - The backend currently accepts `X-LM-Web-Session` as a bearer handle from Next and does not itself set cookies; strict origin/CSRF protection is enforced at the same-origin BFF boundary. A production deployment must ensure the backend is not inadvertently exposed to unauthenticated cross-origin browser callers.
