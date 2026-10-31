@@ -2,6 +2,20 @@ import { stagingAuthEnv } from '../../test/fixtures/auth/keys';
 import { validateEnv } from './env.validation';
 
 describe('validateEnv', () => {
+  it('rejects missing or placeholder BFF secret before staging boot', () => {
+    const env = {
+      ...stagingAuthEnv,
+      APP_ENV: 'staging',
+      NODE_ENV: 'production',
+      PUBLIC_API_BASE_URL: 'https://api.staging.example.invalid',
+      DATABASE_URL: 'postgresql://app_user:secure@db.staging.example.invalid:5432/little_minds',
+    };
+    expect(() => validateEnv({ ...env, LM_WEB_BFF_SECRET: undefined }))
+      .toThrow(/LM_WEB_BFF_SECRET/);
+    expect(() => validateEnv({ ...env, LM_WEB_BFF_SECRET: 'CHANGE_ME_WITH_UNIQUE_32_PLUS_CHARACTER_SECRET' }))
+      .toThrow(/LM_WEB_BFF_SECRET/);
+  });
+
   it('applies development defaults when APP_ENV, NODE_ENV, and PORT are omitted', () => {
     const env = validateEnv({});
     expect(env.APP_ENV).toBe('development');
