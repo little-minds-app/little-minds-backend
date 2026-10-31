@@ -1,0 +1,74 @@
+import { ConfigService } from '@nestjs/config';
+import { ParentAccountLifecycle, PrismaClient } from '@prisma/client';
+import type { AppEnv } from '../src/config/env.validation';
+import { PrismaService } from '../src/modules/prisma/prisma.service';
+import { JwtAccessService } from '../src/modules/identity/session/jwt-access.service';
+import { SessionIssuerService } from '../src/modules/identity/session/session-issuer.service';
+import { WebParentSessionService } from '../src/modules/identity/session/web-parent-session.service';
+import { TEST_JWT_PRIVATE_PEM, TEST_JWT_PUBLIC_PEM, TEST_REFRESH_PEPPER } from './fixtures/auth/keys';
+import { SEED_IDS } from '../prisma/seed';
+
+const describeDb = process.env.DATABASE_URL ? describe : describe.skip;
+describeDb('Opaque web sessions across independent service instances (LMP-38)', () => {
+  const prisma = new PrismaClient();
+  let issuer: SessionIssuerService;
+  let web1: WebParentSessionService;
+  let web2: WebParentSessionService;
+  beforeAll(async () => {
+    await prisma.$connect();
+    await prisma.parentAccount.upsert({
+      where: { id: SEED_IDS.parent },
+      create: { id: SEED_IDS.parent, locale: 'tr-TR', timezone: 'Europe/Istanbul', lifecycle: ParentAccountLifecycle.active },
+      update: { deletedAt: null, lifecycle: ParentAccountLifecycle.active },
+    });
+    const database = { get db() { return prisma; } } as unknown as PrismaService;
+    const config = { get: (key: keyof AppEnv) => ({
+      APP_ENV: 'development', JWT_ACCESS_PRIVATE_KEY_PEM: TEST_JWT_PRIVATE_PEM,
+      JWT_ACCESS_PUBLIC_KEY_PEM: TEST_JWT_PUBLIC_PEM, JWT_KEY_ID: 'db-test',
+      REFRESH_TOKEN_PEPPER: TEST_REFRESH_PEPPER,
+    } as Partial<AppEnv>)[key] } as unknown as ConfigService<AppEnv, true>;
+    const jwt = new JwtAccessService(config);
+    await jwt.onModuleInit();
+    issuer = new SessionIssuerService(database, jwt, config);
+    web1 = new WebParentSessionService(database, config);
+    web2 = new WebParentSessionService(database, config);
+  });
+  afterAll(async () => { await prisma.$disconnect(); });
+
+  it('multiple service instances authorize concurrently without rotating refresh', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
+    try {
+      const session = await web1.create(SEED_IDS.parent, minted.session_id);
+      expect(session.handle).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      const parent = await Promise.all([
+        web1.requireActive(session.handle), web2.requireActive(session.handle),
+        web1.requireActive(session.handle), web2.requireActive(session.handle),
+      ]);
+      expect(parent.map((p) => p.parent_id)).toEqual(Array(4).fill(SEED_IDS.parent));
+      const row = await prisma.parentSession.findUniqueOrThrow({ where: { id: minted.session_id } });
+      expect(row.refreshTokenHash).toBeNull();
+      expect(row.refreshGeneration).toBe(0);
+      await expect(issuer.refresh(minted.refresh_token)).rejects.toBeTruthy();
+      const again = await web2.requireActive(session.handle);
+      expect(again.parent_id).toBe(SEED_IDS.parent);
+      await web2.logout(session.handle);
+      await expect(web1.requireActive(session.handle)).rejects.toBeTruthy();
+      await web1.logout(session.handle); // idempotent
+    } finally {
+      await prisma.webParentSession.deleteMany({ where: { parentSessionId: minted.session_id } });
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+
+  it('rejects non-web session conversion and malformed handles', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'ios' });
+    try {
+      await expect(web1.create(SEED_IDS.parent, minted.session_id)).rejects.toBeTruthy();
+      await expect(web1.requireActive('not-an-opaque-cookie')).rejects.toBeTruthy();
+      const stillNative = await issuer.refresh(minted.refresh_token);
+      expect(stillNative.session_id).toBe(minted.session_id);
+    } finally {
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+});
