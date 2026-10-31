@@ -52,7 +52,7 @@ describeFullstack('LMP-38: real Next.js + NestJS + PostgreSQL authentication E2E
     expect(start.status).toBe(200);
     const startBody = (await start.json()) as { challenge_id: string };
     const code = fakeSms.peekCodeForTests(startBody.challenge_id);
-    expect(code).toMatch(/^\\d{6}$/);
+    expect(code).toMatch(/^\d{6}$/);
     const verify = await requestWeb('verify', { challenge_id: startBody.challenge_id, code });
     expect(verify.status).toBe(200);
     const responseBody = await verify.text();
