@@ -1,5 +1,5 @@
 {
-  "$comment": "Minimum non-breaking contract surface. Paths outside allowlist fail. LMP-33 parent auth + LMP-34 GSM OTP + LMP-35 multi-provider + LMP-36 linking. LMP-50 Activity* schemas remain components-only.",
+  "$comment": "Minimum non-breaking contract surface. Paths outside allowlist fail. LMP-33 parent auth + LMP-34 GSM OTP + LMP-35 multi-provider + LMP-36 linking. LMP-50 Activity* schemas remain components-only. LMP-38 backend-owned opaque web sessions.",
   "contractVersionFile": "contracts/VERSION",
   "allowBreakingRemovalsFromMajor": 1,
   "allowedPaths": [
@@ -21,7 +21,10 @@
     "/v1/auth/email/start",
     "/v1/auth/email/verify",
     "/v1/auth/identities/step-up",
-    "/v1/auth/identities/link"
+    "/v1/auth/identities/link",
+    "/v1/auth/web/session",
+    "/v1/auth/web/me",
+    "/v1/auth/web/logout"
   ],
   "requiredOperations": [
     {
