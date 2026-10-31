@@ -16,6 +16,25 @@ export class WebSessionController {
   @HttpCode(201)
   @UseGuards(ParentAuthGuard)
   async create(@Req() request: Request) {
+    this.requireBff(request);
+    const auth = getParentAuth(request);
+    return this.webSessions.create(auth.parentId, auth.sessionId);
+  }
+
+  @Get('me')
+  async me(@Req() request: Request) {
+    return this.webSessions.requireActive(this.handle(request));
+  }
+
+  /** Only explicitly indicated user interactions may advance the idle clock. */
+  @Post('activity')
+  @HttpCode(200)
+  async activity(@Req() request: Request) {
+    this.requireBff(request);
+    return this.webSessions.requireActive(this.handle(request), true);
+  }
+
+  private requireBff(request: Request): void {
     // Require a separate BFF-to-backend secret, not merely a web bearer token.
     const expected = this.config.get('LM_WEB_BFF_SECRET', { infer: true });
     const supplied = request.headers['x-lm-bff-secret'];
@@ -25,13 +44,6 @@ export class WebSessionController {
     const a = createHash('sha256').update(expected).digest();
     const b = createHash('sha256').update(supplied).digest();
     if (!timingSafeEqual(a, b)) throwUnauthorized('invalid_token', 'Untrusted web session exchange');
-    const auth = getParentAuth(request);
-    return this.webSessions.create(auth.parentId, auth.sessionId);
-  }
-
-  @Get('me')
-  async me(@Req() request: Request) {
-    return this.webSessions.requireActive(this.handle(request));
   }
 
   @Post('logout')
