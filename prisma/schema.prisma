@@ -191,7 +191,7 @@ model ParentSessionRefreshHashLookup {
 model WebParentSession {
   id              String    @id @default(uuid()) @db.Uuid
   parentId        String    @map("parent_id") @db.Uuid
-  parentSessionId String    @map("parent_session_id") @db.Uuid
+  parentSessionId String    @unique @map("parent_session_id") @db.Uuid
   handleHash      String    @unique @map("handle_hash") @db.VarChar(64)
   expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
   revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
