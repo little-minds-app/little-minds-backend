@@ -62,18 +62,38 @@ export class WebParentSessionService {
 
   async requireActive(handle: string): Promise<{ parent_id: string; locale: string; timezone: string }> {
     if (!this.valid(handle)) throwUnauthorized('invalid_token', 'Invalid web session');
-    const web = await this.prisma.db.webParentSession.findUnique({
-      where: { handleHash: this.hash(handle) },
-      include: { parent: true, parentSession: true },
-    });
-    const now = Date.now();
-    if (!web || web.revokedAt || web.expiresAt.getTime() <= now ||
-        web.parentSession.revokedAt || web.parentSession.expiresAt.getTime() <= now ||
-        web.parent.deletedAt || web.parent.lifecycle !== ParentAccountLifecycle.active ||
-        web.parentSession.parentId !== web.parentId) {
-      throwUnauthorized('invalid_token', 'Invalid web session');
+
+    // Atomic eligibility + activity update using the PostgreSQL clock.
+    // The conditional UPDATE is the linearization point for concurrent requests,
+    // idle expiry, and web logout. No stale read can extend an idle session.
+    const active = await this.prisma.db.$queryRaw<Array<{ parent_id: string }>>`
+      UPDATE web_parent_sessions AS w
+      SET last_used_at = clock_timestamp()
+      WHERE w.handle_hash = ${this.hash(handle)}
+        AND w.revoked_at IS NULL
+        AND w.expires_at > clock_timestamp()
+        AND COALESCE(w.last_used_at, w.created_at) > clock_timestamp() - INTERVAL '30 minutes'
+        AND EXISTS (
+          SELECT 1 FROM parent_sessions AS ps
+          WHERE ps.id = w.parent_session_id
+            AND ps.parent_id = w.parent_id
+            AND ps.revoked_at IS NULL
+            AND ps.expires_at > clock_timestamp()
+        )
+        AND EXISTS (
+          SELECT 1 FROM parent_accounts AS pa
+          WHERE pa.id = w.parent_id
+            AND pa.deleted_at IS NULL
+            AND pa.lifecycle = 'active'::"ParentAccountLifecycle"
+        )
+      RETURNING w.parent_id
+    `;
+    if (active.length !== 1) throwUnauthorized('invalid_token', 'Invalid or idle-expired web session');
+    const parent = await this.prisma.db.parentAccount.findUnique({ where: { id: active[0].parent_id } });
+    if (!parent || parent.deletedAt || parent.lifecycle !== ParentAccountLifecycle.active) {
+      throwUnauthorized('invalid_token', 'Inactive parent');
     }
-    return { parent_id: web.parentId, locale: web.parent.locale, timezone: web.parent.timezone };
+    return { parent_id: parent.id, locale: parent.locale, timezone: parent.timezone };
   }
 
   async logout(handle: string): Promise<void> {
