@@ -11,11 +11,13 @@ import { SEED_IDS } from '../prisma/seed';
 const describeDb = process.env.DATABASE_URL ? describe : describe.skip;
 describeDb('Opaque web sessions across independent service instances (LMP-38)', () => {
   const prisma = new PrismaClient();
+  const otherPrisma = new PrismaClient();
   let issuer: SessionIssuerService;
   let web1: WebParentSessionService;
   let web2: WebParentSessionService;
   beforeAll(async () => {
     await prisma.$connect();
+    await otherPrisma.$connect();
     await prisma.parentAccount.upsert({
       where: { id: SEED_IDS.parent },
       create: { id: SEED_IDS.parent, locale: 'tr-TR', timezone: 'Europe/Istanbul', lifecycle: ParentAccountLifecycle.active },
@@ -31,9 +33,10 @@ describeDb('Opaque web sessions across independent service instances (LMP-38)', 
     await jwt.onModuleInit();
     issuer = new SessionIssuerService(database, jwt, config);
     web1 = new WebParentSessionService(database, config);
-    web2 = new WebParentSessionService(database, config);
+    const otherDatabase = { get db() { return otherPrisma; } } as unknown as PrismaService;
+    web2 = new WebParentSessionService(otherDatabase, config);
   });
-  afterAll(async () => { await prisma.$disconnect(); });
+  afterAll(async () => { await prisma.$disconnect(); await otherPrisma.$disconnect(); });
 
   it('multiple service instances authorize concurrently without rotating refresh', async () => {
     const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
