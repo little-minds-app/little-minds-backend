@@ -60,15 +60,15 @@ export class WebParentSessionService {
     return { handle, expires_at: session.expiresAt.toISOString() };
   }
 
-  async requireActive(handle: string): Promise<{ parent_id: string; locale: string; timezone: string }> {
+  async requireActive(handle: string, meaningfulActivity = false): Promise<{ parent_id: string; locale: string; timezone: string }> {
     if (!this.valid(handle)) throwUnauthorized('invalid_token', 'Invalid web session');
 
-    // Atomic eligibility + activity update using the PostgreSQL clock.
+    // Atomic eligibility check; only explicit, BFF-authenticated user activity touches idle clock.
     // The conditional UPDATE is the linearization point for concurrent requests,
     // idle expiry, and web logout. No stale read can extend an idle session.
     const active = await this.prisma.db.$queryRaw<Array<{ parent_id: string }>>`
       UPDATE web_parent_sessions AS w
-      SET last_used_at = clock_timestamp()
+      SET last_used_at = CASE WHEN ${meaningfulActivity} THEN clock_timestamp() ELSE w.last_used_at END
       WHERE w.handle_hash = ${this.hash(handle)}
         AND w.revoked_at IS NULL
         AND w.expires_at > clock_timestamp()
