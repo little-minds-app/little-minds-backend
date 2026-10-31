@@ -112,4 +112,32 @@ describeDb('Opaque web sessions across independent service instances (LMP-38)', 
     }
   });
 
+  it('does not create a web session after parent session revocation', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
+    try {
+      await prisma.parentSession.update({
+        where: { id: minted.session_id },
+        data: { revokedAt: new Date() },
+      });
+      await expect(web2.create(SEED_IDS.parent, minted.session_id)).rejects.toBeTruthy();
+      expect(await prisma.webParentSession.count({ where: { parentSessionId: minted.session_id } })).toBe(0);
+    } finally {
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+
+  it('prevents exchange after expiry even when refresh token is otherwise present', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
+    try {
+      await prisma.parentSession.update({
+        where: { id: minted.session_id },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+      await expect(web1.create(SEED_IDS.parent, minted.session_id)).rejects.toBeTruthy();
+      expect(await prisma.webParentSession.count({ where: { parentSessionId: minted.session_id } })).toBe(0);
+    } finally {
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+
 });
