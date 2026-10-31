@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnv } from '../../config/env.validation';
 import { AuthController } from './controllers/auth.controller';
+import { WebSessionController } from './controllers/web-session.controller';
 import { DevAuthController } from './controllers/dev-auth.controller';
 import { IdentityLinkController } from './controllers/identity-link.controller';
 import { MultiProviderAuthController } from './controllers/multi-provider-auth.controller';
@@ -29,6 +30,7 @@ import { IdentityResolveService } from './resolve/identity-resolve.service';
 import { AuthRateLimitService } from './session/auth-rate-limit.service';
 import { JwtAccessService } from './session/jwt-access.service';
 import { SessionIssuerService } from './session/session-issuer.service';
+import { WebParentSessionService } from './session/web-parent-session.service';
 import { DisabledProductionSmsSender } from './sms/disabled-production-sms.sender';
 import { FakeSmsSender } from './sms/fake-sms.sender';
 import { SMS_SENDER } from './sms/sms-sender';
@@ -40,6 +42,7 @@ import { SMS_SENDER } from './sms/sms-sender';
 @Module({
   controllers: [
     AuthController,
+    WebSessionController,
     ParentController,
     DevAuthController,
     PhoneAuthController,
@@ -49,6 +52,7 @@ import { SMS_SENDER } from './sms/sms-sender';
   providers: [
     JwtAccessService,
     SessionIssuerService,
+    WebParentSessionService,
     AuthRateLimitService,
     ParentAuthGuard,
     OtpAbuseService,
