@@ -59,12 +59,12 @@ describeFullstack('LMP-38: real Next.js + NestJS + PostgreSQL authentication E2E
     expect(responseBody).not.toContain('access_token');
     expect(responseBody).not.toContain('refresh_token');
     const issued = verify.headers.get('set-cookie') || '';
-    expect(issued).toContain('lm_dev_web_session=');
-    expect(issued).toContain('httponly');
+    expect(issued).toContain('__Host-lm_web_session=');
+    expect(issued.toLowerCase()).toContain('httponly');
     expect(issued.toLowerCase()).toContain('samesite=strict');
-    const match = issued.match(/lm_dev_web_session=([^;]+)/);
+    const match = issued.match(/__Host-lm_web_session=([^;]+)/);
     expect(match?.[1]).toBeTruthy();
-    return { cookie: 'lm_dev_web_session=' + match![1], handle: match![1] };
+    return { cookie: '__Host-lm_web_session=' + match![1], handle: match![1] };
   };
 
   beforeAll(async () => {
@@ -98,9 +98,7 @@ describeFullstack('LMP-38: real Next.js + NestJS + PostgreSQL authentication E2E
         NEXT_TELEMETRY_DISABLED: '1',
       },
     });
-    // In production Next uses __Host- cookies; tests operate over HTTP, so
-    // production cookie policies cannot be exercised by Node's non-browser fetch.
-    // Test the backend and HTTP boundary; separate HTTPS browser QA is required.
+    // Test the server and Set-Cookie attributes over loopback HTTP; a separate\n    // real-browser HTTPS validation remains required before production.
     for (let i = 0; i < 100; i++) {
       if (next.exitCode !== null) throw new Error('Next exited: ' + next.exitCode);
       try {
