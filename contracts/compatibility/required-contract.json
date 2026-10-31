@@ -24,6 +24,7 @@
     "/v1/auth/identities/link",
     "/v1/auth/web/session",
     "/v1/auth/web/me",
+    "/v1/auth/web/activity",
     "/v1/auth/web/logout"
   ],
   "requiredOperations": [
