@@ -26,10 +26,11 @@ export class WebParentSessionService {
 
   async create(parentId: string, parentSessionId: string): Promise<{ handle: string; expires_at: string }> {
     const handle = randomBytes(32).toString('base64url');
-    const now = new Date();
     const session = await this.prisma.db.$transaction(async (tx) => {
       // Serialize conversion and prevent any later refresh-token based use of this session.
       await tx.$queryRaw`SELECT id FROM parent_sessions WHERE id = ${parentSessionId}::uuid FOR UPDATE`;
+      // Obtain wall-clock time only after the row lock is acquired.
+      const now = new Date();
       const parentSession = await tx.parentSession.findFirst({
         where: { id: parentSessionId, parentId, revokedAt: null, expiresAt: { gt: now } },
       });
@@ -40,6 +41,8 @@ export class WebParentSessionService {
       }
       // The web handle replaces native refresh credentials. This avoids any
       // single-use refresh rotation and cross-replica race for browser sessions.
+      // Conversion cannot be retried for an already-converted native session.
+      if (!parentSession.refreshTokenHash) throwUnauthorized('invalid_token', 'Session already exchanged');
       await tx.parentSessionRefreshHashLookup.deleteMany({ where: { sessionId: parentSessionId } });
       await tx.parentSession.update({
         where: { id: parentSessionId },
