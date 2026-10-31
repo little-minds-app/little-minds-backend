@@ -1,0 +1,83 @@
+name: LMP-38 Cross-repo Fullstack E2E
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross-repo-e2e:
+    name: Real Next + Nest + PostgreSQL OTP E2E
+    # Protected by an explicit configuration gate until a read-only
+    # cross-repository GitHub App/PAT token has been provisioned.
+    if: ${{ vars.LM_ENABLE_CROSS_REPO_E2E == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: little_minds
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d little_minds"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: development
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/little_minds?schema=public
+      LM_CLIENT_WEB_DIR: ${{ github.workspace }}/client/apps/web
+      LM_FULLSTACK_WEB_E2E: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - name: Checkout backend PR
+        uses: actions/checkout@v4
+        with:
+          path: backend
+          persist-credentials: false
+
+      - name: Checkout pinned client PR
+        uses: actions/checkout@v4
+        with:
+          repository: little-minds-app/little-minds-client
+          ref: 12d04f841f0344ff037ac255be7f3d2185e4b403
+          token: ${{ secrets.LM_CLIENT_REPO_READ_TOKEN }}
+          path: client
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install backend
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+
+      - name: Migrate and seed isolated PostgreSQL
+        working-directory: backend
+        run: |
+          npm run db:migrate
+          npm run db:seed
+
+      - name: Install and build actual Next.js app
+        working-directory: client/apps/web
+        run: |
+          # LMP-25: replace fallback with npm ci after web lockfile is committed.
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+          npm run build
+
+      - name: Real OTP -> opaque cookie -> parent -> logout -> idle expiry
+        working-directory: backend
+        run: npm run test:e2e -- --runInBand --testPathPatterns=web-parent-fullstack
