@@ -202,7 +202,6 @@ model WebParentSession {
   parentSession ParentSession @relation(fields: [parentSessionId], references: [id], onDelete: Cascade)
 
   @@index([parentId, revokedAt], map: "web_parent_sessions_parent_revoked_idx")
-  @@index([parentSessionId], map: "web_parent_sessions_parent_session_idx")
   @@index([expiresAt], map: "web_parent_sessions_expires_at_idx")
   @@map("web_parent_sessions")
 }
