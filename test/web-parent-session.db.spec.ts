@@ -162,4 +162,29 @@ describeDb('Opaque web sessions across independent service instances (LMP-38)', 
     }
   });
 
+  it('expires idle handles at 30 minutes, but active requests extend only the idle clock', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
+    try {
+      const web = await web1.create(SEED_IDS.parent, minted.session_id);
+      const original = await prisma.webParentSession.findUniqueOrThrow({ where: { parentSessionId: minted.session_id } });
+      await prisma.webParentSession.update({
+        where: { id: original.id },
+        data: { lastUsedAt: new Date(Date.now() - 29 * 60_000) },
+      });
+      await expect(web2.requireActive(web.handle)).resolves.toMatchObject({ parent_id: SEED_IDS.parent });
+      const touched = await prisma.webParentSession.findUniqueOrThrow({ where: { id: original.id } });
+      expect(touched.lastUsedAt!.getTime()).toBeGreaterThan(Date.now() - 60_000);
+      expect(touched.expiresAt.toISOString()).toBe(original.expiresAt.toISOString());
+      await prisma.webParentSession.update({
+        where: { id: original.id },
+        data: { lastUsedAt: new Date(Date.now() - 31 * 60_000) },
+      });
+      await expect(web1.requireActive(web.handle)).rejects.toBeTruthy();
+      await expect(web2.requireActive(web.handle)).rejects.toBeTruthy();
+    } finally {
+      await prisma.webParentSession.deleteMany({ where: { parentSessionId: minted.session_id } });
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+
 });
