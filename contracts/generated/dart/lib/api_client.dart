@@ -203,6 +203,8 @@ class ApiClient {
           return AuthError.fromJson(value);
         case 'ConsentScope':
           return ConsentScopeTypeTransformer().decode(value);
+        case 'CreateParentWebSession201Response':
+          return CreateParentWebSession201Response.fromJson(value);
         case 'DevSessionRequest':
           return DevSessionRequest.fromJson(value);
         case 'EmailOtpStartRequest':
@@ -211,6 +213,8 @@ class ApiClient {
           return EmailOtpStartResponse.fromJson(value);
         case 'EmailOtpVerifyRequest':
           return EmailOtpVerifyRequest.fromJson(value);
+        case 'GetParentWebSession200Response':
+          return GetParentWebSession200Response.fromJson(value);
         case 'GoogleAuthRequest':
           return GoogleAuthRequest.fromJson(value);
         case 'GooglePkceStartRequest':

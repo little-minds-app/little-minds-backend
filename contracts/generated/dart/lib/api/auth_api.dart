@@ -244,6 +244,106 @@ class AuthApi {
     return null;
   }
 
+  /// Exchange verified web parent bearer for an opaque browser session (BFF only)
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> createParentWebSessionWithHttpInfo({ Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/web/session';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Exchange verified web parent bearer for an opaque browser session (BFF only)
+  Future<CreateParentWebSession201Response?> createParentWebSession({ Future<void>? abortTrigger, }) async {
+    final response = await createParentWebSessionWithHttpInfo(abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'CreateParentWebSession201Response',) as CreateParentWebSession201Response;
+    
+    }
+    return null;
+  }
+
+  /// Authorize durable opaque web session without refresh rotation
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] xLMWebSession (required):
+  Future<Response> getParentWebSessionWithHttpInfo(String xLMWebSession, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/web/me';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    headerParams[r'X-LM-Web-Session'] = parameterToString(xLMWebSession);
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Authorize durable opaque web session without refresh rotation
+  ///
+  /// Parameters:
+  ///
+  /// * [String] xLMWebSession (required):
+  Future<GetParentWebSession200Response?> getParentWebSession(String xLMWebSession, { Future<void>? abortTrigger, }) async {
+    final response = await getParentWebSessionWithHttpInfo(xLMWebSession, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'GetParentWebSession200Response',) as GetParentWebSession200Response;
+    
+    }
+    return null;
+  }
+
   /// Issue short-lived OIDC nonce (ADR-021)
   ///
   /// Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple or Google ID-token paths (`provider` required: apple|google). Single-use; TTL 600s. Rate-limited per IP. Cross-provider consume is rejected. 
@@ -492,6 +592,53 @@ class AuthApi {
   /// * [LogoutRequest] logoutRequest:
   Future<void> logoutParentSession({ LogoutRequest? logoutRequest, Future<void>? abortTrigger, }) async {
     final response = await logoutParentSessionWithHttpInfo(logoutRequest: logoutRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
+  /// Revoke opaque web session and linked parent session
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] xLMWebSession (required):
+  Future<Response> logoutParentWebSessionWithHttpInfo(String xLMWebSession, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/web/logout';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    headerParams[r'X-LM-Web-Session'] = parameterToString(xLMWebSession);
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Revoke opaque web session and linked parent session
+  ///
+  /// Parameters:
+  ///
+  /// * [String] xLMWebSession (required):
+  Future<void> logoutParentWebSession(String xLMWebSession, { Future<void>? abortTrigger, }) async {
+    final response = await logoutParentWebSessionWithHttpInfo(xLMWebSession, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
