@@ -172,6 +172,9 @@ describeDb('Opaque web sessions across independent service instances (LMP-38)', 
         data: { lastUsedAt: new Date(Date.now() - 29 * 60_000) },
       });
       await expect(web2.requireActive(web.handle)).resolves.toMatchObject({ parent_id: SEED_IDS.parent });
+      const passive = await prisma.webParentSession.findUniqueOrThrow({ where: { id: original.id } });
+      expect(passive.lastUsedAt!.getTime()).toBeLessThan(Date.now() - 28 * 60_000);
+      await expect(web2.requireActive(web.handle, true)).resolves.toMatchObject({ parent_id: SEED_IDS.parent });
       const touched = await prisma.webParentSession.findUniqueOrThrow({ where: { id: original.id } });
       expect(touched.lastUsedAt!.getTime()).toBeGreaterThan(Date.now() - 60_000);
       expect(touched.expiresAt.toISOString()).toBe(original.expiresAt.toISOString());
@@ -181,6 +184,40 @@ describeDb('Opaque web sessions across independent service instances (LMP-38)', 
       });
       await expect(web1.requireActive(web.handle)).rejects.toBeTruthy();
       await expect(web2.requireActive(web.handle)).rejects.toBeTruthy();
+    } finally {
+      await prisma.webParentSession.deleteMany({ where: { parentSessionId: minted.session_id } });
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+
+  it('passive polling cannot extend expired idle session', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
+    try {
+      const web = await web1.create(SEED_IDS.parent, minted.session_id);
+      const idleAt = new Date(Date.now() - 31 * 60_000);
+      await prisma.webParentSession.update({
+        where: { parentSessionId: minted.session_id },
+        data: { lastUsedAt: idleAt },
+      });
+      await expect(web1.requireActive(web.handle)).rejects.toBeTruthy();
+      await expect(web2.requireActive(web.handle, true)).rejects.toBeTruthy();
+      const persisted = await prisma.webParentSession.findUniqueOrThrow({ where: { parentSessionId: minted.session_id } });
+      expect(persisted.lastUsedAt!.getTime()).toBe(idleAt.getTime());
+    } finally {
+      await prisma.webParentSession.deleteMany({ where: { parentSessionId: minted.session_id } });
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+
+  it('concurrent logout and activity never resurrect the session', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
+    try {
+      const web = await web1.create(SEED_IDS.parent, minted.session_id);
+      await Promise.allSettled([web1.requireActive(web.handle, true), web2.logout(web.handle)]);
+      await expect(web1.requireActive(web.handle, true)).rejects.toBeTruthy();
+      await expect(web2.requireActive(web.handle)).rejects.toBeTruthy();
+      const stored = await prisma.webParentSession.findUniqueOrThrow({ where: { parentSessionId: minted.session_id } });
+      expect(stored.revokedAt).not.toBeNull();
     } finally {
       await prisma.webParentSession.deleteMany({ where: { parentSessionId: minted.session_id } });
       await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
