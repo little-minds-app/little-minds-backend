@@ -33,7 +33,7 @@ export class WebParentSessionService {
       const parentSession = await tx.parentSession.findFirst({
         where: { id: parentSessionId, parentId, revokedAt: null, expiresAt: { gt: now } },
       });
-      if (!parentSession) throwUnauthorized('invalid_token', 'Inactive parent session');
+      if (!parentSession || parentSession.clientSurface !== 'web') throwUnauthorized('invalid_token', 'Inactive parent session');
       const parent = await tx.parentAccount.findUnique({ where: { id: parentId } });
       if (!parent || parent.deletedAt || parent.lifecycle !== ParentAccountLifecycle.active) {
         throwUnauthorized('invalid_token', 'Inactive parent');
