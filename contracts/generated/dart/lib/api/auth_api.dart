@@ -644,6 +644,70 @@ class AuthApi {
     }
   }
 
+  /// Extend idle timeout for explicit user activity through trusted BFF only
+  ///
+  /// Requires both X-LM-Web-Session and X-LM-Bff-Secret. Passive GET /me does not advance last_used_at. The backend checks absolute and idle expiry. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] xLMWebSession (required):
+  ///
+  /// * [String] xLMBffSecret (required):
+  Future<Response> markParentWebActivityWithHttpInfo(String xLMWebSession, String xLMBffSecret, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/web/activity';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    headerParams[r'X-LM-Web-Session'] = parameterToString(xLMWebSession);
+    headerParams[r'X-LM-Bff-Secret'] = parameterToString(xLMBffSecret);
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Extend idle timeout for explicit user activity through trusted BFF only
+  ///
+  /// Requires both X-LM-Web-Session and X-LM-Bff-Secret. Passive GET /me does not advance last_used_at. The backend checks absolute and idle expiry. 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] xLMWebSession (required):
+  ///
+  /// * [String] xLMBffSecret (required):
+  Future<GetParentWebSession200Response?> markParentWebActivity(String xLMWebSession, String xLMBffSecret, { Future<void>? abortTrigger, }) async {
+    final response = await markParentWebActivityWithHttpInfo(xLMWebSession, xLMBffSecret, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'GetParentWebSession200Response',) as GetParentWebSession200Response;
+    
+    }
+    return null;
+  }
+
   /// Rotate parent access and refresh tokens
   ///
   /// Transactional single-winner refresh (ADR-019). Clients must use single-flight refresh and must not retry a consumed refresh token. Lost responses require re-authentication. 

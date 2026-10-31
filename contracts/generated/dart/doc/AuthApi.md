@@ -21,6 +21,7 @@ Method | HTTP request | Description
 [**logoutAllParentSessions**](AuthApi.md#logoutallparentsessions) | **POST** /v1/auth/logout-all | Revoke all sessions for the authenticated parent
 [**logoutParentSession**](AuthApi.md#logoutparentsession) | **POST** /v1/auth/logout | Revoke the current parent session
 [**logoutParentWebSession**](AuthApi.md#logoutparentwebsession) | **POST** /v1/auth/web/logout | Revoke opaque web session and linked parent session
+[**markParentWebActivity**](AuthApi.md#markparentwebactivity) | **POST** /v1/auth/web/activity | Extend idle timeout for explicit user activity through trusted BFF only
 [**refreshParentSession**](AuthApi.md#refreshparentsession) | **POST** /v1/auth/token/refresh | Rotate parent access and refresh tokens
 [**revokeParentSession**](AuthApi.md#revokeparentsession) | **DELETE** /v1/auth/sessions/{sessionId} | Revoke one owned session
 [**startEmailOtp**](AuthApi.md#startemailotp) | **POST** /v1/auth/email/start | Start Email OTP challenge (ADR-021)
@@ -549,6 +550,51 @@ No authorization required
 
  - **Content-Type**: Not defined
  - **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **markParentWebActivity**
+> GetParentWebSession200Response markParentWebActivity(xLMWebSession, xLMBffSecret)
+
+Extend idle timeout for explicit user activity through trusted BFF only
+
+Requires both X-LM-Web-Session and X-LM-Bff-Secret. Passive GET /me does not advance last_used_at. The backend checks absolute and idle expiry. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final xLMWebSession = xLMWebSession_example; // String | 
+final xLMBffSecret = xLMBffSecret_example; // String | 
+
+try {
+    final result = api_instance.markParentWebActivity(xLMWebSession, xLMBffSecret);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->markParentWebActivity: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **xLMWebSession** | **String**|  | 
+ **xLMBffSecret** | **String**|  | 
+
+### Return type
+
+[**GetParentWebSession200Response**](GetParentWebSession200Response.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 

@@ -115,6 +115,15 @@ void main() {
       // TODO
     });
 
+    // Extend idle timeout for explicit user activity through trusted BFF only
+    //
+    // Requires both X-LM-Web-Session and X-LM-Bff-Secret. Passive GET /me does not advance last_used_at. The backend checks absolute and idle expiry. 
+    //
+    //Future<GetParentWebSession200Response> markParentWebActivity(String xLMWebSession, String xLMBffSecret) async
+    test('test markParentWebActivity', () async {
+      // TODO
+    });
+
     // Rotate parent access and refresh tokens
     //
     // Transactional single-winner refresh (ADR-019). Clients must use single-flight refresh and must not retry a consumed refresh token. Lost responses require re-authentication. 

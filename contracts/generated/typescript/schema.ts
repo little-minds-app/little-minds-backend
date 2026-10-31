@@ -38,6 +38,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/web/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extend idle timeout for explicit user activity through trusted BFF only
+         * @description Requires both X-LM-Web-Session and X-LM-Bff-Secret. Passive GET /me
+         *     does not advance last_used_at. The backend checks absolute and idle expiry.
+         */
+        post: operations["markParentWebActivity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/web/logout": {
         parameters: {
             query?: never;
@@ -883,6 +904,41 @@ export interface operations {
                 };
             };
             /** @description Invalid, revoked, or expired web session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    markParentWebActivity: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-LM-Web-Session": string;
+                "X-LM-Bff-Secret": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session remains valid and idle clock was extended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        parent_id: string;
+                        locale: string;
+                        timezone: string;
+                    };
+                };
+            };
+            /** @description Invalid, idle-expired, or untrusted session */
             401: {
                 headers: {
                     [name: string]: unknown;
