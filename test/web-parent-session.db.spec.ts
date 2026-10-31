@@ -140,4 +140,26 @@ describeDb('Opaque web sessions across independent service instances (LMP-38)', 
     }
   });
 
+  it('never authorizes a session after concurrent exchange and parent revocation settle', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
+    try {
+      const [converted] = await Promise.allSettled([
+        web1.create(SEED_IDS.parent, minted.session_id),
+        otherPrisma.parentSession.update({
+          where: { id: minted.session_id },
+          data: { revokedAt: new Date() },
+        }),
+      ]);
+      if (converted.status === 'fulfilled') {
+        await expect(web2.requireActive(converted.value.handle)).rejects.toBeTruthy();
+      }
+      expect((await prisma.parentSession.findUniqueOrThrow({
+        where: { id: minted.session_id },
+      })).revokedAt).not.toBeNull();
+    } finally {
+      await prisma.webParentSession.deleteMany({ where: { parentSessionId: minted.session_id } });
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+
 });
