@@ -74,4 +74,42 @@ describeDb('Opaque web sessions across independent service instances (LMP-38)', 
       await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
     }
   });
+  it('accepts exactly one exchange under concurrent requests and preserves original handle', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
+    try {
+      const results = await Promise.allSettled([
+        web1.create(SEED_IDS.parent, minted.session_id),
+        web2.create(SEED_IDS.parent, minted.session_id),
+      ]);
+      const ok = results.filter((r): r is PromiseFulfilledResult<{ handle: string; expires_at: string }> => r.status === 'fulfilled');
+      expect(ok).toHaveLength(1);
+      expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+      expect(await prisma.webParentSession.count({ where: { parentSessionId: minted.session_id } })).toBe(1);
+      expect((await web2.requireActive(ok[0].value.handle)).parent_id).toBe(SEED_IDS.parent);
+    } finally {
+      await prisma.webParentSession.deleteMany({ where: { parentSessionId: minted.session_id } });
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+
+  it('rejects expired and revoked sessions across distinct connections', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
+    try {
+      const web = await web1.create(SEED_IDS.parent, minted.session_id);
+      await prisma.parentSession.update({
+        where: { id: minted.session_id },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+      await expect(web2.requireActive(web.handle)).rejects.toBeTruthy();
+      await prisma.parentSession.update({
+        where: { id: minted.session_id },
+        data: { expiresAt: new Date(Date.now() + 60_000), revokedAt: new Date() },
+      });
+      await expect(web1.requireActive(web.handle)).rejects.toBeTruthy();
+    } finally {
+      await prisma.webParentSession.deleteMany({ where: { parentSessionId: minted.session_id } });
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+
 });
