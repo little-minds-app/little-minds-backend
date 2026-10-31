@@ -169,18 +169,18 @@ describeDb('Opaque web sessions across independent service instances (LMP-38)', 
       const original = await prisma.webParentSession.findUniqueOrThrow({ where: { parentSessionId: minted.session_id } });
       await prisma.webParentSession.update({
         where: { id: original.id },
-        data: { lastUsedAt: new Date(Date.now() - 29 * 60_000) },
+        data: { lastUsedAt: new Date(Date.now() - (30 * 60_000 - 1000)) },
       });
       await expect(web2.requireActive(web.handle)).resolves.toMatchObject({ parent_id: SEED_IDS.parent });
       const passive = await prisma.webParentSession.findUniqueOrThrow({ where: { id: original.id } });
-      expect(passive.lastUsedAt!.getTime()).toBeLessThan(Date.now() - 28 * 60_000);
+      expect(passive.lastUsedAt!.getTime()).toBeLessThan(Date.now() - (29 * 60_000));
       await expect(web2.requireActive(web.handle, true)).resolves.toMatchObject({ parent_id: SEED_IDS.parent });
       const touched = await prisma.webParentSession.findUniqueOrThrow({ where: { id: original.id } });
       expect(touched.lastUsedAt!.getTime()).toBeGreaterThan(Date.now() - 60_000);
       expect(touched.expiresAt.toISOString()).toBe(original.expiresAt.toISOString());
       await prisma.webParentSession.update({
         where: { id: original.id },
-        data: { lastUsedAt: new Date(Date.now() - 31 * 60_000) },
+        data: { lastUsedAt: new Date(Date.now() - (30 * 60_000 + 1000)) },
       });
       await expect(web1.requireActive(web.handle)).rejects.toBeTruthy();
       await expect(web2.requireActive(web.handle)).rejects.toBeTruthy();
@@ -194,7 +194,7 @@ describeDb('Opaque web sessions across independent service instances (LMP-38)', 
     const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
     try {
       const web = await web1.create(SEED_IDS.parent, minted.session_id);
-      const idleAt = new Date(Date.now() - 31 * 60_000);
+      const idleAt = new Date(Date.now() - (30 * 60_000 + 1000));
       await prisma.webParentSession.update({
         where: { parentSessionId: minted.session_id },
         data: { lastUsedAt: idleAt },
