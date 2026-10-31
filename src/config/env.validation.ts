@@ -46,6 +46,7 @@ const baseSchema = z.object({
   JWT_ISSUER: z.string().trim().min(1).max(128).optional(),
   JWT_AUDIENCE: z.string().trim().min(1).max(128).optional(),
   REFRESH_TOKEN_PEPPER: z.string().optional(),
+  LM_WEB_BFF_SECRET: z.string().optional(),
   AUTH_DEV_BOOTSTRAP_ENABLED: z
     .union([z.string(), z.boolean()])
     .optional()
@@ -114,6 +115,7 @@ export type AppEnv = {
   JWT_ISSUER?: string;
   JWT_AUDIENCE?: string;
   REFRESH_TOKEN_PEPPER: string;
+  LM_WEB_BFF_SECRET?: string;
   AUTH_DEV_BOOTSTRAP_ENABLED: boolean;
   AUTH_DEV_BOOTSTRAP_PARENT_ALLOWLIST?: string;
   /** Bind address for `app.listen` — loopback-only when bootstrap is enabled. */
@@ -533,6 +535,12 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     AUTH_DEV_BOOTSTRAP_ENABLED: bootstrapEnabled,
   });
 
+  const bffSecret = parsed.data.LM_WEB_BFF_SECRET;
+  if ((appEnv === 'staging' || appEnv === 'production') &&
+      (!bffSecret || bffSecret.length < 32 || bffSecret.includes('CHANGE_ME'))) {
+    fail('LM_WEB_BFF_SECRET must be configured with a strong 32+ character secret');
+  }
+
   const listenHost = assertListenHostForBootstrap(
     bootstrapEnabled,
     publicApiBaseUrl,
@@ -565,6 +573,7 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     PUBLIC_API_BASE_URL: publicApiBaseUrl,
     RELEASE: release,
     REFRESH_TOKEN_PEPPER: refreshPepper,
+    LM_WEB_BFF_SECRET: bffSecret,
     AUTH_DEV_BOOTSTRAP_ENABLED: bootstrapEnabled,
     JWT_ACCESS_PRIVATE_KEY_PEM: parsed.data.JWT_ACCESS_PRIVATE_KEY_PEM,
     JWT_ACCESS_PUBLIC_KEY_PEM: parsed.data.JWT_ACCESS_PUBLIC_KEY_PEM,
