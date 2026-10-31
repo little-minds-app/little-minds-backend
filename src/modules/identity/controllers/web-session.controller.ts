@@ -1,8 +1,9 @@
 import { Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { throwUnauthorized } from '../session/auth.errors';
 import { getParentAuth, ParentAuthGuard } from '../auth/parent-auth.guard';
 import { WebParentSessionService } from '../session/web-parent-session.service';
-import { throwUnauthorized } from '../session/auth.errors';
 
 @Controller('v1/auth/web')
 export class WebSessionController {
@@ -13,6 +14,15 @@ export class WebSessionController {
   @HttpCode(201)
   @UseGuards(ParentAuthGuard)
   async create(@Req() request: Request) {
+    // Require a separate BFF-to-backend secret, not merely a web bearer token.
+    const expected = process.env.LM_WEB_BFF_SECRET;
+    const supplied = request.headers['x-lm-bff-secret'];
+    if (!expected || expected.length < 32 || typeof supplied !== 'string') {
+      throwUnauthorized('invalid_token', 'Untrusted web session exchange');
+    }
+    const a = createHash('sha256').update(expected).digest();
+    const b = createHash('sha256').update(supplied).digest();
+    if (!timingSafeEqual(a, b)) throwUnauthorized('invalid_token', 'Untrusted web session exchange');
     const auth = getParentAuth(request);
     return this.webSessions.create(auth.parentId, auth.sessionId);
   }
