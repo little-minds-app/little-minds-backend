@@ -28,6 +28,18 @@ export class WebChildProfileController {
     return active.parent_id;
   }
 
+  private trustedHandle(req: Request): string {
+    const secret = this.config.get('LM_WEB_BFF_SECRET', { infer: true });
+    const provided = req.headers['x-lm-bff-secret'];
+    if (!secret || secret.length < 32 || typeof provided !== 'string' ||
+        !timingSafeEqual(createHash('sha256').update(secret).digest(), createHash('sha256').update(provided).digest())) {
+      throw new UnauthorizedException('Untrusted web request');
+    }
+    const handle = req.headers['x-lm-web-session'];
+    if (typeof handle !== 'string') throw new UnauthorizedException('Missing web session');
+    return handle;
+  }
+
   private async successfulActivity(req: Request): Promise<void> {
     const handle = req.headers['x-lm-web-session'];
     if (typeof handle === 'string') await this.web.requireActive(handle, true);
@@ -42,16 +54,14 @@ export class WebChildProfileController {
 
   @Post()
   async create(@Req() req: Request, @Body() body: { age_months?: unknown; reference_date?: unknown; nickname?: unknown; timezone?: unknown }) {
-    const result = await this.profiles.create(await this.parent(req), body);
-    await this.successfulActivity(req);
-    return result;
+    return this.web.authorizedMutation(this.trustedHandle(req),
+      (parentId, tx) => this.profiles.create(parentId, body, tx));
   }
 
   @Patch(':childId')
   async update(@Req() req: Request, @Param('childId', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) childId: string,
     @Body() body: Record<string, unknown>) {
-    const result = await this.profiles.update(await this.parent(req), childId, body);
-    await this.successfulActivity(req);
-    return result;
+    return this.web.authorizedMutation(this.trustedHandle(req),
+      (parentId, tx) => this.profiles.update(parentId, childId, body, tx));
   }
 }
