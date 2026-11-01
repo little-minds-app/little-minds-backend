@@ -88,7 +88,7 @@ export class ChildProfileService {
       const timezone = input.timezone === undefined ? existing.timezone ?? 'Europe/Istanbul' : input.timezone as string;
       try { ageMonthsOnDate(age, reference, localToday(new Date(), timezone)); }
       catch { throw new BadRequestException('Invalid age reference or timezone'); }
-      await tx.childProfile.update({
+      const updated = await tx.childProfile.update({
         where: { id: childId },
         data: {
           ...(input.nickname !== undefined ? { nicknameOptional: input.nickname as string | null } : {}),
@@ -97,9 +97,13 @@ export class ChildProfileService {
           ...(input.timezone !== undefined ? { timezone } : {}),
         },
       });
+      return { child_id: updated.id, nickname: updated.nicknameOptional,
+        age_months: ageMonthsOnDate(updated.ageMonthsAtReference,
+          updated.ageReferenceDate.toISOString().slice(0, 10),
+          localToday(new Date(), updated.timezone ?? 'Europe/Istanbul')),
+        preferred_locale: updated.preferredLocale };
     };
-    await (transaction ? performUpdate(transaction) : this.prisma.db.$transaction(performUpdate));
-    return this.get(parentId, childId);
+    return transaction ? performUpdate(transaction) : this.prisma.db.$transaction(performUpdate);
   }
 
   async create(parentId: string, input: { age_months?: unknown; reference_date?: unknown; nickname?: unknown; timezone?: unknown }, transaction?: Prisma.TransactionClient) {
