@@ -50,7 +50,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: little-minds-app/little-minds-client
-          ref: 30182cf39223b4903cdcd998ea85c5f7402aea09
+          ref: aa60eb83647efcaf4cd7e95ac3f812baef4d1783
           token: ${{ secrets.LM_CLIENT_REPO_READ_TOKEN }}
           path: client
           persist-credentials: false
