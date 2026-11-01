@@ -1,0 +1,36 @@
+name: LMP-40 One-time Contract Generation
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  regenerate:
+    if: github.event.pull_request.number == 25 && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feature/lmp-40-child-profile-experience'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - name: Regenerate, commit, verify
+        run: |
+          npm run contracts:generate
+          git add -- contracts/generated
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "[LMP-40] Update generated API clients for profile management"
+            git push origin HEAD:feature/lmp-40-child-profile-experience
+          fi
+          npm run contracts:check
