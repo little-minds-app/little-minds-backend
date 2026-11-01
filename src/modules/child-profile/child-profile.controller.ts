@@ -14,7 +14,7 @@ export class ChildProfileController {
   }
 
   @Get(':childId')
-  get(@Req() req: Request, @Param('childId', new ParseUUIDPipe({ version: 'all', errorHttpStatusCode: 404 })) childId: string) {
+  get(@Req() req: Request, @Param('childId', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) childId: string) {
     return this.children.get(getParentAuth(req).parentId, childId);
   }
 }
