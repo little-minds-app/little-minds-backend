@@ -81,9 +81,9 @@ export class ParentProfileService {
     return clean as Input;
   }
 
-  async update(parentId: string, input: unknown) {
+  async update(parentId: string, input: unknown, transaction?: Prisma.TransactionClient) {
     const clean = this.validate(input);
-    return this.prisma.db.$transaction(async (tx) => {
+    const save = async (tx: Prisma.TransactionClient) => {
       const parents = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM parent_accounts WHERE id = ${parentId}::uuid
           AND lifecycle = 'active' AND deleted_at IS NULL FOR UPDATE
@@ -106,13 +106,14 @@ export class ParentProfileService {
         number_of_children_optional: record.numberOfChildrenOptional,
         occupation_optional: record.occupationOptional,
       };
-    });
+    };
+    return transaction ? save(transaction) : this.prisma.db.$transaction(save);
   }
 
-  async clear(parentId: string) {
+  async clear(parentId: string, transaction?: Prisma.TransactionClient) {
     return this.update(parentId, {
       first_name: null, last_name: null, age_band_optional: null,
       gender_optional: null, number_of_children_optional: null, occupation_optional: null,
-    });
+    }, transaction);
   }
 }
