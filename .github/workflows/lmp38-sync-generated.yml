@@ -2,15 +2,12 @@ name: LMP-38 Sync OpenAPI Generated Clients
 on:
   push:
     branches:
-      - feature/lmp-41-parent-profile
+      - design/lmp-38-backend-web-session
     paths:
       - 'contracts/openapi.yaml'
       - 'contracts/VERSION'
       - 'contracts/compatibility/**'
       - '.github/workflows/lmp38-sync-generated.yml'
-concurrency:
-  group: lmp41-contract-generation
-  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
@@ -28,10 +25,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Refresh exact current feature head
-        run: |
-          git fetch origin feature/lmp-41-parent-profile
-          git checkout -B feature/lmp-41-parent-profile origin/feature/lmp-41-parent-profile
       - name: Generate versioned OpenAPI clients
         run: |
           npm ci
@@ -42,6 +35,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add contracts/generated/
           if ! git diff --cached --quiet; then
-            git commit -m "[LMP-41] Regenerate parent profile API clients"
-            git push origin HEAD:feature/lmp-41-parent-profile
+            git commit -m "[LMP-38] Regenerate versioned OpenAPI clients"
+            git push origin HEAD:design/lmp-38-backend-web-session
           fi
