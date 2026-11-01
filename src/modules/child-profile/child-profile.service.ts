@@ -34,6 +34,81 @@ export class ChildProfileService {
     };
   }
 
+
+  async list(parentId: string, now = new Date()) {
+    const children = await this.prisma.db.childProfile.findMany({
+      where: { parentId, deletedAt: null, parent: { lifecycle: 'active', deletedAt: null } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, nicknameOptional: true, ageMonthsAtReference: true,
+        ageReferenceDate: true, preferredLocale: true, timezone: true },
+    });
+    return { children: children.map((child) => ({
+      child_id: child.id,
+      nickname: child.nicknameOptional,
+      age_months: ageMonthsOnDate(child.ageMonthsAtReference,
+        child.ageReferenceDate.toISOString().slice(0, 10),
+        localToday(now, child.timezone ?? 'Europe/Istanbul')),
+      preferred_locale: child.preferredLocale,
+    })) };
+  }
+
+  async update(parentId: string, childId: string, input: Record<string, unknown>) {
+    if (!input || typeof input !== 'object' || Array.isArray(input) ||
+      Object.keys(input).length === 0 ||
+      Object.keys(input).some((key) => !['nickname', 'age_months', 'reference_date', 'timezone'].includes(key))) {
+      throw new BadRequestException('Invalid profile fields');
+    }
+    if (input.nickname !== undefined && input.nickname !== null &&
+      (typeof input.nickname !== 'string' || input.nickname.length > 80)) {
+      throw new BadRequestException('Invalid nickname');
+    }
+    if (input.age_months !== undefined &&
+      (typeof input.age_months !== 'number' || !Number.isSafeInteger(input.age_months) ||
+      input.age_months < 0 || input.age_months > 2147483647)) {
+      throw new BadRequestException('Invalid approximate age');
+    }
+    if (input.reference_date !== undefined && typeof input.reference_date !== 'string') {
+      throw new BadRequestException('Invalid reference date');
+    }
+    if (input.timezone !== undefined && typeof input.timezone !== 'string') {
+      throw new BadRequestException('Invalid timezone');
+    }
+    return this.prisma.db.$transaction(async (tx) => {
+      const parents = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM parent_accounts
+        WHERE id = ${parentId}::uuid AND lifecycle = 'active' AND deleted_at IS NULL FOR UPDATE
+      `;
+      if (parents.length !== 1) throw new NotFoundException('Child profile not found');
+      const child = await tx.childProfile.findFirst({
+        where: { id: childId, parentId, deletedAt: null },
+      });
+      if (!child) throw new NotFoundException('Child profile not found');
+      const timezone = input.timezone === undefined ? (child.timezone ?? 'Europe/Istanbul') : input.timezone as string;
+      const age = input.age_months === undefined ? child.ageMonthsAtReference : input.age_months as number;
+      const reference = input.reference_date === undefined ?
+        child.ageReferenceDate.toISOString().slice(0, 10) : input.reference_date as string;
+      const today = localToday(new Date(), timezone);
+      try { ageMonthsOnDate(age, reference, today); }
+      catch { throw new BadRequestException('Invalid reference date'); }
+      const updated = await tx.childProfile.update({
+        where: { id: child.id },
+        data: {
+          ...(input.nickname !== undefined ? { nicknameOptional: input.nickname as string | null } : {}),
+          ...(input.age_months !== undefined ? { ageMonthsAtReference: age } : {}),
+          ...(input.reference_date !== undefined ? { ageReferenceDate: new Date(reference + 'T00:00:00.000Z') } : {}),
+          ...(input.timezone !== undefined ? { timezone } : {}),
+        },
+      });
+      return {
+        child_id: updated.id, nickname: updated.nicknameOptional,
+        age_months: ageMonthsOnDate(updated.ageMonthsAtReference,
+          updated.ageReferenceDate.toISOString().slice(0, 10),
+          localToday(new Date(), updated.timezone ?? 'Europe/Istanbul')),
+        preferred_locale: updated.preferredLocale,
+      };
+    });
+  }
+
   async create(parentId: string, input: { age_months?: unknown; reference_date?: unknown; nickname?: unknown; timezone?: unknown }) {
     if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some((key) => !['age_months', 'reference_date', 'nickname', 'timezone'].includes(key))) {
       throw new BadRequestException('Invalid profile fields');
