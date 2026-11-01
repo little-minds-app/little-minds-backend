@@ -68,6 +68,12 @@ describeFullstack('LMP-38: real Next.js + NestJS + PostgreSQL authentication E2E
   };
 
   beforeAll(async () => {
+    // Prevent persistent OTP counters and test fixtures from polluting dev/staging data.
+    const dbUrl = new URL(process.env.DATABASE_URL!);
+    if (!dbUrl.pathname.endsWith('/little_minds_e2e') ||
+        !['localhost', '127.0.0.1'].includes(dbUrl.hostname)) {
+      throw new Error('Fullstack E2E requires a dedicated local little_minds_e2e database');
+    }
     process.env.APP_ENV = 'development';
     process.env.NODE_ENV = 'test';
     process.env.SMS_SENDER = 'fake';
