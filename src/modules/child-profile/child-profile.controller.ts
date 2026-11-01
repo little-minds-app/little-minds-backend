@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { getParentAuth, ParentAuthGuard } from '../identity/auth/parent-auth.guard';
 import { ChildProfileService } from './child-profile.service';
@@ -14,7 +14,7 @@ export class ChildProfileController {
   }
 
   @Get(':childId')
-  get(@Req() req: Request, @Param('childId') childId: string) {
+  get(@Req() req: Request, @Param('childId', new ParseUUIDPipe({ version: 'all', errorHttpStatusCode: 404 })) childId: string) {
     return this.children.get(getParentAuth(req).parentId, childId);
   }
 }
