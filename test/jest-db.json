@@ -14,7 +14,8 @@
     "<rootDir>/test/account-linking.db.spec.ts",
     "<rootDir>/test/step-up.db.spec.ts",
     "<rootDir>/test/phone-identity-lock.db.spec.ts",
-    "<rootDir>/test/child-profile.db.spec.ts"
+    "<rootDir>/test/child-profile.db.spec.ts",
+    "<rootDir>/test/child-profile-security.db.spec.ts"
   ],
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
