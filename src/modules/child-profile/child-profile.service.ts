@@ -39,7 +39,7 @@ export class ChildProfileService {
       throw new BadRequestException('Invalid profile fields');
     }
     const age = input.age_months;
-    if (typeof age !== 'number' || !Number.isSafeInteger(age) || age < 0) {
+    if (typeof age !== 'number' || !Number.isSafeInteger(age) || age < 0 || age > 2147483647) {
       throw new BadRequestException('Invalid approximate age');
     }
     if (typeof input.reference_date !== 'string') throw new BadRequestException('Invalid reference date');
