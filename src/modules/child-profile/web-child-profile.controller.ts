@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req } from '@nestjs/common';
+import { UnauthorizedException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
@@ -20,10 +20,10 @@ export class WebChildProfileController {
     const provided = request.headers['x-lm-bff-secret'];
     if (!secret || secret.length < 32 || typeof provided !== 'string' ||
       !timingSafeEqual(createHash('sha256').update(secret).digest(), createHash('sha256').update(provided).digest())) {
-      throw new BadRequestException('Untrusted web request');
+      throw new UnauthorizedException('Untrusted web request');
     }
     const handle = request.headers['x-lm-web-session'];
-    if (typeof handle !== 'string') throw new BadRequestException('Missing web session');
+    if (typeof handle !== 'string') throw new UnauthorizedException('Missing web session');
     const active = await this.web.requireActive(handle, true);
     return active.parent_id;
   }
