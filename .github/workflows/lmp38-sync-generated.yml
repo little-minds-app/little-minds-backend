@@ -8,6 +8,9 @@ on:
       - 'contracts/VERSION'
       - 'contracts/compatibility/**'
       - '.github/workflows/lmp38-sync-generated.yml'
+concurrency:
+  group: lmp41-contract-generation
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
@@ -25,6 +28,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Refresh exact current feature head
+        run: |
+          git fetch origin feature/lmp-41-parent-profile
+          git checkout -B feature/lmp-41-parent-profile origin/feature/lmp-41-parent-profile
       - name: Generate versioned OpenAPI clients
         run: |
           npm ci
