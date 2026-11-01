@@ -27,7 +27,9 @@
     "/v1/auth/web/activity",
     "/v1/auth/web/logout",
     "/v1/children",
-    "/v1/children/{childId}"
+    "/v1/children/{childId}",
+    "/v1/web/children",
+    "/v1/web/children/{childId}"
   ],
   "requiredOperations": [
     {
