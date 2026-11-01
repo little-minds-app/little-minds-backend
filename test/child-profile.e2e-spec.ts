@@ -23,13 +23,13 @@ describe('LMP-39 HTTP child profile security boundary', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [ChildProfileController],
-      providers: [{ provide: ChildProfileService, useValue: { get, create } }, ParentAuthGuard],
+      providers: [{ provide: ChildProfileService, useValue: { get, create } }, { provide: ParentAuthGuard, useValue: tokenGuard }],
     }).overrideGuard(ParentAuthGuard).useValue(tokenGuard).compile();
     app = moduleRef.createNestApplication();
     await app.init();
   });
 
-  afterAll(async () => { await app.close(); });
+  afterAll(async () => { await app?.close(); });
   beforeEach(() => jest.resetAllMocks());
 
   const childId = '7bb93fcf-2263-4fef-a4ec-93c130edb5cd';
