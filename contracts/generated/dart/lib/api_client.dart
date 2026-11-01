@@ -247,6 +247,8 @@ class ApiClient {
           return OidcNonceRequest.fromJson(value);
         case 'OidcNonceResponse':
           return OidcNonceResponse.fromJson(value);
+        case 'OptionalParentProfile':
+          return OptionalParentProfile.fromJson(value);
         case 'ParentMeResponse':
           return ParentMeResponse.fromJson(value);
         case 'ParentSessionListResponse':
@@ -273,6 +275,8 @@ class ApiClient {
           return TokenPairResponse.fromJson(value);
         case 'UpdateChildProfileRequest':
           return UpdateChildProfileRequest.fromJson(value);
+        case 'UpdateOptionalParentProfile':
+          return UpdateOptionalParentProfile.fromJson(value);
         case 'UpdateWebChildProfileRequest':
           return UpdateWebChildProfileRequest.fromJson(value);
         default:

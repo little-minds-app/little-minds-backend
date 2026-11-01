@@ -16,6 +16,96 @@ class ParentApi {
 
   final ApiClient apiClient;
 
+  /// Clear all six optional parent profile attributes
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> clearParentProfileWithHttpInfo({ Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/parent/profile';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Clear all six optional parent profile attributes
+  Future<OptionalParentProfile?> clearParentProfile({ Future<void>? abortTrigger, }) async {
+    final response = await clearParentProfileWithHttpInfo(abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'OptionalParentProfile',) as OptionalParentProfile;
+    
+    }
+    return null;
+  }
+
+  /// Clear optional parent profile fields through opaque web session
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> clearWebParentProfileWithHttpInfo({ Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/web/profile';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Clear optional parent profile fields through opaque web session
+  Future<OptionalParentProfile?> clearWebParentProfile({ Future<void>? abortTrigger, }) async {
+    final response = await clearWebParentProfileWithHttpInfo(abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'OptionalParentProfile',) as OptionalParentProfile;
+    
+    }
+    return null;
+  }
+
   /// Create an approximate-age child profile owned by the authenticated parent
   ///
   /// Note: This method returns the HTTP [Response].
@@ -221,6 +311,100 @@ class ParentApi {
     return null;
   }
 
+  /// Read optional parent profile fields without inferring missing values
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> getParentProfileWithHttpInfo({ Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/parent/profile';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Read optional parent profile fields without inferring missing values
+  Future<OptionalParentProfile?> getParentProfile({ Future<void>? abortTrigger, }) async {
+    final response = await getParentProfileWithHttpInfo(abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'OptionalParentProfile',) as OptionalParentProfile;
+    
+    }
+    return null;
+  }
+
+  /// Parent profile through server-authorized opaque web session
+  ///
+  /// BFF-only headers, not a browser-accessible bearer API.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> getWebParentProfileWithHttpInfo({ Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/web/profile';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parent profile through server-authorized opaque web session
+  ///
+  /// BFF-only headers, not a browser-accessible bearer API.
+  Future<OptionalParentProfile?> getWebParentProfile({ Future<void>? abortTrigger, }) async {
+    final response = await getWebParentProfileWithHttpInfo(abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'OptionalParentProfile',) as OptionalParentProfile;
+    
+    }
+    return null;
+  }
+
   /// List only the authenticated parent's non-deleted child profiles
   ///
   /// Note: This method returns the HTTP [Response].
@@ -369,6 +553,59 @@ class ParentApi {
     return null;
   }
 
+  /// Edit supplied optional fields; null removes a stored value
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [UpdateOptionalParentProfile] updateOptionalParentProfile (required):
+  Future<Response> updateParentProfileWithHttpInfo(UpdateOptionalParentProfile updateOptionalParentProfile, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/parent/profile';
+
+    // ignore: prefer_final_locals
+    Object? postBody = updateOptionalParentProfile;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PATCH',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Edit supplied optional fields; null removes a stored value
+  ///
+  /// Parameters:
+  ///
+  /// * [UpdateOptionalParentProfile] updateOptionalParentProfile (required):
+  Future<OptionalParentProfile?> updateParentProfile(UpdateOptionalParentProfile updateOptionalParentProfile, { Future<void>? abortTrigger, }) async {
+    final response = await updateParentProfileWithHttpInfo(updateOptionalParentProfile, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'OptionalParentProfile',) as OptionalParentProfile;
+    
+    }
+    return null;
+  }
+
   /// Server-side BFF child edit using opaque parent web session
   ///
   /// Note: This method returns the HTTP [Response].
@@ -422,6 +659,59 @@ class ParentApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ChildProfileResponse',) as ChildProfileResponse;
+    
+    }
+    return null;
+  }
+
+  /// Edit optional parent profile through opaque web session
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [UpdateOptionalParentProfile] updateOptionalParentProfile (required):
+  Future<Response> updateWebParentProfileWithHttpInfo(UpdateOptionalParentProfile updateOptionalParentProfile, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/auth/web/profile';
+
+    // ignore: prefer_final_locals
+    Object? postBody = updateOptionalParentProfile;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PATCH',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Edit optional parent profile through opaque web session
+  ///
+  /// Parameters:
+  ///
+  /// * [UpdateOptionalParentProfile] updateOptionalParentProfile (required):
+  Future<OptionalParentProfile?> updateWebParentProfile(UpdateOptionalParentProfile updateOptionalParentProfile, { Future<void>? abortTrigger, }) async {
+    final response = await updateWebParentProfileWithHttpInfo(updateOptionalParentProfile, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'OptionalParentProfile',) as OptionalParentProfile;
     
     }
     return null;
