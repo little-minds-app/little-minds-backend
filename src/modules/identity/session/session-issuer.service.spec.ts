@@ -339,8 +339,9 @@ describe('SessionIssuerService (LMP-33)', () => {
     const parentId = '11111111-1111-4111-8111-111111111111';
     const deviceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     const pair = await issuer.mintSession({ parentId, deviceId, clientSurface: 'ios' });
-    expect(mem.devices.get(deviceId)?.parentId).toBe(parentId);
-    expect(mem.sessions.get(pair.session_id)?.deviceId).toBe(deviceId);
+    const parentDeviceId = scopedDeviceId(deviceId, parentId);
+    expect(mem.devices.get(parentDeviceId)?.parentId).toBe(parentId);
+    expect(mem.sessions.get(pair.session_id)?.deviceId).toBe(parentDeviceId);
     await issuer.mintSession({ parentId, deviceId, clientSurface: 'ios' });
     expect(mem.devices.size).toBe(1);
   });
