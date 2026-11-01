@@ -98,7 +98,7 @@ export class ParentProfileService {
         ...(clean.occupation_optional !== undefined ? { occupationOptional: clean.occupation_optional as string | null } : {}),
       };
       const record = await tx.parentProfile.upsert({
-        where: { parentId }, create: { parentId, ...data }, update: data,
+        where: { parentId }, create: { parentId, ...data } as Prisma.ParentProfileUncheckedCreateInput, update: data,
       });
       return {
         first_name: record.firstName, last_name: record.lastName,
