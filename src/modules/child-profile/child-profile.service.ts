@@ -35,8 +35,11 @@ export class ChildProfileService {
   }
 
   async create(parentId: string, input: { age_months?: unknown; reference_date?: unknown; nickname?: unknown; timezone?: unknown }) {
-    const age = input?.age_months;
-    if (typeof age !== 'number' || !Number.isSafeInteger(age) || age < 0 || age > 215) {
+    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some((key) => !['age_months', 'reference_date', 'nickname', 'timezone'].includes(key))) {
+      throw new BadRequestException('Invalid profile fields');
+    }
+    const age = input.age_months;
+    if (typeof age !== 'number' || !Number.isSafeInteger(age) || age < 0) {
       throw new BadRequestException('Invalid approximate age');
     }
     if (typeof input.reference_date !== 'string') throw new BadRequestException('Invalid reference date');
@@ -48,11 +51,16 @@ export class ChildProfileService {
     if (input.nickname !== undefined && (typeof input.nickname !== 'string' || input.nickname.length > 80)) {
       throw new BadRequestException('Invalid nickname');
     }
-    const parent = await this.prisma.db.parentAccount.findFirst({
-      where: { id: parentId, lifecycle: 'active', deletedAt: null }, select: { id: true },
-    });
-    if (!parent) throw new NotFoundException('Parent not found');
-    const child = await this.prisma.db.childProfile.create({
+    // Lock the parent row until child creation commits. Account lifecycle changes
+    // cannot interleave between authorization and insert.
+    const child = await this.prisma.db.$transaction(async (tx) => {
+      const parents = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM parent_accounts
+        WHERE id = ${parentId}::uuid AND lifecycle = 'active' AND deleted_at IS NULL
+        FOR UPDATE
+      `;
+      if (parents.length !== 1) throw new NotFoundException('Parent not found');
+      return tx.childProfile.create({
       data: {
         parentId, ageMonthsAtReference: age,
         ageReferenceDate: new Date(`${input.reference_date}T00:00:00.000Z`),
@@ -60,6 +68,7 @@ export class ChildProfileService {
         timezone,
       },
       select: { id: true },
+      });
     });
     return { child_id: child.id };
   }
