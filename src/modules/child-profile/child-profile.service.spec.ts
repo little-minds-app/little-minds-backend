@@ -11,7 +11,7 @@ describe('LMP-39 parent-owned child profiles', () => {
     $transaction: transaction,
   } };
   const service = new ChildProfileService(prisma as never);
-  beforeEach(() => { jest.resetAllMocks(); lockedParents.mockResolvedValue([]); });
+  beforeEach(() => { jest.clearAllMocks(); lockedParents.mockReset(); create.mockReset(); findFirst.mockReset(); lockedParents.mockResolvedValue([]); });
 
   it('filters by authenticated parent and non-deleted child', async () => {
     findFirst.mockResolvedValue(null);
