@@ -1265,6 +1265,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** Format: int32 */
                     age_months: number;
                     /** Format: date */
                     reference_date: string;

@@ -20,7 +20,6 @@ class CreateChildProfileRequest {
   });
 
   /// Minimum value: 0
-  /// Maximum value: 215
   int ageMonths;
 
   DateTime referenceDate;
