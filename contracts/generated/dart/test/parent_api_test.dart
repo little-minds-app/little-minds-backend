@@ -17,6 +17,20 @@ void main() {
   // final instance = ParentApi();
 
   group('tests for ParentApi', () {
+    // Create an approximate-age child profile owned by the authenticated parent
+    //
+    //Future<CreateChildProfile201Response> createChildProfile(CreateChildProfileRequest createChildProfileRequest) async
+    test('test createChildProfile', () async {
+      // TODO
+    });
+
+    // Read a non-deleted child profile only when owned by authenticated parent
+    //
+    //Future<GetChildProfile200Response> getChildProfile(String childId) async
+    test('test getChildProfile', () async {
+      // TODO
+    });
+
     // Authenticated parent identity probe
     //
     //Future<ParentMeResponse> getParentMe() async
