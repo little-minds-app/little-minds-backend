@@ -91,6 +91,8 @@ Class | Method | HTTP request | Description
 *AuthApi* | [**verifyPhoneOtp**](doc//AuthApi.md#verifyphoneotp) | **POST** /v1/auth/phone/verify | Verify GSM OTP and mint parent session (ADR-020)
 *HealthApi* | [**getHealth**](doc//HealthApi.md#gethealth) | **GET** /health | Process liveness
 *HealthApi* | [**getHealthReady**](doc//HealthApi.md#gethealthready) | **GET** /health/ready | Dependency readiness
+*ParentApi* | [**createChildProfile**](doc//ParentApi.md#createchildprofile) | **POST** /v1/children | Create an approximate-age child profile owned by the authenticated parent
+*ParentApi* | [**getChildProfile**](doc//ParentApi.md#getchildprofile) | **GET** /v1/children/{childId} | Read a non-deleted child profile only when owned by authenticated parent
 *ParentApi* | [**getParentMe**](doc//ParentApi.md#getparentme) | **GET** /v1/parent/me | Authenticated parent identity probe
 
 
@@ -106,11 +108,14 @@ Class | Method | HTTP request | Description
  - [AppleAuthRequest](doc//AppleAuthRequest.md)
  - [AuthError](doc//AuthError.md)
  - [ConsentScope](doc//ConsentScope.md)
+ - [CreateChildProfile201Response](doc//CreateChildProfile201Response.md)
+ - [CreateChildProfileRequest](doc//CreateChildProfileRequest.md)
  - [CreateParentWebSession201Response](doc//CreateParentWebSession201Response.md)
  - [DevSessionRequest](doc//DevSessionRequest.md)
  - [EmailOtpStartRequest](doc//EmailOtpStartRequest.md)
  - [EmailOtpStartResponse](doc//EmailOtpStartResponse.md)
  - [EmailOtpVerifyRequest](doc//EmailOtpVerifyRequest.md)
+ - [GetChildProfile200Response](doc//GetChildProfile200Response.md)
  - [GetParentWebSession200Response](doc//GetParentWebSession200Response.md)
  - [GoogleAuthRequest](doc//GoogleAuthRequest.md)
  - [GooglePkceStartRequest](doc//GooglePkceStartRequest.md)

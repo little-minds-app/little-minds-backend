@@ -322,6 +322,90 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthError'
+  /v1/children:
+    post:
+      operationId: createChildProfile
+      tags: [Parent]
+      summary: Create an approximate-age child profile owned by the authenticated parent
+      security:
+        - parentAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [age_months, reference_date]
+              properties:
+                age_months:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                reference_date:
+                  type: string
+                  format: date
+                nickname:
+                  type: string
+                  maxLength: 80
+                timezone:
+                  type: string
+                  description: IANA time zone; defaults to Europe/Istanbul
+      responses:
+        '201':
+          description: Created child profile owned by parent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [child_id]
+                properties:
+                  child_id:
+                    type: string
+                    format: uuid
+        '400':
+          description: Invalid approximate age or reference date
+        '401':
+          description: Unauthorized
+        '404':
+          description: Parent account inactive or unavailable
+  /v1/children/{childId}:
+    get:
+      operationId: getChildProfile
+      tags: [Parent]
+      summary: Read a non-deleted child profile only when owned by authenticated parent
+      security:
+        - parentAccessToken: []
+      parameters:
+        - in: path
+          name: childId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Parent-owned child profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [child_id, nickname, age_months, preferred_locale]
+                properties:
+                  child_id:
+                    type: string
+                    format: uuid
+                  nickname:
+                    type: string
+                    nullable: true
+                  age_months:
+                    type: integer
+                  preferred_locale:
+                    type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: Missing, soft-deleted, or not-owned child profile (uniform)
   /v1/parent/me:
     get:
       operationId: getParentMe

@@ -216,6 +216,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an approximate-age child profile owned by the authenticated parent */
+        post: operations["createChildProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/children/{childId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a non-deleted child profile only when owned by authenticated parent */
+        get: operations["getChildProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/parent/me": {
         parameters: {
             query?: never;
@@ -1218,6 +1252,104 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthError"];
                 };
+            };
+        };
+    };
+    createChildProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int32 */
+                    age_months: number;
+                    /** Format: date */
+                    reference_date: string;
+                    nickname?: string;
+                    /** @description IANA time zone; defaults to Europe/Istanbul */
+                    timezone?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created child profile owned by parent */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        child_id: string;
+                    };
+                };
+            };
+            /** @description Invalid approximate age or reference date */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Parent account inactive or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getChildProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                childId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Parent-owned child profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        child_id: string;
+                        nickname: string | null;
+                        age_months: number;
+                        preferred_locale: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, soft-deleted, or not-owned child profile (uniform) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
