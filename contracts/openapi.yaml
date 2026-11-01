@@ -475,6 +475,114 @@ paths:
           description: Unauthorized
         '404':
           description: Missing, soft-deleted, or not-owned child profile (uniform)
+  /v1/web/children:
+    get:
+      operationId: listWebChildProfiles
+      tags: [Parent]
+      summary: Server-side BFF child list using an opaque parent web session
+      responses:
+        '200':
+          description: Owned profiles
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [children]
+                properties:
+                  children:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChildProfileResponse'
+        '401':
+          description: Invalid web session
+    post:
+      operationId: createWebChildProfile
+      tags: [Parent]
+      summary: Server-side BFF child creation using opaque session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [age_months, reference_date]
+              properties:
+                age_months:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                reference_date:
+                  type: string
+                  format: date
+                nickname:
+                  type: string
+                  maxLength: 80
+                timezone:
+                  type: string
+      responses:
+        '201':
+          description: Created child
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [child_id]
+                properties:
+                  child_id:
+                    type: string
+                    format: uuid
+        '400':
+          description: Invalid request
+        '401':
+          description: Invalid web session
+  /v1/web/children/{childId}:
+    patch:
+      operationId: updateWebChildProfile
+      tags: [Parent]
+      summary: Server-side BFF child edit using opaque parent web session
+      parameters:
+        - in: path
+          name: childId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                nickname:
+                  type: string
+                  nullable: true
+                  maxLength: 80
+                age_months:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                reference_date:
+                  type: string
+                  format: date
+                timezone:
+                  type: string
+      responses:
+        '200':
+          description: Updated owned profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChildProfileResponse'
+        '400':
+          description: Invalid request
+        '401':
+          description: Invalid web session
+        '404':
+          description: Not found or not owned
   /v1/parent/me:
     get:
       operationId: getParentMe
