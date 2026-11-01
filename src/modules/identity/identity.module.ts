@@ -6,6 +6,7 @@ import { WebSessionController } from './controllers/web-session.controller';
 import { DevAuthController } from './controllers/dev-auth.controller';
 import { IdentityLinkController } from './controllers/identity-link.controller';
 import { MultiProviderAuthController } from './controllers/multi-provider-auth.controller';
+import { WebParentProfileController } from './controllers/web-parent-profile.controller';
 import { ParentProfileService } from './parent-profile.service';
 import { ParentController } from './controllers/parent.controller';
 import { PhoneAuthController } from './controllers/phone-auth.controller';
@@ -44,6 +45,7 @@ import { SMS_SENDER } from './sms/sms-sender';
   controllers: [
     AuthController,
     WebSessionController,
+    WebParentProfileController,
     ParentController,
     DevAuthController,
     PhoneAuthController,
