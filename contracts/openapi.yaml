@@ -340,8 +340,8 @@ paths:
               properties:
                 age_months:
                   type: integer
+                  format: int32
                   minimum: 0
-                  maximum: 215
                 reference_date:
                   type: string
                   format: date
