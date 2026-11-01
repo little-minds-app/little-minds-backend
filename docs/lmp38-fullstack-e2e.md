@@ -3,13 +3,13 @@
 ## Purpose
 
 Run the actual Next.js parent web app from `little-minds-client` against the actual
-NestJS `AppModule`, fake-SMS adapter, and an isolated PostgreSQL 16 service.
+NestJS `AppModule`, fake-SMS adapter, and an isolated PostgreSQL 16 service (`little_minds_e2e`).
 The test intentionally avoids a mock HTTP backend.
 
 - Jest spec: `test/web-parent-fullstack.e2e-spec.ts`
 - Workflow: `.github/workflows/lmp38-fullstack-e2e.yml`
-- Pinned client revision in the workflow: `12d04f841f0344ff037ac255be7f3d2185e4b403`
-  (OpenAPI 0.8.0, backend pin `bae3044857bc11479d4ca680ec55b5339779e025`).
+- Pinned client revision in the workflow: `30182cf39223b4903cdcd998ea85c5f7402aea09`
+  (client PR #18, integration branch based on merged LMP-25; OpenAPI 0.8.0).
 - Coverage: web OTP start/verify through Nest + fake SMS, opaque cookie, real
   protected page/profile, explicit activity, backend logout, idle expiration,
   and denial of stale sessions.
