@@ -53,6 +53,20 @@ void main() {
       // TODO
     });
 
+    // Exchange verified web parent bearer for an opaque browser session (BFF only)
+    //
+    //Future<CreateParentWebSession201Response> createParentWebSession() async
+    test('test createParentWebSession', () async {
+      // TODO
+    });
+
+    // Authorize durable opaque web session without refresh rotation
+    //
+    //Future<GetParentWebSession200Response> getParentWebSession(String xLMWebSession) async
+    test('test getParentWebSession', () async {
+      // TODO
+    });
+
     // Issue short-lived OIDC nonce (ADR-021)
     //
     // Unauthenticated. Returns a **provider-bound** server-issued nonce for Apple or Google ID-token paths (`provider` required: apple|google). Single-use; TTL 600s. Rate-limited per IP. Cross-provider consume is rejected. 
@@ -91,6 +105,22 @@ void main() {
     //
     //Future logoutParentSession({ LogoutRequest logoutRequest }) async
     test('test logoutParentSession', () async {
+      // TODO
+    });
+
+    // Revoke opaque web session and linked parent session
+    //
+    //Future logoutParentWebSession(String xLMWebSession) async
+    test('test logoutParentWebSession', () async {
+      // TODO
+    });
+
+    // Extend idle timeout for explicit user activity through trusted BFF only
+    //
+    // Requires both X-LM-Web-Session and X-LM-Bff-Secret. Passive GET /me does not advance last_used_at. The backend checks absolute and idle expiry. 
+    //
+    //Future<GetParentWebSession200Response> markParentWebActivity(String xLMWebSession, String xLMBffSecret) async
+    test('test markParentWebActivity', () async {
       // TODO
     });
 

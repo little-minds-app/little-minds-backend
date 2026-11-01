@@ -4,6 +4,78 @@
  */
 
 export interface paths {
+    "/v1/auth/web/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Exchange verified web parent bearer for an opaque browser session (BFF only) */
+        post: operations["createParentWebSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/web/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Authorize durable opaque web session without refresh rotation */
+        get: operations["getParentWebSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/web/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extend idle timeout for explicit user activity through trusted BFF only
+         * @description Requires both X-LM-Web-Session and X-LM-Bff-Secret. Passive GET /me
+         *     does not advance last_used_at. The backend checks absolute and idle expiry.
+         */
+        post: operations["markParentWebActivity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/web/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke opaque web session and linked parent session */
+        post: operations["logoutParentWebSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -775,6 +847,126 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    createParentWebSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Opaque session handle for trusted Next.js server, never browser JSON */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        handle: string;
+                        /** Format: date-time */
+                        expires_at: string;
+                    };
+                };
+            };
+            /** @description Not an active web parent session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getParentWebSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-LM-Web-Session": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated parent summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        parent_id: string;
+                        locale: string;
+                        timezone: string;
+                    };
+                };
+            };
+            /** @description Invalid, revoked, or expired web session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    markParentWebActivity: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-LM-Web-Session": string;
+                "X-LM-Bff-Secret": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session remains valid and idle clock was extended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        parent_id: string;
+                        locale: string;
+                        timezone: string;
+                    };
+                };
+            };
+            /** @description Invalid, idle-expired, or untrusted session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    logoutParentWebSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-LM-Web-Session": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Web session revoked or already absent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getHealth: {
         parameters: {
             query?: never;

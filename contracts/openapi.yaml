@@ -12,7 +12,7 @@ info:
     event contracts. Live `POST /v1/events/batch` is intentionally **not** published
     here — ingest lands in a later Jira task. Authoritative Ajv JSON Schemas live under
     `contracts/schemas/activity/` (`schema_version` 1.0.0, independent of this info.version).
-  version: 0.7.1
+  version: 0.8.0
 
   contact:
     name: Little Minds
@@ -29,6 +29,111 @@ tags:
   - name: Parent
     description: Authenticated parent identity probe
 paths:
+  /v1/auth/web/session:
+    post:
+      operationId: createParentWebSession
+      tags: [Auth]
+      summary: Exchange verified web parent bearer for an opaque browser session (BFF only)
+      security:
+        - parentAccessToken: []
+      responses:
+        '201':
+          description: Opaque session handle for trusted Next.js server, never browser JSON
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [handle, expires_at]
+                properties:
+                  handle:
+                    type: string
+                    minLength: 43
+                    maxLength: 43
+                  expires_at:
+                    type: string
+                    format: date-time
+        '401':
+          description: Not an active web parent session
+  /v1/auth/web/me:
+    get:
+      operationId: getParentWebSession
+      tags: [Auth]
+      summary: Authorize durable opaque web session without refresh rotation
+      parameters:
+        - in: header
+          name: X-LM-Web-Session
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authenticated parent summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [parent_id, locale, timezone]
+                properties:
+                  parent_id:
+                    type: string
+                    format: uuid
+                  locale:
+                    type: string
+                  timezone:
+                    type: string
+        '401':
+          description: Invalid, revoked, or expired web session
+  /v1/auth/web/activity:
+    post:
+      operationId: markParentWebActivity
+      tags: [Auth]
+      summary: Extend idle timeout for explicit user activity through trusted BFF only
+      description: |
+        Requires both X-LM-Web-Session and X-LM-Bff-Secret. Passive GET /me
+        does not advance last_used_at. The backend checks absolute and idle expiry.
+      parameters:
+        - in: header
+          name: X-LM-Web-Session
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-LM-Bff-Secret
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session remains valid and idle clock was extended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [parent_id, locale, timezone]
+                properties:
+                  parent_id:
+                    type: string
+                    format: uuid
+                  locale:
+                    type: string
+                  timezone:
+                    type: string
+        '401':
+          description: Invalid, idle-expired, or untrusted session
+  /v1/auth/web/logout:
+    post:
+      operationId: logoutParentWebSession
+      tags: [Auth]
+      summary: Revoke opaque web session and linked parent session
+      parameters:
+        - in: header
+          name: X-LM-Web-Session
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Web session revoked or already absent
   /health:
     get:
       operationId: getHealth

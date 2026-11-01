@@ -137,6 +137,7 @@ model ParentAccount {
   deletionRequests               DeletionRequest[]
   parentPreferences              ParentPreference[]
   sessions                       ParentSession[]
+  webSessions                    WebParentSession[]
   accountLinkAudits              AccountLinkAudit[]
 
   @@map("parent_accounts")
@@ -165,6 +166,7 @@ model ParentSession {
   parent       ParentAccount                     @relation(fields: [parentId], references: [id], onDelete: Restrict)
   device       Device?                           @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   priorHashes  ParentSessionRefreshHashLookup[]
+  webSessions  WebParentSession[]
 
   @@unique([refreshTokenHash], map: "parent_sessions_refresh_token_hash_key")
   @@index([parentId, revokedAt], map: "parent_sessions_parent_revoked_idx")
@@ -182,6 +184,26 @@ model ParentSessionRefreshHashLookup {
 
   @@index([sessionId], map: "parent_session_refresh_hash_lookups_session_idx")
   @@map("parent_session_refresh_hash_lookups")
+}
+
+/// LMP-38 — opaque browser session, bound to the canonical parent session.
+/// Web clients never hold or rotate backend refresh tokens.
+model WebParentSession {
+  id              String    @id @default(uuid()) @db.Uuid
+  parentId        String    @map("parent_id") @db.Uuid
+  parentSessionId String    @unique @map("parent_session_id") @db.Uuid
+  handleHash      String    @unique @map("handle_hash") @db.VarChar(64)
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt      DateTime? @map("last_used_at") @db.Timestamptz(6)
+
+  parent        ParentAccount @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  parentSession ParentSession @relation(fields: [parentSessionId], references: [id], onDelete: Cascade)
+
+  @@index([parentId, revokedAt], map: "web_parent_sessions_parent_revoked_idx")
+  @@index([expiresAt], map: "web_parent_sessions_expires_at_idx")
+  @@map("web_parent_sessions")
 }
 
 /// LMP-34 / ADR-020 — LM-owned OTP challenges (no plaintext OTP / E.164 at rest).

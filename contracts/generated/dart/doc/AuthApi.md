@@ -13,11 +13,15 @@ Method | HTTP request | Description
 [**authenticateGoogle**](AuthApi.md#authenticategoogle) | **POST** /v1/auth/google | Google Sign-In nonce or auth-code+PKCE (ADR-021)
 [**createDevParentSession**](AuthApi.md#createdevparentsession) | **POST** /v1/auth/dev/session | Local/test session bootstrap (development only)
 [**createIdentityLinkStepUp**](AuthApi.md#createidentitylinkstepup) | **POST** /v1/auth/identities/step-up | Issue recent-auth step-up token for identity linking (LMP-36)
+[**createParentWebSession**](AuthApi.md#createparentwebsession) | **POST** /v1/auth/web/session | Exchange verified web parent bearer for an opaque browser session (BFF only)
+[**getParentWebSession**](AuthApi.md#getparentwebsession) | **GET** /v1/auth/web/me | Authorize durable opaque web session without refresh rotation
 [**issueOidcNonce**](AuthApi.md#issueoidcnonce) | **POST** /v1/auth/oidc/nonce | Issue short-lived OIDC nonce (ADR-021)
 [**linkParentIdentity**](AuthApi.md#linkparentidentity) | **POST** /v1/auth/identities/link | Explicitly link a verified provider identity (LMP-36)
 [**listParentSessions**](AuthApi.md#listparentsessions) | **GET** /v1/auth/sessions | List sessions for the authenticated parent
 [**logoutAllParentSessions**](AuthApi.md#logoutallparentsessions) | **POST** /v1/auth/logout-all | Revoke all sessions for the authenticated parent
 [**logoutParentSession**](AuthApi.md#logoutparentsession) | **POST** /v1/auth/logout | Revoke the current parent session
+[**logoutParentWebSession**](AuthApi.md#logoutparentwebsession) | **POST** /v1/auth/web/logout | Revoke opaque web session and linked parent session
+[**markParentWebActivity**](AuthApi.md#markparentwebactivity) | **POST** /v1/auth/web/activity | Extend idle timeout for explicit user activity through trusted BFF only
 [**refreshParentSession**](AuthApi.md#refreshparentsession) | **POST** /v1/auth/token/refresh | Rotate parent access and refresh tokens
 [**revokeParentSession**](AuthApi.md#revokeparentsession) | **DELETE** /v1/auth/sessions/{sessionId} | Revoke one owned session
 [**startEmailOtp**](AuthApi.md#startemailotp) | **POST** /v1/auth/email/start | Start Email OTP challenge (ADR-021)
@@ -201,6 +205,90 @@ Name | Type | Description  | Notes
 ### HTTP request headers
 
  - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **createParentWebSession**
+> CreateParentWebSession201Response createParentWebSession()
+
+Exchange verified web parent bearer for an opaque browser session (BFF only)
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+// TODO Configure HTTP Bearer authorization: parentAccessToken
+// Case 1. Use String Token
+//defaultApiClient.getAuthentication<HttpBearerAuth>('parentAccessToken').setAccessToken('YOUR_ACCESS_TOKEN');
+// Case 2. Use Function which generate token.
+// String yourTokenGeneratorFunction() { ... }
+//defaultApiClient.getAuthentication<HttpBearerAuth>('parentAccessToken').setAccessToken(yourTokenGeneratorFunction);
+
+final api_instance = AuthApi();
+
+try {
+    final result = api_instance.createParentWebSession();
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->createParentWebSession: $e\n');
+}
+```
+
+### Parameters
+This endpoint does not need any parameter.
+
+### Return type
+
+[**CreateParentWebSession201Response**](CreateParentWebSession201Response.md)
+
+### Authorization
+
+[parentAccessToken](../README.md#parentAccessToken)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **getParentWebSession**
+> GetParentWebSession200Response getParentWebSession(xLMWebSession)
+
+Authorize durable opaque web session without refresh rotation
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final xLMWebSession = xLMWebSession_example; // String | 
+
+try {
+    final result = api_instance.getParentWebSession(xLMWebSession);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->getParentWebSession: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **xLMWebSession** | **String**|  | 
+
+### Return type
+
+[**GetParentWebSession200Response**](GetParentWebSession200Response.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
  - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
@@ -421,6 +509,91 @@ No authorization required
 ### HTTP request headers
 
  - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **logoutParentWebSession**
+> logoutParentWebSession(xLMWebSession)
+
+Revoke opaque web session and linked parent session
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final xLMWebSession = xLMWebSession_example; // String | 
+
+try {
+    api_instance.logoutParentWebSession(xLMWebSession);
+} catch (e) {
+    print('Exception when calling AuthApi->logoutParentWebSession: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **xLMWebSession** | **String**|  | 
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **markParentWebActivity**
+> GetParentWebSession200Response markParentWebActivity(xLMWebSession, xLMBffSecret)
+
+Extend idle timeout for explicit user activity through trusted BFF only
+
+Requires both X-LM-Web-Session and X-LM-Bff-Secret. Passive GET /me does not advance last_used_at. The backend checks absolute and idle expiry. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = AuthApi();
+final xLMWebSession = xLMWebSession_example; // String | 
+final xLMBffSecret = xLMBffSecret_example; // String | 
+
+try {
+    final result = api_instance.markParentWebActivity(xLMWebSession, xLMBffSecret);
+    print(result);
+} catch (e) {
+    print('Exception when calling AuthApi->markParentWebActivity: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **xLMWebSession** | **String**|  | 
+ **xLMBffSecret** | **String**|  | 
+
+### Return type
+
+[**GetParentWebSession200Response**](GetParentWebSession200Response.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
  - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
