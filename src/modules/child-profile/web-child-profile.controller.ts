@@ -24,23 +24,34 @@ export class WebChildProfileController {
     }
     const handle = request.headers['x-lm-web-session'];
     if (typeof handle !== 'string') throw new UnauthorizedException('Missing web session');
-    const active = await this.web.requireActive(handle, true);
+    const active = await this.web.requireActive(handle, false);
     return active.parent_id;
+  }
+
+  private async successfulActivity(req: Request): Promise<void> {
+    const handle = req.headers['x-lm-web-session'];
+    if (typeof handle === 'string') await this.web.requireActive(handle, true);
   }
 
   @Get()
   async list(@Req() req: Request) {
-    return this.profiles.list(await this.parent(req));
+    const result = await this.profiles.list(await this.parent(req));
+    await this.successfulActivity(req);
+    return result;
   }
 
   @Post()
   async create(@Req() req: Request, @Body() body: { age_months?: unknown; reference_date?: unknown; nickname?: unknown; timezone?: unknown }) {
-    return this.profiles.create(await this.parent(req), body);
+    const result = await this.profiles.create(await this.parent(req), body);
+    await this.successfulActivity(req);
+    return result;
   }
 
   @Patch(':childId')
   async update(@Req() req: Request, @Param('childId', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) childId: string,
     @Body() body: Record<string, unknown>) {
-    return this.profiles.update(await this.parent(req), childId, body);
+    const result = await this.profiles.update(await this.parent(req), childId, body);
+    await this.successfulActivity(req);
+    return result;
   }
 }
