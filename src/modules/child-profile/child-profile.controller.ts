@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { getParentAuth, ParentAuthGuard } from '../identity/auth/parent-auth.guard';
 import { ChildProfileService } from './child-profile.service';
@@ -7,6 +7,17 @@ import { ChildProfileService } from './child-profile.service';
 @UseGuards(ParentAuthGuard)
 export class ChildProfileController {
   constructor(private readonly children: ChildProfileService) {}
+
+  @Get()
+  list(@Req() req: Request) {
+    return this.children.list(getParentAuth(req).parentId);
+  }
+
+  @Patch(':childId')
+  update(@Req() req: Request, @Param('childId', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) childId: string,
+    @Body() body: Record<string, unknown>) {
+    return this.children.update(getParentAuth(req).parentId, childId, body);
+  }
 
   @Post()
   create(@Req() req: Request, @Body() body: { age_months?: unknown; reference_date?: unknown; nickname?: unknown; timezone?: unknown }) {
