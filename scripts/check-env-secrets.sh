@@ -145,7 +145,7 @@ else
   elif ! grep -Eq "^[[:space:]]*version:[[:space:]]*['\"]?${CONTRACT_VERSION}['\"]?[[:space:]]*$" "$OPENAPI_FILE"; then
     fail "LMP-28-TC-006" "OpenAPI info.version must match contracts/VERSION (${CONTRACT_VERSION})"
   else
-    # Path keys under `paths:` must stay health-only (descriptions may mention future /v1/...).
+    # Only explicitly approved API paths are allowed (descriptions are not path declarations).
     PATH_KEYS="$(
       awk '
         /^paths:/ { in_paths=1; next }
@@ -164,9 +164,9 @@ else
       EXTRA_PATHS=""
       while IFS= read -r p; do
         [[ -z "$p" ]] && continue
-        # LMP-32 health + LMP-33 parent session paths (ADR-019). No other /v1 invent.
+        # Approved health, auth, and LMP-39 parent-owned child profile paths only.
         case "$p" in
-          /health|/health/ready|/v1/auth/token/refresh|/v1/auth/logout|/v1/auth/logout-all|/v1/auth/sessions|/v1/auth/sessions/{sessionId}|/v1/parent/me|/v1/auth/dev/session|/v1/auth/phone/start|/v1/auth/phone/verify|/v1/auth/oidc/nonce|/v1/auth/google/pkce/start|/v1/auth/apple|/v1/auth/google|/v1/auth/email/start|/v1/auth/email/verify|/v1/auth/identities/step-up|/v1/auth/identities/link|/v1/auth/web/session|/v1/auth/web/me|/v1/auth/web/activity|/v1/auth/web/logout)
+          /health|/health/ready|/v1/auth/token/refresh|/v1/auth/logout|/v1/auth/logout-all|/v1/auth/sessions|/v1/auth/sessions/{sessionId}|/v1/parent/me|/v1/auth/dev/session|/v1/auth/phone/start|/v1/auth/phone/verify|/v1/auth/oidc/nonce|/v1/auth/google/pkce/start|/v1/auth/apple|/v1/auth/google|/v1/auth/email/start|/v1/auth/email/verify|/v1/auth/identities/step-up|/v1/auth/identities/link|/v1/auth/web/session|/v1/auth/web/me|/v1/auth/web/activity|/v1/auth/web/logout|/v1/children|/v1/children/{childId})
             ;;
           *)
             EXTRA_PATHS="${EXTRA_PATHS}${p} "
@@ -174,9 +174,9 @@ else
         esac
       done <<<"$PATH_KEYS"
       if [[ -n "$EXTRA_PATHS" ]]; then
-        fail "LMP-28-TC-006" "OpenAPI path surface outside approved auth allowlist; unexpected: ${EXTRA_PATHS}"
+        fail "LMP-28-TC-006" "OpenAPI path surface outside approved endpoint allowlist; unexpected: ${EXTRA_PATHS}"
       else
-        pass "LMP-28-TC-006" "OpenAPI VERSION=${CONTRACT_VERSION} synced; paths health+LMP-33/34/35/36/38 auth (additive bumps OK)"
+        pass "LMP-28-TC-006" "OpenAPI VERSION=${CONTRACT_VERSION} synced; paths health+LMP-33/34/35/36/38 auth+LMP-39 child profiles (additive bumps OK)"
       fi
     fi
   fi
