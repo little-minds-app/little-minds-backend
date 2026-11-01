@@ -60,6 +60,7 @@ describe('LMP-40 HTTP web-session child profile boundary', () => {
     expect(children.list).toHaveBeenCalledWith('parent-A');
     expect(children.create).toHaveBeenCalledWith('parent-A', { age_months: 32, reference_date: '2026-01-01' });
     expect(children.update).toHaveBeenCalledWith('parent-A', childId, { nickname: 'Updated' });
+    expect(sessions.requireActive).toHaveBeenCalledWith(handle, false);
     expect(sessions.requireActive).toHaveBeenCalledWith(handle, true);
   });
 
@@ -68,4 +69,21 @@ describe('LMP-40 HTTP web-session child profile boundary', () => {
       .send({ nickname: 'x' }).expect(404);
     expect(children.update).not.toHaveBeenCalled();
   });
+  it('does not refresh idle clock when a foreign edit is rejected', async () => {
+    children.update.mockRejectedValue(new (await import('@nestjs/common')).NotFoundException('Child profile not found'));
+    await headers(request(app.getHttpServer()).patch('/v1/web/children/' + childId))
+      .send({ nickname: 'Rejected' }).expect(404);
+    expect(sessions.requireActive).toHaveBeenCalledTimes(1);
+    expect(sessions.requireActive).toHaveBeenCalledWith(handle, false);
+    expect(sessions.requireActive).not.toHaveBeenCalledWith(handle, true);
+  });
+
+  it('does not refresh idle clock for invalid profile data', async () => {
+    children.create.mockRejectedValue(new (await import('@nestjs/common')).BadRequestException('Invalid profile'));
+    await headers(request(app.getHttpServer()).post('/v1/web/children'))
+      .send({ age_months: -1, reference_date: '2026-11-01' }).expect(400);
+    expect(sessions.requireActive).toHaveBeenCalledTimes(1);
+    expect(sessions.requireActive).not.toHaveBeenCalledWith(handle, true);
+  });
+
 });
