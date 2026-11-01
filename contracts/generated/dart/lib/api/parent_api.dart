@@ -69,6 +69,59 @@ class ParentApi {
     return null;
   }
 
+  /// Server-side BFF child creation using opaque session
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [CreateWebChildProfileRequest] createWebChildProfileRequest (required):
+  Future<Response> createWebChildProfileWithHttpInfo(CreateWebChildProfileRequest createWebChildProfileRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/web/children';
+
+    // ignore: prefer_final_locals
+    Object? postBody = createWebChildProfileRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Server-side BFF child creation using opaque session
+  ///
+  /// Parameters:
+  ///
+  /// * [CreateWebChildProfileRequest] createWebChildProfileRequest (required):
+  Future<CreateChildProfile201Response?> createWebChildProfile(CreateWebChildProfileRequest createWebChildProfileRequest, { Future<void>? abortTrigger, }) async {
+    final response = await createWebChildProfileWithHttpInfo(createWebChildProfileRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'CreateChildProfile201Response',) as CreateChildProfile201Response;
+    
+    }
+    return null;
+  }
+
   /// Read a non-deleted child profile only when owned by authenticated parent
   ///
   /// Note: This method returns the HTTP [Response].
@@ -163,6 +216,212 @@ class ParentApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ParentMeResponse',) as ParentMeResponse;
+    
+    }
+    return null;
+  }
+
+  /// List only the authenticated parent's non-deleted child profiles
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> listChildProfilesWithHttpInfo({ Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/children';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// List only the authenticated parent's non-deleted child profiles
+  Future<ListChildProfiles200Response?> listChildProfiles({ Future<void>? abortTrigger, }) async {
+    final response = await listChildProfilesWithHttpInfo(abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ListChildProfiles200Response',) as ListChildProfiles200Response;
+    
+    }
+    return null;
+  }
+
+  /// Server-side BFF child list using an opaque parent web session
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> listWebChildProfilesWithHttpInfo({ Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/web/children';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Server-side BFF child list using an opaque parent web session
+  Future<ListChildProfiles200Response?> listWebChildProfiles({ Future<void>? abortTrigger, }) async {
+    final response = await listWebChildProfilesWithHttpInfo(abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ListChildProfiles200Response',) as ListChildProfiles200Response;
+    
+    }
+    return null;
+  }
+
+  /// Update a child profile owned by the authenticated parent
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] childId (required):
+  ///
+  /// * [UpdateChildProfileRequest] updateChildProfileRequest (required):
+  Future<Response> updateChildProfileWithHttpInfo(String childId, UpdateChildProfileRequest updateChildProfileRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/children/{childId}'
+      .replaceAll('{childId}', childId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = updateChildProfileRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PATCH',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Update a child profile owned by the authenticated parent
+  ///
+  /// Parameters:
+  ///
+  /// * [String] childId (required):
+  ///
+  /// * [UpdateChildProfileRequest] updateChildProfileRequest (required):
+  Future<ChildProfileResponse?> updateChildProfile(String childId, UpdateChildProfileRequest updateChildProfileRequest, { Future<void>? abortTrigger, }) async {
+    final response = await updateChildProfileWithHttpInfo(childId, updateChildProfileRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ChildProfileResponse',) as ChildProfileResponse;
+    
+    }
+    return null;
+  }
+
+  /// Server-side BFF child edit using opaque parent web session
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] childId (required):
+  ///
+  /// * [UpdateWebChildProfileRequest] updateWebChildProfileRequest (required):
+  Future<Response> updateWebChildProfileWithHttpInfo(String childId, UpdateWebChildProfileRequest updateWebChildProfileRequest, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/web/children/{childId}'
+      .replaceAll('{childId}', childId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = updateWebChildProfileRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PATCH',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Server-side BFF child edit using opaque parent web session
+  ///
+  /// Parameters:
+  ///
+  /// * [String] childId (required):
+  ///
+  /// * [UpdateWebChildProfileRequest] updateWebChildProfileRequest (required):
+  Future<ChildProfileResponse?> updateWebChildProfile(String childId, UpdateWebChildProfileRequest updateWebChildProfileRequest, { Future<void>? abortTrigger, }) async {
+    final response = await updateWebChildProfileWithHttpInfo(childId, updateWebChildProfileRequest, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ChildProfileResponse',) as ChildProfileResponse;
     
     }
     return null;
