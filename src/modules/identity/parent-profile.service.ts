@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ageBands = ['18-24', '25-34', '35-44', '45-54', '55+', 'prefer_not_to_say'];
@@ -88,13 +89,13 @@ export class ParentProfileService {
           AND lifecycle = 'active' AND deleted_at IS NULL FOR UPDATE
       `;
       if (parents.length !== 1) throw new NotFoundException('Parent not found');
-      const data = {
-        ...(clean.first_name !== undefined ? { firstName: clean.first_name } : {}),
-        ...(clean.last_name !== undefined ? { lastName: clean.last_name } : {}),
-        ...(clean.age_band_optional !== undefined ? { ageBandOptional: clean.age_band_optional } : {}),
-        ...(clean.gender_optional !== undefined ? { genderOptional: clean.gender_optional } : {}),
-        ...(clean.number_of_children_optional !== undefined ? { numberOfChildrenOptional: clean.number_of_children_optional } : {}),
-        ...(clean.occupation_optional !== undefined ? { occupationOptional: clean.occupation_optional } : {}),
+      const data: Prisma.ParentProfileUncheckedUpdateInput = {
+        ...(clean.first_name !== undefined ? { firstName: clean.first_name as string | null } : {}),
+        ...(clean.last_name !== undefined ? { lastName: clean.last_name as string | null } : {}),
+        ...(clean.age_band_optional !== undefined ? { ageBandOptional: clean.age_band_optional as string | null } : {}),
+        ...(clean.gender_optional !== undefined ? { genderOptional: clean.gender_optional as string | null } : {}),
+        ...(clean.number_of_children_optional !== undefined ? { numberOfChildrenOptional: clean.number_of_children_optional as number | null } : {}),
+        ...(clean.occupation_optional !== undefined ? { occupationOptional: clean.occupation_optional as string | null } : {}),
       };
       const record = await tx.parentProfile.upsert({
         where: { parentId }, create: { parentId, ...data }, update: data,
