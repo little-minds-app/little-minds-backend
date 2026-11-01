@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -19,7 +20,7 @@ const empty = {
 
 @Injectable()
 export class ParentProfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly config?: ConfigService) {}
 
   private async active(parentId: string) {
     const parent = await this.prisma.db.parentAccount.findFirst({
@@ -83,6 +84,13 @@ export class ParentProfileService {
 
   async update(parentId: string, input: unknown, transaction?: Prisma.TransactionClient) {
     const clean = this.validate(input);
+    // Purpose-specific legal review of optional demographics is not complete.
+    // Removals are always permitted; real-user collection is fail-closed.
+    const environment = this.config?.get<string>('APP_ENV') ?? 'development';
+    if ((environment === 'production' || environment === 'staging') &&
+      Object.values(clean).some((value) => value !== null)) {
+      throw new ServiceUnavailableException('Optional profile collection unavailable pending legal review');
+    }
     const save = async (tx: Prisma.TransactionClient) => {
       const parents = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM parent_accounts WHERE id = ${parentId}::uuid
