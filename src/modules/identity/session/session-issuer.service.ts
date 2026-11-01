@@ -6,7 +6,7 @@ import {
   type ParentSession,
   type Prisma,
 } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { AppEnv } from '../../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -42,6 +42,24 @@ export type MintSessionInput = {
   clientSurface?: string | null;
   userAgentSummary?: string | null;
 };
+
+/** A stable parent-scoped device row for an untrusted installation UUID.
+ * The raw installation ID is never used as a parent authorization credential.
+ * Preserve legacy device rows for their original owner, without transferring them.
+ */
+export function scopedDeviceId(installationId: string, parentId: string): string {
+  const hash = createHash('sha256')
+    .update('little-minds/parent-device/v1:')
+    .update(installationId)
+    .update(':')
+    .update(parentId)
+    .digest();
+  // RFC 4122 UUID v5-style, domain-separated digest encoded as a UUID.
+  hash[6] = (hash[6] & 0x0f) | 0x50;
+  hash[8] = (hash[8] & 0x3f) | 0x80;
+  const h = hash.subarray(0, 16).toString('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 
 type TxClient = Prisma.TransactionClient;
 
@@ -118,27 +136,44 @@ export class SessionIssuerService {
       );
     }
 
-    // The client-supplied installation UUID is not an existing device record.
-    // Bind it to the verified parent in this transaction before session mint.
-    // Never reassign an existing device to another parent or revive revocation.
+    // Device rows own parent-scoped child/activity/sync data; never re-parent.
+    // Existing legacy registrations keep working for their original parent.
+    // Different parents receive distinct deterministic device rows.
+    let sessionDeviceId: string | null = null;
     if (input.deviceId) {
-      const existingDevice = await tx.device.findUnique({
+      const legacyDevice = await tx.device.findUnique({
         where: { id: input.deviceId },
       });
-      if (existingDevice) {
-        if (existingDevice.parentId !== input.parentId || existingDevice.revokedAt) {
+      sessionDeviceId =
+        legacyDevice?.parentId === input.parentId
+          ? input.deviceId
+          : scopedDeviceId(input.deviceId, input.parentId);
+      const device = await tx.device.findUnique({
+        where: { id: sessionDeviceId },
+      });
+      if (device) {
+        if (device.parentId !== input.parentId || device.revokedAt) {
           throwInvalidRequest('Device is not available for this account');
         }
       } else {
-        await tx.device.create({
-          data: {
-            id: input.deviceId,
+        // Concurrent sign-ins for the same installation and parent are idempotent.
+        await tx.device.upsert({
+          where: { id: sessionDeviceId },
+          create: {
+            id: sessionDeviceId,
             parentId: input.parentId,
             platform: input.clientSurface === 'ios' || input.clientSurface === 'android'
               ? input.clientSurface
               : 'unknown',
           },
+          update: {},
         });
+        const registered = await tx.device.findUnique({
+          where: { id: sessionDeviceId },
+        });
+        if (!registered || registered.parentId !== input.parentId || registered.revokedAt) {
+          throwInvalidRequest('Device is not available for this account');
+        }
       }
     }
 
@@ -151,7 +186,7 @@ export class SessionIssuerService {
         refreshTokenHashHistory: [],
         refreshGeneration: 0,
         expiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_TTL_MS),
-        deviceId: input.deviceId ?? null,
+        deviceId: sessionDeviceId,
         clientSurface: input.clientSurface ?? null,
         userAgentSummary: input.userAgentSummary ?? null,
       },
