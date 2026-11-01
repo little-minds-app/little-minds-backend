@@ -22,20 +22,22 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: little_minds
+          POSTGRES_DB: little_minds_e2e
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U postgres -d little_minds"
+          --health-cmd "pg_isready -U postgres -d little_minds_e2e"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
       APP_ENV: development
       NODE_ENV: test
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/little_minds?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/little_minds_e2e?schema=public
       LM_CLIENT_WEB_DIR: ${{ github.workspace }}/client/apps/web
       LM_FULLSTACK_WEB_E2E: '1'
       NEXT_TELEMETRY_DISABLED: '1'
+      # Matches the E2E harness; test-only, never a deployment secret.
+      LM_WEB_BFF_SECRET: ci-cross-repo-web-bff-secret-32-chars-minimum
 
     steps:
       - name: Checkout backend PR
@@ -70,12 +72,7 @@ jobs:
       - name: Install and build actual Next.js app
         working-directory: client/apps/web
         run: |
-          # LMP-25: replace fallback with npm ci after web lockfile is committed.
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            npm install --no-audit --no-fund
-          fi
+          npm ci --no-audit --no-fund
           npm run build
 
       - name: Real OTP -> opaque cookie -> parent -> logout -> idle expiry
