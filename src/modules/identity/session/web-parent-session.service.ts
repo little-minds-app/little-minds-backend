@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ParentAccountLifecycle, ParentSessionRevokeReason } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
 import type { AppEnv } from '../../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -94,6 +95,40 @@ export class WebParentSessionService {
       throwUnauthorized('invalid_token', 'Inactive parent');
     }
     return { parent_id: parent.id, locale: parent.locale, timezone: parent.timezone };
+  }
+
+
+  /** Serialize eligibility, successful activity and a profile write in one DB commit.
+   * Failed or expired actions roll back both the write and the idle-clock update.
+   */
+  async authorizedMutation<T>(
+    handle: string,
+    operation: (parentId: string, tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    if (!this.valid(handle)) throwUnauthorized('invalid_token', 'Invalid web session');
+    return this.prisma.db.$transaction(async (tx) => {
+      const active = await tx.$queryRaw<Array<{ parent_id: string }>>`
+        UPDATE web_parent_sessions AS w
+        SET last_used_at = clock_timestamp()
+        WHERE w.handle_hash = ${this.hash(handle)}
+          AND w.revoked_at IS NULL
+          AND w.expires_at > clock_timestamp()
+          AND COALESCE(w.last_used_at, w.created_at) > clock_timestamp() - INTERVAL '30 minutes'
+          AND EXISTS (
+            SELECT 1 FROM parent_sessions AS ps
+            WHERE ps.id = w.parent_session_id AND ps.parent_id = w.parent_id
+              AND ps.revoked_at IS NULL AND ps.expires_at > clock_timestamp()
+          )
+          AND EXISTS (
+            SELECT 1 FROM parent_accounts AS pa
+            WHERE pa.id = w.parent_id AND pa.deleted_at IS NULL
+              AND pa.lifecycle = 'active'::"ParentAccountLifecycle"
+          )
+        RETURNING w.parent_id
+      `;
+      if (active.length !== 1) throwUnauthorized('invalid_token', 'Invalid or expired web session');
+      return operation(active[0].parent_id, tx);
+    });
   }
 
   async logout(handle: string): Promise<void> {
