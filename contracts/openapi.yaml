@@ -583,6 +583,55 @@ paths:
           description: Invalid web session
         '404':
           description: Not found or not owned
+  /v1/auth/web/profile:
+    get:
+      operationId: getWebParentProfile
+      tags: [Parent]
+      summary: Parent profile through server-authorized opaque web session
+      description: BFF-only headers, not a browser-accessible bearer API.
+      responses:
+        '200':
+          description: Optional parent profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionalParentProfile'
+        '401':
+          description: Invalid web session
+    patch:
+      operationId: updateWebParentProfile
+      tags: [Parent]
+      summary: Edit optional parent profile through opaque web session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOptionalParentProfile'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionalParentProfile'
+        '400':
+          description: Invalid input
+        '401':
+          description: Invalid web session
+    delete:
+      operationId: clearWebParentProfile
+      tags: [Parent]
+      summary: Clear optional parent profile fields through opaque web session
+      responses:
+        '200':
+          description: Cleared profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionalParentProfile'
+        '401':
+          description: Invalid web session
   /v1/parent/profile:
     get:
       operationId: getParentProfile
