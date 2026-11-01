@@ -224,4 +224,29 @@ describeDb('Opaque web sessions across independent service instances (LMP-38)', 
     }
   });
 
+  it('expired web session cannot write a child profile in the same transaction', async () => {
+    const minted = await issuer.mintSession({ parentId: SEED_IDS.parent, clientSurface: 'web' });
+    try {
+      const session = await web1.create(SEED_IDS.parent, minted.session_id);
+      await prisma.webParentSession.update({
+        where: { parentSessionId: minted.session_id },
+        data: { lastUsedAt: new Date(Date.now() - 31 * 60_000) },
+      });
+      const before = await prisma.childProfile.count({ where: { parentId: SEED_IDS.parent } });
+      await expect(web1.authorizedMutation(session.handle, async (parentId, tx) => {
+        return tx.childProfile.create({
+          data: {
+            parentId,
+            ageMonthsAtReference: 24,
+            ageReferenceDate: new Date('2026-01-01T00:00:00Z'),
+          },
+        });
+      })).rejects.toBeTruthy();
+      expect(await prisma.childProfile.count({ where: { parentId: SEED_IDS.parent } })).toBe(before);
+    } finally {
+      await prisma.webParentSession.deleteMany({ where: { parentSessionId: minted.session_id } });
+      await prisma.parentSession.deleteMany({ where: { id: minted.session_id } });
+    }
+  });
+
 });
