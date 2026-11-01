@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ageMonthsOnDate } from './age-months';
 
@@ -50,7 +51,7 @@ export class ChildProfileService {
     })) };
   }
 
-  async update(parentId: string, childId: string, input: Record<string, unknown>) {
+  async update(parentId: string, childId: string, input: Record<string, unknown>, transaction?: Prisma.TransactionClient) {
     if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).length === 0 ||
       Object.keys(input).some((key) => !['nickname', 'age_months', 'reference_date', 'timezone'].includes(key))) {
@@ -71,7 +72,7 @@ export class ChildProfileService {
     if (input.timezone !== undefined && typeof input.timezone !== 'string') {
       throw new BadRequestException('Invalid timezone');
     }
-    await this.prisma.db.$transaction(async (tx) => {
+    const performUpdate = async (tx: Prisma.TransactionClient) => {
       const parents = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM parent_accounts
         WHERE id = ${parentId}::uuid AND lifecycle = 'active' AND deleted_at IS NULL FOR UPDATE
@@ -96,11 +97,12 @@ export class ChildProfileService {
           ...(input.timezone !== undefined ? { timezone } : {}),
         },
       });
-    });
+    };
+    await (transaction ? performUpdate(transaction) : this.prisma.db.$transaction(performUpdate));
     return this.get(parentId, childId);
   }
 
-  async create(parentId: string, input: { age_months?: unknown; reference_date?: unknown; nickname?: unknown; timezone?: unknown }) {
+  async create(parentId: string, input: { age_months?: unknown; reference_date?: unknown; nickname?: unknown; timezone?: unknown }, transaction?: Prisma.TransactionClient) {
     if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some((key) => !['age_months', 'reference_date', 'nickname', 'timezone'].includes(key))) {
       throw new BadRequestException('Invalid profile fields');
     }
@@ -119,7 +121,7 @@ export class ChildProfileService {
     }
     // Lock the parent row until child creation commits. Account lifecycle changes
     // cannot interleave between authorization and insert.
-    const child = await this.prisma.db.$transaction(async (tx) => {
+    const createRow = async (tx: Prisma.TransactionClient) => {
       const parents = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM parent_accounts
         WHERE id = ${parentId}::uuid AND lifecycle = 'active' AND deleted_at IS NULL
@@ -135,7 +137,8 @@ export class ChildProfileService {
       },
       select: { id: true },
       });
-    });
+    };
+    const child = await (transaction ? createRow(transaction) : this.prisma.db.$transaction(createRow));
     return { child_id: child.id };
   }
 }
