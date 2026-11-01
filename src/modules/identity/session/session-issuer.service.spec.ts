@@ -382,6 +382,19 @@ describe('SessionIssuerService (LMP-33)', () => {
     expect(mem.sessions.get(b.session_id)?.deviceId).toBe(scopedDeviceId(installation, parentB));
   });
 
+  it('does not revive a revoked scoped binding on subsequent login', async () => {
+    const { issuer, mem } = await build();
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const installation = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const scopedId = scopedDeviceId(installation, parentId);
+    mem.devices.set(scopedId, { id: scopedId, parentId, revokedAt: new Date() });
+    await expect(issuer.mintSession({ parentId, deviceId: installation })).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'invalid_request' }),
+    });
+    expect(mem.devices.get(scopedId)?.revokedAt).not.toBeNull();
+    expect(mem.sessions.size).toBe(0);
+  });
+
   it('mints and refreshes with single-winner rotation', async () => {
     const { issuer } = await build();
     const pair = await issuer.mintSession({
