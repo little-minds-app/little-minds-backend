@@ -323,6 +323,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuthError'
   /v1/children:
+    get:
+      operationId: listChildProfiles
+      tags: [Parent]
+      summary: List parent-owned active child profiles
+      security:
+        - parentAccessToken: []
+      responses:
+        '200':
+          description: Owned children
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [children]
+                properties:
+                  children:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChildProfileResponse'
+        '401':
+          description: Unauthorized
     post:
       operationId: createChildProfile
       tags: [Parent]
@@ -370,6 +391,38 @@ paths:
         '404':
           description: Parent account inactive or unavailable
   /v1/children/{childId}:
+    patch:
+      operationId: updateChildProfile
+      tags: [Parent]
+      summary: Edit owned active child profile
+      security:
+        - parentAccessToken: []
+      parameters:
+        - in: path
+          name: childId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateChildProfileRequest'
+      responses:
+        '200':
+          description: Updated child profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChildProfileResponse'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '404':
+          description: Profile missing or not owned
     get:
       operationId: getChildProfile
       tags: [Parent]
@@ -900,6 +953,24 @@ components:
         Parent access JWT (Ed25519 / EdDSA, token_use=access, aud=little-minds-parent, TTL 900s).
         Server always loads parent_sessions by sid so revoke is immediate.
   schemas:
+    ChildProfileResponse:
+      type: object
+      additionalProperties: false
+      required: [child_id, nickname, age_months, preferred_locale]
+      properties:
+        child_id: { type: string, format: uuid }
+        nickname: { type: string, nullable: true }
+        age_months: { type: integer, minimum: 0 }
+        preferred_locale: { type: string }
+    UpdateChildProfileRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        age_months: { type: integer, format: int32, minimum: 0 }
+        reference_date: { type: string, format: date }
+        nickname: { type: string, maxLength: 80, nullable: true }
+        timezone: { type: string }
     HealthStatus:
       type: object
       additionalProperties: false
