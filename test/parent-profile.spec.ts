@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ParentProfileService } from '../src/modules/identity/parent-profile.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
@@ -24,6 +24,19 @@ describe('LMP-41 parent profile safety', () => {
     await expect(service.update('p', input)).rejects.toBeInstanceOf(BadRequestException);
     expect(db.$transaction).not.toHaveBeenCalled();
   });
+
+  it('fails closed on real-user demographic collection before dedicated legal approval', async () => {
+    const restricted = new ParentProfileService(
+      { get db() { return db; } } as unknown as PrismaService,
+      { get: () => 'production' } as never,
+    );
+    await expect(restricted.update('p', { first_name: 'Sample' }))
+      .rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(restricted.update('p', { occupation_optional: 'technology' }))
+      .rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
   it('accepts Unicode names and explicit clearing', async () => {
     const upsert = jest.fn().mockResolvedValue({
       firstName: 'Çağrı', lastName: null, ageBandOptional: null,
