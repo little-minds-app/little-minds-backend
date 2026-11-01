@@ -117,7 +117,17 @@ describeFullstack('LMP-38: real Next.js + NestJS + PostgreSQL authentication E2E
   }, 90000);
 
   afterAll(async () => {
-    next?.kill('SIGTERM');
+    if (next && next.exitCode === null && next.signalCode === null) {
+      await new Promise<void>((resolve) => {
+        const forced = setTimeout(() => next.kill('SIGKILL'), 3000);
+        forced.unref();
+        next.once('exit', () => {
+          clearTimeout(forced);
+          resolve();
+        });
+        next.kill('SIGTERM');
+      });
+    }
     await app?.close();
   });
 
