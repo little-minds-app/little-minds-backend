@@ -52,6 +52,36 @@ describeDb('LMP-39 child profile ownership against PostgreSQL', () => {
     await expect(profiles.get(parentA, created.child_id)).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('lists only owner profiles and rejects cross-family edits', async () => {
+    const created = await profiles.create(parentA, {
+      age_months: 32, reference_date: '2026-01-31', nickname: 'First',
+    });
+    const listed = await profiles.list(parentA);
+    expect(listed.children.some((child) => child.child_id === created.child_id)).toBe(true);
+    const other = await profiles.list(parentB);
+    expect(other.children.some((child) => child.child_id === created.child_id)).toBe(false);
+    await expect(profiles.update(parentB, created.child_id, { nickname: 'Intrusion' }))
+      .rejects.toBeInstanceOf(NotFoundException);
+    expect((await profiles.get(parentA, created.child_id)).nickname).toBe('First');
+    const updated = await profiles.update(parentA, created.child_id, { nickname: 'Updated' });
+    expect(updated.nickname).toBe('Updated');
+  });
+
+  it('rejects invalid and foreign edits without creating child data', async () => {
+    const created = await profiles.create(parentA, {
+      age_months: 24, reference_date: '2026-01-01',
+    });
+    await expect(profiles.update(parentA, created.child_id, { age_months: 2.5 }))
+      .rejects.toThrow();
+    await expect(profiles.update(parentA, created.child_id, { parentId: parentB }))
+      .rejects.toThrow();
+    await db.childProfile.update({
+      where: { id: created.child_id }, data: { deletedAt: new Date() },
+    });
+    await expect(profiles.update(parentA, created.child_id, { nickname: 'Revive' }))
+      .rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('denies creation for inactive parents', async () => {
     await db.parentAccount.update({
       where: { id: parentB }, data: { lifecycle: 'pending_deletion' },

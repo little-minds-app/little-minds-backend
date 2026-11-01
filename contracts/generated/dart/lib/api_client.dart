@@ -201,6 +201,8 @@ class ApiClient {
           return AppleAuthRequest.fromJson(value);
         case 'AuthError':
           return AuthError.fromJson(value);
+        case 'ChildProfileResponse':
+          return ChildProfileResponse.fromJson(value);
         case 'ConsentScope':
           return ConsentScopeTypeTransformer().decode(value);
         case 'CreateChildProfile201Response':
@@ -209,6 +211,8 @@ class ApiClient {
           return CreateChildProfileRequest.fromJson(value);
         case 'CreateParentWebSession201Response':
           return CreateParentWebSession201Response.fromJson(value);
+        case 'CreateWebChildProfileRequest':
+          return CreateWebChildProfileRequest.fromJson(value);
         case 'DevSessionRequest':
           return DevSessionRequest.fromJson(value);
         case 'EmailOtpStartRequest':
@@ -233,6 +237,8 @@ class ApiClient {
           return LinkIdentityRequest.fromJson(value);
         case 'LinkIdentityResponse':
           return LinkIdentityResponse.fromJson(value);
+        case 'ListChildProfiles200Response':
+          return ListChildProfiles200Response.fromJson(value);
         case 'LogoutAllResponse':
           return LogoutAllResponse.fromJson(value);
         case 'LogoutRequest':
@@ -265,6 +271,10 @@ class ApiClient {
           return StepUpResponse.fromJson(value);
         case 'TokenPairResponse':
           return TokenPairResponse.fromJson(value);
+        case 'UpdateChildProfileRequest':
+          return UpdateChildProfileRequest.fromJson(value);
+        case 'UpdateWebChildProfileRequest':
+          return UpdateWebChildProfileRequest.fromJson(value);
         default:
           dynamic match;
           if (value is List && (match = _regList.firstMatch(targetType)?.group(1)) != null) {

@@ -24,6 +24,13 @@ void main() {
       // TODO
     });
 
+    // Server-side BFF child creation using opaque session
+    //
+    //Future<CreateChildProfile201Response> createWebChildProfile(CreateWebChildProfileRequest createWebChildProfileRequest) async
+    test('test createWebChildProfile', () async {
+      // TODO
+    });
+
     // Read a non-deleted child profile only when owned by authenticated parent
     //
     //Future<GetChildProfile200Response> getChildProfile(String childId) async
@@ -35,6 +42,34 @@ void main() {
     //
     //Future<ParentMeResponse> getParentMe() async
     test('test getParentMe', () async {
+      // TODO
+    });
+
+    // List only the authenticated parent's non-deleted child profiles
+    //
+    //Future<ListChildProfiles200Response> listChildProfiles() async
+    test('test listChildProfiles', () async {
+      // TODO
+    });
+
+    // Server-side BFF child list using an opaque parent web session
+    //
+    //Future<ListChildProfiles200Response> listWebChildProfiles() async
+    test('test listWebChildProfiles', () async {
+      // TODO
+    });
+
+    // Update a child profile owned by the authenticated parent
+    //
+    //Future<ChildProfileResponse> updateChildProfile(String childId, UpdateChildProfileRequest updateChildProfileRequest) async
+    test('test updateChildProfile', () async {
+      // TODO
+    });
+
+    // Server-side BFF child edit using opaque parent web session
+    //
+    //Future<ChildProfileResponse> updateWebChildProfile(String childId, UpdateWebChildProfileRequest updateWebChildProfileRequest) async
+    test('test updateWebChildProfile', () async {
       // TODO
     });
 

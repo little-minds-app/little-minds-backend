@@ -13,10 +13,12 @@ doc/ActivitySessionV1.md
 doc/AppleAuthRequest.md
 doc/AuthApi.md
 doc/AuthError.md
+doc/ChildProfileResponse.md
 doc/ConsentScope.md
 doc/CreateChildProfile201Response.md
 doc/CreateChildProfileRequest.md
 doc/CreateParentWebSession201Response.md
+doc/CreateWebChildProfileRequest.md
 doc/DevSessionRequest.md
 doc/EmailOtpStartRequest.md
 doc/EmailOtpStartResponse.md
@@ -30,6 +32,7 @@ doc/HealthApi.md
 doc/HealthStatus.md
 doc/LinkIdentityRequest.md
 doc/LinkIdentityResponse.md
+doc/ListChildProfiles200Response.md
 doc/LogoutAllResponse.md
 doc/LogoutRequest.md
 doc/OidcNonceRequest.md
@@ -47,6 +50,8 @@ doc/RefreshTokenRequest.md
 doc/StepUpRequest.md
 doc/StepUpResponse.md
 doc/TokenPairResponse.md
+doc/UpdateChildProfileRequest.md
+doc/UpdateWebChildProfileRequest.md
 git_push.sh
 lib/api.dart
 lib/api/auth_api.dart
@@ -69,10 +74,12 @@ lib/model/activity_session_provenance.dart
 lib/model/activity_session_v1.dart
 lib/model/apple_auth_request.dart
 lib/model/auth_error.dart
+lib/model/child_profile_response.dart
 lib/model/consent_scope.dart
 lib/model/create_child_profile201_response.dart
 lib/model/create_child_profile_request.dart
 lib/model/create_parent_web_session201_response.dart
+lib/model/create_web_child_profile_request.dart
 lib/model/dev_session_request.dart
 lib/model/email_otp_start_request.dart
 lib/model/email_otp_start_response.dart
@@ -85,6 +92,7 @@ lib/model/google_pkce_start_response.dart
 lib/model/health_status.dart
 lib/model/link_identity_request.dart
 lib/model/link_identity_response.dart
+lib/model/list_child_profiles200_response.dart
 lib/model/logout_all_response.dart
 lib/model/logout_request.dart
 lib/model/oidc_nonce_request.dart
@@ -101,6 +109,8 @@ lib/model/refresh_token_request.dart
 lib/model/step_up_request.dart
 lib/model/step_up_response.dart
 lib/model/token_pair_response.dart
+lib/model/update_child_profile_request.dart
+lib/model/update_web_child_profile_request.dart
 pubspec.yaml
 test/activity_event_provenance_test.dart
 test/activity_event_type_test.dart
@@ -112,10 +122,12 @@ test/activity_session_v1_test.dart
 test/apple_auth_request_test.dart
 test/auth_api_test.dart
 test/auth_error_test.dart
+test/child_profile_response_test.dart
 test/consent_scope_test.dart
 test/create_child_profile201_response_test.dart
 test/create_child_profile_request_test.dart
 test/create_parent_web_session201_response_test.dart
+test/create_web_child_profile_request_test.dart
 test/dev_session_request_test.dart
 test/email_otp_start_request_test.dart
 test/email_otp_start_response_test.dart
@@ -129,6 +141,7 @@ test/health_api_test.dart
 test/health_status_test.dart
 test/link_identity_request_test.dart
 test/link_identity_response_test.dart
+test/list_child_profiles200_response_test.dart
 test/logout_all_response_test.dart
 test/logout_request_test.dart
 test/oidc_nonce_request_test.dart
@@ -146,3 +159,5 @@ test/refresh_token_request_test.dart
 test/step_up_request_test.dart
 test/step_up_response_test.dart
 test/token_pair_response_test.dart
+test/update_child_profile_request_test.dart
+test/update_web_child_profile_request_test.dart
