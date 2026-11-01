@@ -52,7 +52,7 @@ export class ParentProfileService {
       const value = object[key];
       if (value !== undefined && value !== null &&
         (typeof value !== 'string' || [...value.trim()].length > 100 ||
-         /[\u0000-\u001f\u007f]/u.test(value))) {
+         [...value].some((character) => character.codePointAt(0)! < 32 || character.codePointAt(0) === 127))) {
         throw new BadRequestException('Invalid parent name');
       }
     }
