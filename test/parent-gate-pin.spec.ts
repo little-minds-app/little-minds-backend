@@ -3,6 +3,7 @@ import { ParentGatePinService } from '../src/modules/identity/parent-gate-pin.se
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnv } from '../src/config/env.validation';
+import { StepUpService } from '../src/modules/identity/linking/step-up.service';
 
 describe('LMP-42 parent PIN gate', () => {
   const parentId = '11111111-1111-4111-8111-111111111111';
@@ -36,6 +37,7 @@ describe('LMP-42 parent PIN gate', () => {
   const service = new ParentGatePinService(
     { get db() { return db; } } as unknown as PrismaService,
     { get: () => 'unit-test-pepper-must-be-long' } as unknown as ConfigService<AppEnv, true>,
+    { consumeParentGateTx: jest.fn().mockResolvedValue(undefined) } as unknown as StepUpService,
   );
 
   beforeEach(() => {
@@ -44,8 +46,8 @@ describe('LMP-42 parent PIN gate', () => {
   });
 
   it('refuses non-six-digit setup PIN and mismatched confirmation', async () => {
-    await expect(service.setup(parentId, '1234', '1234')).rejects.toBeInstanceOf(BadRequestException);
-    await expect(service.setup(parentId, '123456', '654321')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.setWithProof(parentId, sessionId, 'proof', '1234', '1234', false)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.setWithProof(parentId, sessionId, 'proof', '123456', '654321', false)).rejects.toBeInstanceOf(BadRequestException);
     expect(db.parentGatePin.create).not.toHaveBeenCalled();
   });
 
