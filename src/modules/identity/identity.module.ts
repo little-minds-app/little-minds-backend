@@ -13,6 +13,7 @@ import { ParentController } from './controllers/parent.controller';
 import { ParentGateController } from './controllers/parent-gate.controller';
 import { PhoneAuthController } from './controllers/phone-auth.controller';
 import { ParentAuthGuard } from './auth/parent-auth.guard';
+import { ParentGateGrantGuard } from './auth/parent-gate-grant.guard';
 import { AccountLinkingService } from './linking/account-linking.service';
 import { StepUpService } from './linking/step-up.service';
 import { DisabledProductionMailSender } from './mail/disabled-production-mail.sender';
@@ -61,6 +62,7 @@ import { SMS_SENDER } from './sms/sms-sender';
     WebParentSessionService,
     AuthRateLimitService,
     ParentAuthGuard,
+    ParentGateGrantGuard,
     ParentProfileService,
     ParentGatePinService,
     OtpAbuseService,
