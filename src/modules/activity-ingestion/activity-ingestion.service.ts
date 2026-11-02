@@ -33,7 +33,7 @@ export class ActivityIngestionService {
       if (!consent) continue;
       try {
         await db.activitySession.create({
-          data: { id: session.play_session_id, childId: device.childId, deviceId: session.device_id, contentVersionId: session.content_version_id, startedAt: new Date(session.started_at), endedAt: session.ended_at ? new Date(session.ended_at) : null, completionStatus: session.completion_status, monotonicDurationSeconds: session.monotonic_duration_seconds, schemaVersion: session.schema_version },
+          data: { id: session.play_session_id, childId: device.childId, deviceId: session.device_id, contentVersionId: session.content_version_id, startedAt: new Date(session.started_at), endedAt: session.ended_at ? new Date(session.ended_at) : null, completionStatus: session.completion_status, monotonicDurationSeconds: session.monotonic_duration_seconds, schemaVersion: session.schema_version, consentScope: session.consent.consent_scope, consentPolicyVersion: session.consent.policy_version, provenanceJson: session.provenance as Prisma.InputJsonValue },
         });
       } catch (error) {
         // The only acceptable race is a pre-existing session with the same
@@ -43,8 +43,22 @@ export class ActivityIngestionService {
           throw error;
         }
       }
-      const persisted = await db.activitySession.findUnique({ where: { id: session.play_session_id }, select: { childId: true, deviceId: true, contentVersionId: true, startedAt: true, schemaVersion: true } });
-      if (!persisted || persisted.childId !== device.childId || persisted.deviceId !== session.device_id || persisted.contentVersionId !== session.content_version_id || persisted.startedAt.getTime() !== new Date(session.started_at).getTime() || persisted.schemaVersion !== session.schema_version) continue;
+      const persisted = await db.activitySession.findUnique({ where: { id: session.play_session_id }, select: { childId: true, deviceId: true, contentVersionId: true, startedAt: true, schemaVersion: true, endedAt: true, consentScope: true, consentPolicyVersion: true } });
+      if (!persisted || persisted.childId !== device.childId || persisted.deviceId !== session.device_id || persisted.contentVersionId !== session.content_version_id || persisted.startedAt.getTime() !== new Date(session.started_at).getTime() || persisted.schemaVersion !== session.schema_version || (persisted.consentScope && persisted.consentScope !== session.consent.consent_scope) || (persisted.consentPolicyVersion && persisted.consentPolicyVersion !== session.consent.policy_version)) continue;
+      // Complete a previously started session without permitting downgrade or
+      // inconsistent replay of immutable session metadata.
+      if (session.ended_at) {
+        const end = new Date(session.ended_at);
+        if (persisted.endedAt && persisted.endedAt.getTime() !== end.getTime()) continue;
+        if (!persisted.endedAt) {
+          await db.activitySession.updateMany({
+            where: { id: session.play_session_id, childId: device.childId, deviceId: session.device_id, endedAt: null },
+            data: { endedAt: end, completionStatus: session.completion_status, monotonicDurationSeconds: session.monotonic_duration_seconds },
+          });
+          const final = await db.activitySession.findUnique({ where: { id: session.play_session_id }, select: { endedAt: true } });
+          if (!final?.endedAt || final.endedAt.getTime() !== end.getTime()) continue;
+        }
+      }
       knownSessions.set(session.play_session_id, { childId: device.childId, contentVersionId: session.content_version_id, deviceId: session.device_id });
     }
 
@@ -105,9 +119,9 @@ export class ActivityIngestionService {
         }
         await tx.activityIngestKey.create({ data: { eventId: event.event_id, parentId, payloadFingerprint: fingerprint, eventClass } });
         if (parentOnly) {
-          await tx.parentActivityEvent.create({ data: { eventId: event.event_id, parentId, deviceId: event.device_id, contentVersionId: event.content_version_id, eventType: event.event_type, occurredAt: new Date(event.occurred_at), payloadJson: event.payload as Prisma.InputJsonValue, schemaVersion: event.schema_version, consentScope: event.consent_scope, consentPolicyVersion: event.consent_policy_version, payloadFingerprint: fingerprint } });
+          await tx.parentActivityEvent.create({ data: { eventId: event.event_id, parentId, deviceId: event.device_id, contentVersionId: event.content_version_id, eventType: event.event_type, occurredAt: new Date(event.occurred_at), payloadJson: event.payload as Prisma.InputJsonValue, schemaVersion: event.schema_version, consentScope: event.consent_scope, consentPolicyVersion: event.consent_policy_version, provenanceJson: event.provenance as Prisma.InputJsonValue, payloadFingerprint: fingerprint } });
         } else {
-          await tx.activityEvent.create({ data: { eventId: event.event_id, childId: session!.childId, playSessionId: event.play_session_id!, deviceId: event.device_id, contentVersionId: event.content_version_id, eventType: event.event_type, occurredAt: new Date(event.occurred_at), receivedAt: new Date(), monotonicDurationSeconds: event.monotonic_duration_seconds, payloadJson: event.payload as Prisma.InputJsonValue, schemaVersion: event.schema_version, consentScope: event.consent_scope } });
+          await tx.activityEvent.create({ data: { eventId: event.event_id, childId: session!.childId, playSessionId: event.play_session_id!, deviceId: event.device_id, contentVersionId: event.content_version_id, eventType: event.event_type, occurredAt: new Date(event.occurred_at), receivedAt: new Date(), monotonicDurationSeconds: event.monotonic_duration_seconds, payloadJson: event.payload as Prisma.InputJsonValue, schemaVersion: event.schema_version, consentScope: event.consent_scope, consentPolicyVersion: event.consent_policy_version, provenanceJson: event.provenance as Prisma.InputJsonValue } });
         }
         return { event_id: event.event_id, status: 'accepted' as const };
       });
