@@ -85,6 +85,27 @@ describe('LMP-42 parent PIN gate', () => {
     expect(stepUp.consumeParentGateTx).not.toHaveBeenCalled();
   });
 
+  it('creates grant inside the same serialized transaction as PIN verification', async () => {
+    tx.parentGatePin.findUnique.mockResolvedValue({
+      ...pinRow,
+      pinHash: 'not-a-valid-match',
+    });
+    await expect(service.verifyAndIssue(parentId, sessionId, '123456'))
+      .rejects.toBeInstanceOf(ForbiddenException);
+    expect(db.parentGateGrant.create).not.toHaveBeenCalled();
+    expect(tx.$queryRaw).toHaveBeenCalled();
+  });
+
+  it('revoke targets a single old grant, not a newer unlock', async () => {
+    const token = 'a'.repeat(43);
+    await service.revokeGrant(parentId, sessionId, token);
+    expect(db.parentGateGrant.deleteMany).toHaveBeenCalledWith({
+      where: {
+        parentId, sessionId, tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      },
+    });
+  });
+
   it('never grants access for a missing or malformed token', async () => {
     await expect(service.requireGrant(parentId, sessionId, undefined)).rejects.toBeInstanceOf(ForbiddenException);
     await expect(service.requireGrant(parentId, sessionId, '123456')).rejects.toBeInstanceOf(ForbiddenException);
