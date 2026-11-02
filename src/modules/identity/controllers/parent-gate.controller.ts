@@ -65,7 +65,7 @@ export class ParentGateController {
   @Delete('grant')
   async lock(@Req() req: Request) {
     const { parentId, sessionId } = getParentAuth(req);
-    await this.pin.revokeGrant(parentId, sessionId);
+    await this.pin.revokeGrant(parentId, sessionId, req.headers['x-parent-gate-token']);
     return { locked: true };
   }
 
