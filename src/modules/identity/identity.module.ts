@@ -130,6 +130,6 @@ import { SMS_SENDER } from './sms/sms-sender';
       },
     },
   ],
-  exports: [SessionIssuerService, JwtAccessService, ParentAuthGuard, ParentGateGrantGuard, WebParentSessionService],
+  exports: [SessionIssuerService, JwtAccessService, ParentAuthGuard, ParentGatePinService, ParentGateGrantGuard, WebParentSessionService],
 })
 export class IdentityModule {}
