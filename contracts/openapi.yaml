@@ -9,10 +9,10 @@ info:
     per ADR-021), and LMP-36 explicit identity linking (`POST /v1/auth/identities/step-up|link`).
     LMP-32 adds structured logging / correlation (not path surface) plus
     readiness. LMP-50 adds ActivitySessionV1 / ActivityEventV1 **components** for versioned
-    event contracts. Live `POST /v1/events/batch` is intentionally **not** published
-    here — ingest lands in a later Jira task. Authoritative Ajv JSON Schemas live under
+    event contracts. LMP-51 adds authenticated, server-consent-gated
+    POST /v1/events/batch with per-event durable acknowledgements. Authoritative Ajv JSON Schemas live under
     `contracts/schemas/activity/` (`schema_version` 1.0.0, independent of this info.version).
-  version: 0.11.0
+  version: 0.12.0
 
   contact:
     name: Little Minds
@@ -29,6 +29,73 @@ tags:
   - name: Parent
     description: Authenticated parent identity probe
 paths:
+  /v1/events/batch:
+    post:
+      operationId: ingestActivityEventBatch
+      tags: [Activity]
+      summary: Ingest a bounded batch of authenticated parent-owned activity sessions and events
+      description: |
+        LMP-51 contract only until backend implementation is enabled. Validate all
+        items against canonical ActivitySessionV1 / ActivityEventV1 schemas, derive
+        parent ownership from bearer, check authoritative server consent, and use
+        transactionally global event_id idempotency across actor scopes.
+        Parent-only events MUST omit play_session_id; no fabricated session.
+      security:
+        - parentAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [sessions, events]
+              properties:
+                sessions:
+                  type: array
+                  maxItems: 50
+                  items:
+                    $ref: '#/components/schemas/ActivitySessionV1'
+                events:
+                  type: array
+                  maxItems: 50
+                  items:
+                    $ref: '#/components/schemas/ActivityEventV1'
+      responses:
+        '200':
+          description: Per-event status after durable commits; retry unchanged event_id if no ACK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    maxItems: 50
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [event_id, status]
+                      properties:
+                        event_id:
+                          type: string
+                          format: uuid
+                        status:
+                          type: string
+                          enum: [accepted, duplicate_noop, rejected, retryable]
+                        reason_code:
+                          type: string
+                          description: Stable machine-readable code without echoed payload
+        '400':
+          description: Malformed batch envelope
+        '401':
+          description: Authentication required
+        '413':
+          description: Request body exceeds configured byte limit
+        '429':
+          description: Rate limited; honor Retry-After
   /v1/auth/web/session:
     post:
       operationId: createParentWebSession
