@@ -8,7 +8,7 @@ import { ParentAccountLifecycle, PrismaClient } from '@prisma/client';
 import type { AppEnv } from '../src/config/env.validation';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { JwtAccessService } from '../src/modules/identity/session/jwt-access.service';
-import { SessionIssuerService } from '../src/modules/identity/session/session-issuer.service';
+import { SessionIssuerService, scopedDeviceId } from '../src/modules/identity/session/session-issuer.service';
 import {
   TEST_JWT_PRIVATE_PEM,
   TEST_JWT_PUBLIC_PEM,
@@ -146,19 +146,22 @@ describeDb('Identity sessions against PostgreSQL (LMP-33)', () => {
       const rows = await prisma.device.findMany({
         where: { id: { in: deviceIds } },
       });
-      expect(rows).toHaveLength(2);
-      expect(rows.every((row) => row.parentId === SEED_IDS.parent)).toBe(true);
+      expect(rows).toHaveLength(0);
+      const scopedIds = deviceIds.map((id) => scopedDeviceId(id, SEED_IDS.parent));
+      const scopedRows = await prisma.device.findMany({ where: { id: { in: scopedIds } } });
+      expect(scopedRows).toHaveLength(2);
+      expect(scopedRows.every((row) => row.parentId === SEED_IDS.parent)).toBe(true);
       const minted = await prisma.parentSession.findMany({
         where: { id: { in: sessions.map((session) => session.session_id) } },
       });
       expect(new Set(minted.map((session) => session.deviceId))).toEqual(
-        new Set(deviceIds),
+        new Set(scopedIds),
       );
     } finally {
       await prisma.parentSession.deleteMany({
-        where: { deviceId: { in: deviceIds } },
+        where: { deviceId: { in: deviceIds.map((id) => scopedDeviceId(id, SEED_IDS.parent)) } },
       });
-      await prisma.device.deleteMany({ where: { id: { in: deviceIds } } });
+      await prisma.device.deleteMany({ where: { id: { in: deviceIds.map((id) => scopedDeviceId(id, SEED_IDS.parent)) } } });
     }
   });
 
@@ -171,19 +174,21 @@ describeDb('Identity sessions against PostgreSQL (LMP-33)', () => {
       ]);
       expect(sessions).toHaveLength(2);
       expect(sessions[0].session_id).not.toBe(sessions[1].session_id);
-      expect(await prisma.device.count({ where: { id: deviceId } })).toBe(1);
+      expect(await prisma.device.count({ where: { id: scopedDeviceId(deviceId, SEED_IDS.parent) } })).toBe(1);
       expect(await prisma.parentSession.count({
-        where: { id: { in: sessions.map((session) => session.session_id) }, deviceId },
+        where: { id: { in: sessions.map((session) => session.session_id) }, deviceId: scopedDeviceId(deviceId, SEED_IDS.parent) },
       })).toBe(2);
     } finally {
-      await prisma.parentSession.deleteMany({ where: { deviceId } });
-      await prisma.device.deleteMany({ where: { id: deviceId } });
+      await prisma.parentSession.deleteMany({ where: { deviceId: scopedDeviceId(deviceId, SEED_IDS.parent) } });
+      await prisma.device.deleteMany({ where: { id: scopedDeviceId(deviceId, SEED_IDS.parent) } });
     }
   });
 
-  it('blocks a different parent from claiming an existing device', async () => {
+  it('allows a second parent on the same installation with distinct device ownership', async () => {
     const deviceId = randomUUID();
     const otherParentId = randomUUID();
+    const aId = scopedDeviceId(deviceId, SEED_IDS.parent);
+    const bId = scopedDeviceId(deviceId, otherParentId);
     try {
       await prisma.parentAccount.create({
         data: {
@@ -193,24 +198,26 @@ describeDb('Identity sessions against PostgreSQL (LMP-33)', () => {
           lifecycle: ParentAccountLifecycle.active,
         },
       });
-      await issuer.mintSession({
+      const a = await issuer.mintSession({
         parentId: SEED_IDS.parent, deviceId, clientSurface: 'ios',
       });
-      await expect(
-        issuer.mintSession({
-          parentId: otherParentId, deviceId, clientSurface: 'ios',
-        }),
-      ).rejects.toMatchObject({
-        response: expect.objectContaining({ error: 'invalid_request' }),
+      await issuer.logout({ sessionId: a.session_id, parentId: SEED_IDS.parent });
+      const b = await issuer.mintSession({
+        parentId: otherParentId, deviceId, clientSurface: 'ios',
       });
-      const device = await prisma.device.findUniqueOrThrow({ where: { id: deviceId } });
-      expect(device.parentId).toBe(SEED_IDS.parent);
-      expect(await prisma.parentSession.count({
-        where: { parentId: otherParentId, deviceId },
-      })).toBe(0);
+      expect(a.session_id).not.toBe(b.session_id);
+      const devices = await prisma.device.findMany({
+        where: { id: { in: [aId, bId] } },
+      });
+      expect(devices).toHaveLength(2);
+      expect(devices.find((row) => row.id === aId)?.parentId).toBe(SEED_IDS.parent);
+      expect(devices.find((row) => row.id === bId)?.parentId).toBe(otherParentId);
+      await expect(issuer.requireActiveSession(a.session_id, SEED_IDS.parent)).rejects.toBeTruthy();
+      await expect(issuer.requireActiveSession(b.session_id, SEED_IDS.parent)).rejects.toBeTruthy();
+      expect((await issuer.requireActiveSession(b.session_id, otherParentId)).deviceId).toBe(bId);
     } finally {
-      await prisma.parentSession.deleteMany({ where: { deviceId } });
-      await prisma.device.deleteMany({ where: { id: deviceId } });
+      await prisma.parentSession.deleteMany({ where: { deviceId: { in: [aId, bId] } } });
+      await prisma.device.deleteMany({ where: { id: { in: [aId, bId] } } });
       await prisma.parentAccount.deleteMany({ where: { id: otherParentId } });
     }
   });
