@@ -86,7 +86,10 @@ export class ActivityIngestionService {
         });
         if (persisted?.deviceId) session = { childId: persisted.childId, deviceId: persisted.deviceId, contentVersionId: persisted.contentVersionId };
       }
-      if (!session || session.childId !== device.childId || session.deviceId !== event.device_id || session.contentVersionId !== event.content_version_id) return reject('session.ownership_mismatch');
+      // An offline batch may arrive before its session metadata. Do not
+      // permanently reject an otherwise valid event just for arrival order.
+      if (!session) return { event_id: event.event_id, status: 'retryable', reason_code: 'session.pending' };
+      if (session.childId !== device.childId || session.deviceId !== event.device_id || session.contentVersionId !== event.content_version_id) return reject('session.ownership_mismatch');
     }
     if (!await this.checkConsent(db, parentId, parentOnly ? null : session!.childId, event.consent_scope, event.consent_policy_version)) return reject('consent.not_authorized');
     const fingerprint = eventFingerprint(event);
