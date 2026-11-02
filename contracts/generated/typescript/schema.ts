@@ -309,6 +309,109 @@ export interface paths {
         patch: operations["updateWebParentProfile"];
         trace?: never;
     };
+    "/v1/parent/gate/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check whether this verified parent has configured a gate PIN */
+        get: operations["getParentGateStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/parent/gate/proof": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify a freshly authenticated linked identity for PIN setup or reset */
+        post: operations["issueParentGateProof"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/parent/gate/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** One-time PIN setup after fresh verified identity proof */
+        post: operations["createParentGatePin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/parent/gate/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace PIN with fresh verified identity proof and revoke all grants */
+        post: operations["resetParentGatePin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/parent/gate/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue five-minute session-bound adult authorization after PIN check */
+        post: operations["verifyParentGatePin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/parent/gate/grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check a session-bound adult grant */
+        get: operations["checkParentGateGrant"];
+        put?: never;
+        post?: never;
+        /** Revoke all outstanding adult grants for the current parent session */
+        delete: operations["lockParentGate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/parent/profile": {
         parameters: {
             query?: never;
@@ -599,6 +702,45 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ParentGateStatus: {
+            configured: boolean;
+        };
+        ParentGateProofRequest: {
+            /** @enum {string} */
+            provider: "phone" | "email" | "apple" | "google";
+            challenge_id?: string;
+            code?: string;
+            id_token?: string;
+            nonce?: string;
+            authorization_code?: string;
+            code_verifier?: string;
+            redirect_uri?: string;
+            oauth_state?: string;
+        };
+        ParentGateProofResponse: {
+            step_up_token: string;
+            /** @enum {string} */
+            purpose: "parent_gate_pin";
+            expires_in: number;
+        };
+        ParentGateSetPinRequest: {
+            pin: string;
+            confirmation: string;
+            step_up_token: string;
+        };
+        ParentGateVerifyRequest: {
+            pin: string;
+        };
+        ParentGateVerifyResponse: {
+            gate_token: string;
+            expires_in: number;
+        };
+        ParentGateAuthorized: {
+            authorized: boolean;
+        };
+        ParentGateLocked: {
+            locked: boolean;
+        };
         OptionalParentProfile: {
             first_name: string | null;
             last_name: string | null;
@@ -1764,6 +1906,262 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    getParentGateStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Parent gate status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentGateStatus"];
+                };
+            };
+            /** @description Invalid parent session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issueParentGateProof: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParentGateProofRequest"];
+            };
+        };
+        responses: {
+            /** @description Single-use OTP step-up scoped to parent_gate_pin */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentGateProofResponse"];
+                };
+            };
+            /** @description Invalid provider proof */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid linked parent identity */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Identity proof rate limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createParentGatePin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParentGateSetPinRequest"];
+            };
+        };
+        responses: {
+            /** @description PIN configured */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentGateStatus"];
+                };
+            };
+            /** @description Invalid PIN or confirmation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid parent session or step-up */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PIN already configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resetParentGatePin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParentGateSetPinRequest"];
+            };
+        };
+        responses: {
+            /** @description PIN replaced */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentGateStatus"];
+                };
+            };
+            /** @description Invalid PIN or confirmation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid parent session or step-up */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PIN not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    verifyParentGatePin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParentGateVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Short-lived opaque gate token */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentGateVerifyResponse"];
+                };
+            };
+            /** @description Invalid PIN format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Incorrect PIN or gate not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited or temporarily locked */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    checkParentGateGrant: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Parent-Gate-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grant is valid */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentGateAuthorized"];
+                };
+            };
+            /** @description Parent gate locked or expired */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    lockParentGate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Parent gate locked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentGateLocked"];
+                };
             };
         };
     };

@@ -17,6 +17,13 @@ void main() {
   // final instance = ParentApi();
 
   group('tests for ParentApi', () {
+    // Check a session-bound adult grant
+    //
+    //Future<ParentGateAuthorized> checkParentGateGrant(String xParentGateToken) async
+    test('test checkParentGateGrant', () async {
+      // TODO
+    });
+
     // Clear all six optional parent profile attributes
     //
     //Future<OptionalParentProfile> clearParentProfile() async
@@ -38,6 +45,13 @@ void main() {
       // TODO
     });
 
+    // One-time PIN setup after fresh verified identity proof
+    //
+    //Future<ParentGateStatus> createParentGatePin(ParentGateSetPinRequest parentGateSetPinRequest) async
+    test('test createParentGatePin', () async {
+      // TODO
+    });
+
     // Server-side BFF child creation using opaque session
     //
     //Future<CreateChildProfile201Response> createWebChildProfile(CreateWebChildProfileRequest createWebChildProfileRequest) async
@@ -49,6 +63,13 @@ void main() {
     //
     //Future<GetChildProfile200Response> getChildProfile(String childId) async
     test('test getChildProfile', () async {
+      // TODO
+    });
+
+    // Check whether this verified parent has configured a gate PIN
+    //
+    //Future<ParentGateStatus> getParentGateStatus() async
+    test('test getParentGateStatus', () async {
       // TODO
     });
 
@@ -75,6 +96,13 @@ void main() {
       // TODO
     });
 
+    // Verify a freshly authenticated linked identity for PIN setup or reset
+    //
+    //Future<ParentGateProofResponse> issueParentGateProof(ParentGateProofRequest parentGateProofRequest) async
+    test('test issueParentGateProof', () async {
+      // TODO
+    });
+
     // List only the authenticated parent's non-deleted child profiles
     //
     //Future<ListChildProfiles200Response> listChildProfiles() async
@@ -86,6 +114,20 @@ void main() {
     //
     //Future<ListChildProfiles200Response> listWebChildProfiles() async
     test('test listWebChildProfiles', () async {
+      // TODO
+    });
+
+    // Revoke all outstanding adult grants for the current parent session
+    //
+    //Future<ParentGateLocked> lockParentGate() async
+    test('test lockParentGate', () async {
+      // TODO
+    });
+
+    // Replace PIN with fresh verified identity proof and revoke all grants
+    //
+    //Future<ParentGateStatus> resetParentGatePin(ParentGateSetPinRequest parentGateSetPinRequest) async
+    test('test resetParentGatePin', () async {
       // TODO
     });
 
@@ -114,6 +156,13 @@ void main() {
     //
     //Future<OptionalParentProfile> updateWebParentProfile(UpdateOptionalParentProfile updateOptionalParentProfile) async
     test('test updateWebParentProfile', () async {
+      // TODO
+    });
+
+    // Issue five-minute session-bound adult authorization after PIN check
+    //
+    //Future<ParentGateVerifyResponse> verifyParentGatePin(ParentGateVerifyRequest parentGateVerifyRequest) async
+    test('test verifyParentGatePin', () async {
       // TODO
     });
 
