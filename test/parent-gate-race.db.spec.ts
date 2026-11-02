@@ -78,4 +78,14 @@ describeDb('LMP-42 PIN reset and verify real PostgreSQL race', () => {
       await blocker;
     }
   });
+  it('verify-first grant is revoked by reset, while reset-first rejects old PIN', async () => {
+    const beforeReset = await a.verifyAndIssue(parentId, sessionId, '111111');
+    await expect(a.requireGrant(parentId, sessionId, beforeReset.gate_token)).resolves.toBeUndefined();
+    await b.setWithProof(parentId, sessionId, 'reset-proof-3', '222222', '222222', true);
+    await expect(a.requireGrant(parentId, sessionId, beforeReset.gate_token)).rejects.toThrow();
+    await expect(a.verifyAndIssue(parentId, sessionId, '111111')).rejects.toThrow();
+    const afterReset = await a.verifyAndIssue(parentId, sessionId, '222222');
+    await expect(b.requireGrant(parentId, sessionId, afterReset.gate_token)).resolves.toBeUndefined();
+  });
+
 });
