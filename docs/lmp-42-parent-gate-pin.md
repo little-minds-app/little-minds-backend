@@ -22,11 +22,11 @@ Status: implementation in progress; **not accepted for release**.
 ## Implementation tracking
 - [x] Parent-scoped Prisma persistence model
 - [x] Explicit SQL migration
-- [ ] PIN create/change/reset endpoints with fresh identity proof
-- [ ] Atomic rate limiter, verification and adult grant issuance/revocation
-- [ ] OpenAPI contract and generated clients
+- [ ] PIN create/change/reset endpoints with fresh identity proof (setup service exists but has deliberately no HTTP route)
+- [x] Initial atomic PIN attempt limiter, verification service and five-minute session-bound grant issuance/revocation (review/testing pending)
+- [ ] OpenAPI contract and generated clients (draft status/verify/grant-check/lock HTTP routes exist; not yet published as contract)
 - [ ] Flutter setup/challenge screens and navigation integration
 - [ ] Phone/tablet and session/account-switch regression tests
-- [ ] CI, security review and manual UAT
+- [ ] CI, security review and manual UAT (initial unit tests added; broader E2E pending)
 
 The persistence model alone does **not** enforce the gate. Do not merge or enable PIN UI until the full flow is implemented and verified.
