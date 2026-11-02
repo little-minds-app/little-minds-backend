@@ -117,7 +117,11 @@ export class EmailOtpService {
     const subjectKey = emailSubjectKey(normalized.canonical, this.emailPepper());
     const ip = clientIp(req);
     const challengeId = randomUUID();
-    const code = generateOtpCode();
+    // Local fake-mail manual UAT only. Never fix OTP codes for real mail or non-dev environments.
+    const code = this.config.get('APP_ENV', { infer: true }) === 'development' &&
+      this.config.get('MAIL_SENDER', { infer: true }) === 'fake' &&
+      process.env.LM_DEV_FIXED_OTP === '123456'
+      ? '123456' : generateOtpCode();
     const codeHash = hashOtpCode(
       this.otpPepper(),
       challengeId,

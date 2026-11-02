@@ -17,6 +17,20 @@ void main() {
   // final instance = ParentApi();
 
   group('tests for ParentApi', () {
+    // Clear all six optional parent profile attributes
+    //
+    //Future<OptionalParentProfile> clearParentProfile() async
+    test('test clearParentProfile', () async {
+      // TODO
+    });
+
+    // Clear optional parent profile fields through opaque web session
+    //
+    //Future<OptionalParentProfile> clearWebParentProfile() async
+    test('test clearWebParentProfile', () async {
+      // TODO
+    });
+
     // Create an approximate-age child profile owned by the authenticated parent
     //
     //Future<CreateChildProfile201Response> createChildProfile(CreateChildProfileRequest createChildProfileRequest) async
@@ -45,6 +59,22 @@ void main() {
       // TODO
     });
 
+    // Read optional parent profile fields without inferring missing values
+    //
+    //Future<OptionalParentProfile> getParentProfile() async
+    test('test getParentProfile', () async {
+      // TODO
+    });
+
+    // Parent profile through server-authorized opaque web session
+    //
+    // BFF-only headers, not a browser-accessible bearer API.
+    //
+    //Future<OptionalParentProfile> getWebParentProfile() async
+    test('test getWebParentProfile', () async {
+      // TODO
+    });
+
     // List only the authenticated parent's non-deleted child profiles
     //
     //Future<ListChildProfiles200Response> listChildProfiles() async
@@ -66,10 +96,24 @@ void main() {
       // TODO
     });
 
+    // Edit supplied optional fields; null removes a stored value
+    //
+    //Future<OptionalParentProfile> updateParentProfile(UpdateOptionalParentProfile updateOptionalParentProfile) async
+    test('test updateParentProfile', () async {
+      // TODO
+    });
+
     // Server-side BFF child edit using opaque parent web session
     //
     //Future<ChildProfileResponse> updateWebChildProfile(String childId, UpdateWebChildProfileRequest updateWebChildProfileRequest) async
     test('test updateWebChildProfile', () async {
+      // TODO
+    });
+
+    // Edit optional parent profile through opaque web session
+    //
+    //Future<OptionalParentProfile> updateWebParentProfile(UpdateOptionalParentProfile updateOptionalParentProfile) async
+    test('test updateWebParentProfile', () async {
       // TODO
     });
 

@@ -64,6 +64,7 @@ part 'model/logout_all_response.dart';
 part 'model/logout_request.dart';
 part 'model/oidc_nonce_request.dart';
 part 'model/oidc_nonce_response.dart';
+part 'model/optional_parent_profile.dart';
 part 'model/parent_me_response.dart';
 part 'model/parent_session_list_response.dart';
 part 'model/parent_session_summary.dart';
@@ -77,6 +78,7 @@ part 'model/step_up_request.dart';
 part 'model/step_up_response.dart';
 part 'model/token_pair_response.dart';
 part 'model/update_child_profile_request.dart';
+part 'model/update_optional_parent_profile.dart';
 part 'model/update_web_child_profile_request.dart';
 
 

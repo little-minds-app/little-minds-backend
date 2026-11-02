@@ -12,7 +12,7 @@ info:
     event contracts. Live `POST /v1/events/batch` is intentionally **not** published
     here — ingest lands in a later Jira task. Authoritative Ajv JSON Schemas live under
     `contracts/schemas/activity/` (`schema_version` 1.0.0, independent of this info.version).
-  version: 0.9.0
+  version: 0.10.0
 
   contact:
     name: Little Minds
@@ -583,6 +583,109 @@ paths:
           description: Invalid web session
         '404':
           description: Not found or not owned
+  /v1/auth/web/profile:
+    get:
+      operationId: getWebParentProfile
+      tags: [Parent]
+      summary: Parent profile through server-authorized opaque web session
+      description: BFF-only headers, not a browser-accessible bearer API.
+      responses:
+        '200':
+          description: Optional parent profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionalParentProfile'
+        '401':
+          description: Invalid web session
+    patch:
+      operationId: updateWebParentProfile
+      tags: [Parent]
+      summary: Edit optional parent profile through opaque web session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOptionalParentProfile'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionalParentProfile'
+        '400':
+          description: Invalid input
+        '401':
+          description: Invalid web session
+    delete:
+      operationId: clearWebParentProfile
+      tags: [Parent]
+      summary: Clear optional parent profile fields through opaque web session
+      responses:
+        '200':
+          description: Cleared profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionalParentProfile'
+        '401':
+          description: Invalid web session
+  /v1/parent/profile:
+    get:
+      operationId: getParentProfile
+      tags: [Parent]
+      summary: Read optional parent profile fields without inferring missing values
+      security:
+        - parentAccessToken: []
+      responses:
+        '200':
+          description: The authenticated parent's optional profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionalParentProfile'
+        '401':
+          description: Unauthorized
+    patch:
+      operationId: updateParentProfile
+      tags: [Parent]
+      summary: Edit supplied optional fields; null removes a stored value
+      security:
+        - parentAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOptionalParentProfile'
+      responses:
+        '200':
+          description: Current optional profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionalParentProfile'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+    delete:
+      operationId: clearParentProfile
+      tags: [Parent]
+      summary: Clear all six optional parent profile attributes
+      security:
+        - parentAccessToken: []
+      responses:
+        '200':
+          description: Cleared profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionalParentProfile'
+        '401':
+          description: Unauthorized
   /v1/parent/me:
     get:
       operationId: getParentMe
@@ -1077,6 +1180,46 @@ components:
         Parent access JWT (Ed25519 / EdDSA, token_use=access, aud=little-minds-parent, TTL 900s).
         Server always loads parent_sessions by sid so revoke is immediate.
   schemas:
+    OptionalParentProfile:
+      type: object
+      additionalProperties: false
+      required: [first_name, last_name, age_band_optional, gender_optional, number_of_children_optional, occupation_optional]
+      properties:
+        first_name: { type: string, nullable: true, maxLength: 100 }
+        last_name: { type: string, nullable: true, maxLength: 100 }
+        age_band_optional:
+          type: string
+          nullable: true
+          enum: ['18-24', '25-34', '35-44', '45-54', '55+', prefer_not_to_say, null]
+        gender_optional:
+          type: string
+          nullable: true
+          enum: [woman, man, non_binary, self_describe, prefer_not_to_say, null]
+        number_of_children_optional: { type: integer, nullable: true, minimum: 0, maximum: 30 }
+        occupation_optional:
+          type: string
+          nullable: true
+          enum: [education, healthcare, technology, finance_business, public_service, retail_services, manufacturing_trades, creative_media, homemaker_caregiver, student, retired, not_currently_employed, other, prefer_not_to_say, null]
+    UpdateOptionalParentProfile:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        first_name: { type: string, nullable: true, maxLength: 100 }
+        last_name: { type: string, nullable: true, maxLength: 100 }
+        age_band_optional:
+          type: string
+          nullable: true
+          enum: ['18-24', '25-34', '35-44', '45-54', '55+', prefer_not_to_say, null]
+        gender_optional:
+          type: string
+          nullable: true
+          enum: [woman, man, non_binary, self_describe, prefer_not_to_say, null]
+        number_of_children_optional: { type: integer, nullable: true, minimum: 0, maximum: 30 }
+        occupation_optional:
+          type: string
+          nullable: true
+          enum: [education, healthcare, technology, finance_business, public_service, retail_services, manufacturing_trades, creative_media, homemaker_caregiver, student, retired, not_currently_employed, other, prefer_not_to_say, null]
     ChildProfileResponse:
       type: object
       additionalProperties: false

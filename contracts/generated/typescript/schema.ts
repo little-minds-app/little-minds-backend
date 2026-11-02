@@ -287,6 +287,47 @@ export interface paths {
         patch: operations["updateWebChildProfile"];
         trace?: never;
     };
+    "/v1/auth/web/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Parent profile through server-authorized opaque web session
+         * @description BFF-only headers, not a browser-accessible bearer API.
+         */
+        get: operations["getWebParentProfile"];
+        put?: never;
+        post?: never;
+        /** Clear optional parent profile fields through opaque web session */
+        delete: operations["clearWebParentProfile"];
+        options?: never;
+        head?: never;
+        /** Edit optional parent profile through opaque web session */
+        patch: operations["updateWebParentProfile"];
+        trace?: never;
+    };
+    "/v1/parent/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read optional parent profile fields without inferring missing values */
+        get: operations["getParentProfile"];
+        put?: never;
+        post?: never;
+        /** Clear all six optional parent profile attributes */
+        delete: operations["clearParentProfile"];
+        options?: never;
+        head?: never;
+        /** Edit supplied optional fields; null removes a stored value */
+        patch: operations["updateParentProfile"];
+        trace?: never;
+    };
     "/v1/parent/me": {
         parameters: {
             query?: never;
@@ -558,6 +599,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        OptionalParentProfile: {
+            first_name: string | null;
+            last_name: string | null;
+            /** @enum {string|null} */
+            age_band_optional: "18-24" | "25-34" | "35-44" | "45-54" | "55+" | "prefer_not_to_say" | null;
+            /** @enum {string|null} */
+            gender_optional: "woman" | "man" | "non_binary" | "self_describe" | "prefer_not_to_say" | null;
+            number_of_children_optional: number | null;
+            /** @enum {string|null} */
+            occupation_optional: "education" | "healthcare" | "technology" | "finance_business" | "public_service" | "retail_services" | "manufacturing_trades" | "creative_media" | "homemaker_caregiver" | "student" | "retired" | "not_currently_employed" | "other" | "prefer_not_to_say" | null;
+        };
+        UpdateOptionalParentProfile: {
+            first_name?: string | null;
+            last_name?: string | null;
+            /** @enum {string|null} */
+            age_band_optional?: "18-24" | "25-34" | "35-44" | "45-54" | "55+" | "prefer_not_to_say" | null;
+            /** @enum {string|null} */
+            gender_optional?: "woman" | "man" | "non_binary" | "self_describe" | "prefer_not_to_say" | null;
+            number_of_children_optional?: number | null;
+            /** @enum {string|null} */
+            occupation_optional?: "education" | "healthcare" | "technology" | "finance_business" | "public_service" | "retail_services" | "manufacturing_trades" | "creative_media" | "homemaker_caregiver" | "student" | "retired" | "not_currently_employed" | "other" | "prefer_not_to_say" | null;
+        };
         ChildProfileResponse: {
             /** Format: uuid */
             child_id: string;
@@ -1605,6 +1668,190 @@ export interface operations {
             };
             /** @description Not found or not owned */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getWebParentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Optional parent profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionalParentProfile"];
+                };
+            };
+            /** @description Invalid web session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clearWebParentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionalParentProfile"];
+                };
+            };
+            /** @description Invalid web session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateWebParentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOptionalParentProfile"];
+            };
+        };
+        responses: {
+            /** @description Updated profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionalParentProfile"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid web session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getParentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The authenticated parent's optional profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionalParentProfile"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clearParentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionalParentProfile"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateParentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOptionalParentProfile"];
+            };
+        };
+        responses: {
+            /** @description Current optional profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionalParentProfile"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

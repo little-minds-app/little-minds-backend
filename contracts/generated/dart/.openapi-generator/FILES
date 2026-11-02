@@ -37,6 +37,7 @@ doc/LogoutAllResponse.md
 doc/LogoutRequest.md
 doc/OidcNonceRequest.md
 doc/OidcNonceResponse.md
+doc/OptionalParentProfile.md
 doc/ParentApi.md
 doc/ParentMeResponse.md
 doc/ParentSessionListResponse.md
@@ -51,6 +52,7 @@ doc/StepUpRequest.md
 doc/StepUpResponse.md
 doc/TokenPairResponse.md
 doc/UpdateChildProfileRequest.md
+doc/UpdateOptionalParentProfile.md
 doc/UpdateWebChildProfileRequest.md
 git_push.sh
 lib/api.dart
@@ -97,6 +99,7 @@ lib/model/logout_all_response.dart
 lib/model/logout_request.dart
 lib/model/oidc_nonce_request.dart
 lib/model/oidc_nonce_response.dart
+lib/model/optional_parent_profile.dart
 lib/model/parent_me_response.dart
 lib/model/parent_session_list_response.dart
 lib/model/parent_session_summary.dart
@@ -110,6 +113,7 @@ lib/model/step_up_request.dart
 lib/model/step_up_response.dart
 lib/model/token_pair_response.dart
 lib/model/update_child_profile_request.dart
+lib/model/update_optional_parent_profile.dart
 lib/model/update_web_child_profile_request.dart
 pubspec.yaml
 test/activity_event_provenance_test.dart
@@ -146,6 +150,7 @@ test/logout_all_response_test.dart
 test/logout_request_test.dart
 test/oidc_nonce_request_test.dart
 test/oidc_nonce_response_test.dart
+test/optional_parent_profile_test.dart
 test/parent_api_test.dart
 test/parent_me_response_test.dart
 test/parent_session_list_response_test.dart
@@ -160,4 +165,5 @@ test/step_up_request_test.dart
 test/step_up_response_test.dart
 test/token_pair_response_test.dart
 test/update_child_profile_request_test.dart
+test/update_optional_parent_profile_test.dart
 test/update_web_child_profile_request_test.dart

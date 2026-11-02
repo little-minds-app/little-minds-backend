@@ -11,6 +11,8 @@
     "/v1/auth/sessions",
     "/v1/auth/sessions/{sessionId}",
     "/v1/parent/me",
+    "/v1/parent/profile",
+    "/v1/auth/web/profile",
     "/v1/auth/dev/session",
     "/v1/auth/phone/start",
     "/v1/auth/phone/verify",
