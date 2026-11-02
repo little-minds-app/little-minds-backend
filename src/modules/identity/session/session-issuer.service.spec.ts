@@ -8,7 +8,7 @@ import {
 import type { AppEnv } from '../../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtAccessService } from './jwt-access.service';
-import { SessionIssuerService } from './session-issuer.service';
+import { SessionIssuerService, scopedDeviceId } from './session-issuer.service';
 import { hashRefreshToken } from './refresh-token';
 import { MAX_ACTIVE_SESSIONS_PER_PARENT } from './session.constants';
 
@@ -262,6 +262,17 @@ function memoryDb() {
   db.device = {
     findUnique: async ({ where: { id } }: { where: { id: string } }) =>
       devices.get(id) ?? null,
+    upsert: async ({ where: { id }, create }: {
+      where: { id: string };
+      create: { id: string; parentId: string; platform: string };
+      update: Record<string, never>;
+    }) => {
+      const existing = devices.get(id);
+      if (existing) return existing;
+      const row = { id, parentId: create.parentId, revokedAt: null };
+      devices.set(id, row);
+      return row;
+    },
     create: async ({ data }: { data: { id: string; parentId: string; platform: string } }) => {
       if (devices.has(data.id)) throw new Error('duplicate device');
       const row = { id: data.id, parentId: data.parentId, revokedAt: null };
@@ -328,28 +339,59 @@ describe('SessionIssuerService (LMP-33)', () => {
     const parentId = '11111111-1111-4111-8111-111111111111';
     const deviceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     const pair = await issuer.mintSession({ parentId, deviceId, clientSurface: 'ios' });
-    expect(mem.devices.get(deviceId)?.parentId).toBe(parentId);
-    expect(mem.sessions.get(pair.session_id)?.deviceId).toBe(deviceId);
+    const parentDeviceId = scopedDeviceId(deviceId, parentId);
+    expect(mem.devices.get(parentDeviceId)?.parentId).toBe(parentId);
+    expect(mem.sessions.get(pair.session_id)?.deviceId).toBe(parentDeviceId);
     await issuer.mintSession({ parentId, deviceId, clientSurface: 'ios' });
     expect(mem.devices.size).toBe(1);
   });
 
-  it('rejects a device owned by another parent or revoked', async () => {
+  it('isolates verified parents sharing one installation without transferring legacy ownership', async () => {
+    const { issuer, mem } = await build();
+    const parentA = '11111111-1111-4111-8111-111111111111';
+    const parentB = '22222222-2222-4222-8222-222222222222';
+    const installation = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    mem.parents.set(parentB, { ...mem.parents.get(parentA)!, id: parentB });
+    mem.devices.set(installation, { id: installation, parentId: parentA, revokedAt: null });
+    const sessionA = await issuer.mintSession({ parentId: parentA, deviceId: installation });
+    await issuer.logout({ sessionId: sessionA.session_id, parentId: parentA });
+    const sessionB = await issuer.mintSession({ parentId: parentB, deviceId: installation });
+    const bDeviceId = scopedDeviceId(installation, parentB);
+    expect(mem.sessions.get(sessionB.session_id)?.deviceId).toBe(bDeviceId);
+    expect(mem.devices.get(installation)?.parentId).toBe(parentA);
+    expect(mem.devices.get(bDeviceId)?.parentId).toBe(parentB);
+    await expect(issuer.requireActiveSession(sessionA.session_id, parentA)).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'revoked_session' }),
+    });
+    await issuer.logout({ sessionId: sessionB.session_id, parentId: parentB });
+    const again = await issuer.mintSession({ parentId: parentA, deviceId: installation });
+    expect(mem.sessions.get(again.session_id)?.deviceId).toBe(installation);
+  });
+
+  it('rejects revoked parent binding while allowing a different parent on that installation', async () => {
+    const { issuer, mem } = await build();
+    const parentA = '11111111-1111-4111-8111-111111111111';
+    const parentB = '22222222-2222-4222-8222-222222222222';
+    const installation = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    mem.parents.set(parentB, { ...mem.parents.get(parentA)!, id: parentB });
+    mem.devices.set(installation, { id: installation, parentId: parentA, revokedAt: new Date() });
+    await expect(issuer.mintSession({ parentId: parentA, deviceId: installation })).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'invalid_request' }),
+    });
+    const b = await issuer.mintSession({ parentId: parentB, deviceId: installation });
+    expect(mem.sessions.get(b.session_id)?.deviceId).toBe(scopedDeviceId(installation, parentB));
+  });
+
+  it('does not revive a revoked scoped binding on subsequent login', async () => {
     const { issuer, mem } = await build();
     const parentId = '11111111-1111-4111-8111-111111111111';
-    const deviceId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-    mem.devices.set(deviceId, {
-      id: deviceId,
-      parentId: '22222222-2222-4222-8222-222222222222',
-      revokedAt: null,
-    });
-    await expect(issuer.mintSession({ parentId, deviceId })).rejects.toMatchObject({
+    const installation = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const scopedId = scopedDeviceId(installation, parentId);
+    mem.devices.set(scopedId, { id: scopedId, parentId, revokedAt: new Date() });
+    await expect(issuer.mintSession({ parentId, deviceId: installation })).rejects.toMatchObject({
       response: expect.objectContaining({ error: 'invalid_request' }),
     });
-    mem.devices.set(deviceId, { id: deviceId, parentId, revokedAt: new Date() });
-    await expect(issuer.mintSession({ parentId, deviceId })).rejects.toMatchObject({
-      response: expect.objectContaining({ error: 'invalid_request' }),
-    });
+    expect(mem.devices.get(scopedId)?.revokedAt).not.toBeNull();
     expect(mem.sessions.size).toBe(0);
   });
 
