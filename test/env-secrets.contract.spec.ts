@@ -79,7 +79,7 @@ describe('Environment & secrets contract (LMP-28)', () => {
     expect(read('contracts/openapi.yaml')).toContain(`version: ${version}`);
     expect(read('contracts/openapi.yaml')).toContain('/health:');
     expect(read('contracts/openapi.yaml')).toContain('/health/ready:');
-    // No live ingest path published yet (LMP-50 schemas-only). Mentions in prose are OK.
-    expect(read('contracts/openapi.yaml')).not.toMatch(/\n\s+\/v1\/events(?:\/|$)/);
+    // LMP-51 adds a versioned, authenticated batch ingest path.
+    expect(read('contracts/openapi.yaml')).toContain('/v1/events/batch:');
   });
 });
