@@ -10,6 +10,7 @@ import { WebParentProfileController } from './controllers/web-parent-profile.con
 import { ParentProfileService } from './parent-profile.service';
 import { ParentGatePinService } from './parent-gate-pin.service';
 import { ParentController } from './controllers/parent.controller';
+import { ParentGateController } from './controllers/parent-gate.controller';
 import { PhoneAuthController } from './controllers/phone-auth.controller';
 import { ParentAuthGuard } from './auth/parent-auth.guard';
 import { AccountLinkingService } from './linking/account-linking.service';
@@ -48,6 +49,7 @@ import { SMS_SENDER } from './sms/sms-sender';
     WebSessionController,
     WebParentProfileController,
     ParentController,
+    ParentGateController,
     DevAuthController,
     PhoneAuthController,
     MultiProviderAuthController,
