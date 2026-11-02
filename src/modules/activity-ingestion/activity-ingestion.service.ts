@@ -29,15 +29,22 @@ export class ActivityIngestionService {
       const device = await db.device.findFirst({ where: { id: session.device_id, parentId, revokedAt: null, childId: { not: null }, child: { deletedAt: null } }, select: { childId: true } });
       const variant = await db.activityVariant.findUnique({ where: { id: session.content_version_id }, select: { id: true } });
       if (!device?.childId || !variant) continue;
-      const current = await db.activitySession.findUnique({ where: { id: session.play_session_id }, select: { childId: true, contentVersionId: true, deviceId: true } });
-      if (current && (current.childId !== device.childId || current.contentVersionId !== session.content_version_id || current.deviceId !== session.device_id)) continue;
       const consent = await this.checkConsent(db, parentId, device.childId, session.consent.consent_scope, session.consent.policy_version);
       if (!consent) continue;
-      await db.activitySession.upsert({
-        where: { id: session.play_session_id },
-        create: { id: session.play_session_id, childId: device.childId, deviceId: session.device_id, contentVersionId: session.content_version_id, startedAt: new Date(session.started_at), endedAt: session.ended_at ? new Date(session.ended_at) : null, completionStatus: session.completion_status, monotonicDurationSeconds: session.monotonic_duration_seconds, schemaVersion: session.schema_version },
-        update: {},
-      });
+      try {
+        await db.activitySession.create({
+          data: { id: session.play_session_id, childId: device.childId, deviceId: session.device_id, contentVersionId: session.content_version_id, startedAt: new Date(session.started_at), endedAt: session.ended_at ? new Date(session.ended_at) : null, completionStatus: session.completion_status, monotonicDurationSeconds: session.monotonic_duration_seconds, schemaVersion: session.schema_version },
+        });
+      } catch (error) {
+        // The only acceptable race is a pre-existing session with the same
+        // immutable ownership and metadata. A unique-key collision must never
+        // silently reassign an existing session.
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+          throw error;
+        }
+      }
+      const persisted = await db.activitySession.findUnique({ where: { id: session.play_session_id }, select: { childId: true, deviceId: true, contentVersionId: true, startedAt: true, schemaVersion: true } });
+      if (!persisted || persisted.childId !== device.childId || persisted.deviceId !== session.device_id || persisted.contentVersionId !== session.content_version_id || persisted.startedAt.getTime() !== new Date(session.started_at).getTime() || persisted.schemaVersion !== session.schema_version) continue;
       knownSessions.set(session.play_session_id, { childId: device.childId, contentVersionId: session.content_version_id, deviceId: session.device_id });
     }
 
