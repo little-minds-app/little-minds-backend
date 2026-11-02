@@ -49,3 +49,11 @@ Status: **Proposed / implementation gate**. Issue: LMP-51 (V1/P0, F-012/F-021). 
 - clean migrations and schema-contract compatibility, plus CI and code review
 
 This document scopes implementation; it does **not** imply any of these live behaviors are already implemented or tested.
+
+## Phase A implementation log (2026-11-02)
+
+- Added `ParentActivityEvent` model and `20261102170000_lmp51_parent_activity_events` migration. Parent-only events do **not** fabricate a child `play_session_id`.
+- Parent-only rows require an authenticated parent FK, event ID, device ID, content version ID, consent fields, fingerprint, and allowlisted type. `event_id` uniqueness currently applies **within this table only**.
+- **Important remaining gate:** child events live in `activity_events`; global uniqueness and cross-table conflicts must be enforced with one shared ingest idempotency registry or an equivalent canonical store before `POST /v1/events/batch` can be enabled. Do not rely on independent table primary keys for global uniqueness.
+- Device and content IDs in the parent-only table are payload attributes, **not yet foreign keys**. Ingest must verify parent ownership and content validity using server lookups before inserting; decide whether explicit FKs are desirable in follow-up migration.
+- This is a **draft schema change**, not a deployed release. Run Prisma migration drift, fresh DB tests, and security review before graduating PR from draft. No API or Flutter emitter is enabled.
