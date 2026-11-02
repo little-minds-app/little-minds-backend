@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import type { AppEnv } from '../../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -38,6 +38,47 @@ export class ParentGatePinService {
         SCRYPT_OPTIONS,
         (error, derived) => error ? reject(error) : resolve(derived),
       );
+    });
+  }
+
+  private tokenHash(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  async configuration(parentId: string): Promise<{ configured: boolean }> {
+    const count = await this.prisma.db.parentGatePin.count({ where: { parentId } });
+    return { configured: count > 0 };
+  }
+
+  /** Opaque gate token is never a parent session or a replacement for one. */
+  async verifyAndIssue(parentId: string, sessionId: string, pin: unknown) {
+    await this.verify(parentId, pin);
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    await this.prisma.db.parentGateGrant.create({
+      data: { tokenHash: this.tokenHash(token), parentId, sessionId, expiresAt },
+    });
+    return { gate_token: token, expires_in: 300 };
+  }
+
+  /** Fail-closed: caller must also pass ParentAuthGuard first. */
+  async requireGrant(parentId: string, sessionId: string, token: unknown): Promise<void> {
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
+      throw new ForbiddenException('Parent gate locked');
+    }
+    const grant = await this.prisma.db.parentGateGrant.findUnique({
+      where: { tokenHash: this.tokenHash(token) },
+    });
+    if (!grant || grant.parentId !== parentId || grant.sessionId !== sessionId ||
+        grant.expiresAt <= new Date()) {
+      throw new ForbiddenException('Parent gate locked');
+    }
+  }
+
+  async revokeGrant(parentId: string, sessionId: string, token: unknown): Promise<void> {
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) return;
+    await this.prisma.db.parentGateGrant.deleteMany({
+      where: { tokenHash: this.tokenHash(token), parentId, sessionId },
     });
   }
 
