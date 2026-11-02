@@ -48,6 +48,7 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
     await db.activityDefinition.create({ data: { id: definitionId, mechanicId, learningGoalId: goalId, minAgeMonths: 24, maxAgeMonths: 71, safetyClass: 'low' } });
     await db.activityVariant.create({ data: { id: variantId, activityId: definitionId, version: 1 } });
     await db.consentRecord.create({ data: { parentId, childId, purpose: 'essential_play_events', policyVersion: consentPolicy, status: 'granted', source: 'server_consent_store', recordedAt: new Date('2026-01-01T00:00:00Z') } });
+    await db.consentRecord.create({ data: { parentId, purpose: 'essential_play_events', policyVersion: consentPolicy, status: 'granted', source: 'server_consent_store', recordedAt: new Date('2026-01-01T00:00:00Z') } });
   });
   afterAll(async () => {
     await db.activityIngestKey.deleteMany({ where: { parentId } });
@@ -92,10 +93,8 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
   it('refuses another parent and rejects events after consent withdrawal', async () => {
     const cross = await ingestion.ingest(randomUUID(), { sessions: [], events: [parentEvent(randomUUID())] });
     expect(cross.results[0]).toMatchObject({ status: 'rejected', reason_code: 'ownership.invalid_device' });
-    await db.consentRecord.create({ data: { parentId, childId, purpose: 'essential_play_events', policyVersion: 'newer-policy', status: 'withdrawn', source: 'server_consent_store', recordedAt: new Date('2026-10-30T00:00:00Z') } });
+    await db.consentRecord.create({ data: { parentId, purpose: 'essential_play_events', policyVersion: 'newer-policy', status: 'withdrawn', source: 'server_consent_store', recordedAt: new Date('2026-10-30T00:00:00Z') } });
     const withdrawn = await ingestion.ingest(parentId, { sessions: [], events: [parentEvent(randomUUID())] });
-    // Parent-only events require an active *parent-scoped* consent. The child-scoped
-    // withdrawal above must not establish new authorization on its own.
-    expect(withdrawn.results[0].status).toBe('accepted');
+    expect(withdrawn.results[0]).toMatchObject({ status: 'rejected', reason_code: 'consent.not_authorized' });
   });
 });
