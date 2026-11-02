@@ -3,7 +3,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityBatchAdmissionService, eventFingerprint } from './activity-batch-admission.service';
 import { evaluateConsentScopeAuthorization } from './activity-event.consent';
-import { PARENT_ONLY_EVENT_TYPES, type ActivityEventV1, type ActivitySessionV1, type ServerConsentRecord } from './activity-contract.types';
+import { PARENT_ONLY_EVENT_TYPES, type ActivityEventV1, type ServerConsentRecord } from './activity-contract.types';
 
 type Ack = { event_id: string; status: 'accepted' | 'duplicate_noop' | 'rejected' | 'retryable'; reason_code?: string };
 const isParentEvent = (event: ActivityEventV1) =>
