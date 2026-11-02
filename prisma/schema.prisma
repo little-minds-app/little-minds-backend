@@ -141,6 +141,7 @@ model ParentAccount {
   sessions                       ParentSession[]
   webSessions                    WebParentSession[]
   accountLinkAudits              AccountLinkAudit[]
+  parentActivityEvents            ParentActivityEvent[]
 
   @@map("parent_accounts")
 }
@@ -913,6 +914,28 @@ model ActivityEvent {
 
   @@index([childId, receivedAt], map: "activity_events_child_id_received_at_idx")
   @@map("activity_events")
+}
+
+/// Parent-only telemetry: no fabricated child play session (LMP-51).
+/// Future ingestion enforces authenticated parent ownership and server consent.
+model ParentActivityEvent {
+  eventId                  String    @id @map("event_id") @db.Uuid
+  parentId                 String    @map("parent_id") @db.Uuid
+  deviceId                 String    @map("device_id") @db.Uuid
+  contentVersionId         String    @map("content_version_id") @db.Uuid
+  eventType                String    @map("event_type")
+  occurredAt               DateTime  @map("occurred_at") @db.Timestamptz(6)
+  receivedAt               DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+  payloadJson              Json      @map("payload_json")
+  schemaVersion            String    @map("schema_version")
+  consentScope             String    @map("consent_scope")
+  consentPolicyVersion     String    @map("consent_policy_version")
+  payloadFingerprint       String    @map("payload_fingerprint") @db.VarChar(64)
+
+  parent                   ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId, receivedAt], map: "parent_activity_events_parent_received_idx")
+  @@map("parent_activity_events")
 }
 
 model SkillObservation {
