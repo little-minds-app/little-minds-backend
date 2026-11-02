@@ -8,6 +8,7 @@ import { IdentityLinkController } from './controllers/identity-link.controller';
 import { MultiProviderAuthController } from './controllers/multi-provider-auth.controller';
 import { WebParentProfileController } from './controllers/web-parent-profile.controller';
 import { ParentProfileService } from './parent-profile.service';
+import { ParentGatePinService } from './parent-gate-pin.service';
 import { ParentController } from './controllers/parent.controller';
 import { PhoneAuthController } from './controllers/phone-auth.controller';
 import { ParentAuthGuard } from './auth/parent-auth.guard';
@@ -59,6 +60,7 @@ import { SMS_SENDER } from './sms/sms-sender';
     AuthRateLimitService,
     ParentAuthGuard,
     ParentProfileService,
+    ParentGatePinService,
     OtpAbuseService,
     OtpRetentionService,
     PhoneOtpService,
