@@ -104,10 +104,11 @@ export class ParentGatePinService {
     }
   }
 
-  async revokeGrant(parentId: string, sessionId: string): Promise<void> {
-    // Locking adult mode invalidates ALL outstanding grants for this session.
+  async revokeGrant(parentId: string, sessionId: string, token: unknown): Promise<void> {
+    // Revoke only the grant being closed; a delayed lock must never kill a newer unlock.
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) return;
     await this.prisma.db.parentGateGrant.deleteMany({
-      where: { parentId, sessionId },
+      where: { parentId, sessionId, tokenHash: this.tokenHash(token) },
     });
   }
 
