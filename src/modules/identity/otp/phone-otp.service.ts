@@ -144,7 +144,12 @@ export class PhoneOtpService {
     const subjectKey = phoneSubjectKey(normalized.e164, this.phonePepper());
     const ip = clientIp(req);
     const challengeId = randomUUID();
-    const code = generateOtpCode();
+    // Fixed OTP is opt-in for local fake-SMS manual UAT only.
+    // Staging/production and real sender paths retain cryptographically random OTPs.
+    const code = this.config.get('APP_ENV', { infer: true }) === 'development' &&
+      this.config.get('SMS_SENDER', { infer: true }) === 'fake' &&
+      process.env.LM_DEV_FIXED_OTP === '123456'
+      ? '123456' : generateOtpCode();
     const codeHash = hashOtpCode(
       this.otpPepper(),
       challengeId,
