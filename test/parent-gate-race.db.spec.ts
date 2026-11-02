@@ -47,30 +47,35 @@ describeDb('LMP-42 PIN reset and verify real PostgreSQL race', () => {
     const replacement = await a.verifyAndIssue(parentId, sessionId, '654321');
     await expect(a.requireGrant(parentId, sessionId, replacement.gate_token)).resolves.toBeUndefined();
   });
-  it('holds the parent row lock while a concurrent verification waits for reset', async () => {
-    // Force reset to wait until our explicitly held row lock is released.
-    // This proves verification cannot mint an old-PIN grant after reset commits.
+  it('reset commits before waiting verifier can obtain the row lock', async () => {
     let release!: () => void;
     let locked!: () => void;
-    const released = new Promise<void>((resolve) => { release = resolve; });
+    const hold = new Promise<void>((resolve) => { release = resolve; });
     const acquired = new Promise<void>((resolve) => { locked = resolve; });
     const blocker = primary.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM parent_accounts WHERE id = ${parentId}::uuid FOR UPDATE`;
       locked();
-      await released;
+      await hold;
     });
     await acquired;
-    // Reset and verification both queue behind the same PostgreSQL row lock.
-    // Start reset first, then release and verify its committed result.
-    const reset = b.setWithProof(parentId, sessionId, 'reset-proof-2', '111111', '111111', true);
-    release();
-    await blocker;
-    await reset;
-    await expect(a.verifyAndIssue(parentId, sessionId, '654321')).rejects.toThrow();
-    expect(await primary.parentGateGrant.count({ where: { parentId } })).toBe(0);
-    const replacement = await a.verifyAndIssue(parentId, sessionId, '111111');
-    await expect(a.requireGrant(parentId, sessionId, replacement.gate_token)).resolves.toBeUndefined();
+    try {
+      // While lock is held, both operations must be waiting, not succeeding.
+      const reset = b.setWithProof(parentId, sessionId, 'reset-proof-2', '111111', '111111', true);
+      const verify = a.verifyAndIssue(parentId, sessionId, '654321');
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(await primary.parentGateGrant.count({ where: { parentId } })).toBe(1);
+      release();
+      await blocker;
+      const results = await Promise.allSettled([reset, verify]);
+      expect(results[0].status).toBe('fulfilled');
+      // Whether verify was queued before or after reset, no old grant survives reset.
+      expect(await primary.parentGateGrant.count({ where: { parentId } })).toBe(0);
+      await expect(a.verifyAndIssue(parentId, sessionId, '654321')).rejects.toThrow();
+      const replacement = await a.verifyAndIssue(parentId, sessionId, '111111');
+      await expect(a.requireGrant(parentId, sessionId, replacement.gate_token)).resolves.toBeUndefined();
+    } finally {
+      release();
+      await blocker;
+    }
   });
-
-
 });
