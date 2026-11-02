@@ -1301,18 +1301,58 @@ components:
   schemas:
     ParentGateStatus:
       type: object
-      additionalProperties: false
       required: [configured]
       properties:
         configured: { type: boolean }
     ParentGateProofRequest:
       type: object
-      additionalProperties: false
       required: [provider]
       properties:
         provider: { type: string, enum: [phone, email, apple, google] }
         challenge_id: { type: string }
-        code: { type: string, pattern: '^[0-9]{6}
+        code: { type: string, minLength: 6, maxLength: 6 }
+        id_token: { type: string }
+        nonce: { type: string }
+        authorization_code: { type: string }
+        code_verifier: { type: string }
+        redirect_uri: { type: string }
+        oauth_state: { type: string }
+    ParentGateProofResponse:
+      type: object
+      required: [step_up_token, purpose, expires_in]
+      properties:
+        step_up_token: { type: string }
+        purpose: { type: string, enum: [parent_gate_pin] }
+        expires_in: { type: integer }
+    ParentGateSetPinRequest:
+      type: object
+      required: [pin, confirmation, step_up_token]
+      properties:
+        pin: { type: string, minLength: 6, maxLength: 6 }
+        confirmation: { type: string, minLength: 6, maxLength: 6 }
+        step_up_token: { type: string }
+    ParentGateVerifyRequest:
+      type: object
+      required: [pin]
+      properties:
+        pin: { type: string, minLength: 6, maxLength: 6 }
+    ParentGateVerifyResponse:
+      type: object
+      required: [gate_token, expires_in]
+      properties:
+        gate_token: { type: string }
+        expires_in: { type: integer }
+    ParentGateAuthorized:
+      type: object
+      required: [authorized]
+      properties:
+        authorized: { type: boolean }
+    ParentGateLocked:
+      type: object
+      required: [locked]
+      properties:
+        locked: { type: boolean }
+    OptionalParentProfile:
       type: object
       additionalProperties: false
       required: [first_name, last_name, age_band_optional, gender_optional, number_of_children_optional, occupation_optional]
