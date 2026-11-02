@@ -49,7 +49,7 @@ export class ActivityIngestionService {
 
   private async checkConsent(db: PrismaClient, parentId: string, childId: string | null, scope: ActivityEventV1['consent_scope'], policyVersion: string): Promise<boolean> {
     const rows = await db.consentRecord.findMany({ where: { parentId, OR: [{ childId: null }, ...(childId ? [{ childId }] : [])] }, orderBy: { recordedAt: 'desc' } });
-    const records: ServerConsentRecord[] = rows.filter(row => row.purpose === scope && row.policyVersion === policyVersion).map(row => ({
+    const records: ServerConsentRecord[] = rows.filter(row => row.purpose === scope).map(row => ({
       purpose: row.purpose,
       consent_scope: scope,
       policy_version: row.policyVersion,
@@ -57,7 +57,8 @@ export class ActivityIngestionService {
       status: row.status === 'granted' && !row.revokedAt ? 'granted' : 'withdrawn',
       effective_at: (row.revokedAt ?? row.recordedAt).toISOString(),
     }));
-    return evaluateConsentScopeAuthorization(scope, records).authorized;
+    const effective = evaluateConsentScopeAuthorization(scope, records);
+    return effective.authorized && effective.effective?.policy_version === policyVersion;
   }
 
   private async storeEvent(db: PrismaClient, parentId: string, event: ActivityEventV1, sessions: Map<string, { childId: string; contentVersionId: string; deviceId: string }>): Promise<Ack> {
