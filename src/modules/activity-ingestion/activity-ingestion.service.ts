@@ -70,11 +70,15 @@ export class ActivityIngestionService {
 
   private async checkConsent(db: PrismaClient, parentId: string, childId: string | null, scope: ActivityEventV1['consent_scope'], policyVersion: string): Promise<boolean> {
     const rows = await db.consentRecord.findMany({ where: { parentId, OR: [{ childId: null }, ...(childId ? [{ childId }] : [])] }, orderBy: { recordedAt: 'desc' } });
-    const records: ServerConsentRecord[] = rows.filter(row => row.purpose === scope).map(row => ({
+    const scoped = rows.filter(row => row.purpose === scope);
+    // A database row is not automatically an authoritative consent grant.
+    // Never promote arbitrary client/source strings into trusted attestations.
+    if (scoped.some(row => row.source !== 'server_consent_store' && row.source !== 'sync_scope_grant')) return false;
+    const records: ServerConsentRecord[] = scoped.map(row => ({
       purpose: row.purpose,
       consent_scope: scope,
       policy_version: row.policyVersion,
-      source: 'server_consent_store',
+      source: row.source as ServerConsentRecord['source'],
       status: row.status === 'granted' && !row.revokedAt ? 'granted' : 'withdrawn',
       effective_at: (row.revokedAt ?? row.recordedAt).toISOString(),
     }));
