@@ -54,12 +54,39 @@ export class ParentGatePinService {
 
   /** Opaque gate token is never a parent session or a replacement for one. */
   async verifyAndIssue(parentId: string, sessionId: string, pin: unknown) {
-    await this.verify(parentId, pin);
+    validPin(pin);
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-    await this.prisma.db.parentGateGrant.create({
-      data: { tokenHash: this.tokenHash(token), parentId, sessionId, expiresAt },
+    // PIN reset, verification and grant insertion serialize on the parent row.
+    // Invalid attempts commit their throttle before an exception is returned.
+    const accepted = await this.prisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM parent_accounts WHERE id = ${parentId}::uuid FOR UPDATE`;
+      const record = await tx.parentGatePin.findUnique({ where: { parentId } });
+      if (!record) throw new ForbiddenException('Parent PIN not configured');
+      const now = new Date();
+      if (record.lockedUntil && record.lockedUntil > now) {
+        throw new HttpException('Parent gate temporarily locked', HttpStatus.TOO_MANY_REQUESTS);
+      }
+      const candidate = await this.derive(pin, record.salt);
+      const stored = Buffer.from(record.pinHash, 'hex');
+      if (stored.length !== KEY_LENGTH || !timingSafeEqual(candidate, stored)) {
+        const failures = record.failedAttempts + 1;
+        const seconds = failures >= 5 ? Math.min(3600, 30 * (2 ** Math.min(failures - 5, 7))) : 0;
+        await tx.parentGatePin.update({ where: { parentId }, data: {
+          failedAttempts: failures,
+          lockedUntil: seconds ? new Date(now.getTime() + seconds * 1000) : null,
+        } });
+        return false;
+      }
+      await tx.parentGatePin.update({
+        where: { parentId }, data: { failedAttempts: 0, lockedUntil: null },
+      });
+      await tx.parentGateGrant.create({
+        data: { tokenHash: this.tokenHash(token), parentId, sessionId, expiresAt },
+      });
+      return true;
     });
+    if (!accepted) throw new ForbiddenException('Invalid parent PIN');
     return { gate_token: token, expires_in: 300 };
   }
 
