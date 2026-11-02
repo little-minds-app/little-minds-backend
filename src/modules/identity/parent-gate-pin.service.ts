@@ -1,12 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, TooManyRequestsException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
-import { promisify } from 'node:util';
 import type { AppEnv } from '../../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 
-const scrypt = promisify(scryptCallback);
 const PIN_PATTERN = /^[0-9]{6}$/;
 const KEY_LENGTH = 32;
 const SCRYPT_OPTIONS = { N: 1 << 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 } as const;
@@ -32,12 +30,15 @@ export class ParentGatePinService {
   }
 
   private async derive(pin: string, salt: string): Promise<Buffer> {
-    return (await scrypt(
-      pin + ':' + this.pepper(),
-      Buffer.from(salt, 'hex'),
-      KEY_LENGTH,
-      SCRYPT_OPTIONS,
-    )) as Buffer;
+    return new Promise<Buffer>((resolve, reject) => {
+      scryptCallback(
+        pin + ':' + this.pepper(),
+        Buffer.from(salt, 'hex'),
+        KEY_LENGTH,
+        SCRYPT_OPTIONS,
+        (error, derived) => error ? reject(error) : resolve(derived),
+      );
+    });
   }
 
   /** Setup is one-time only. PIN recovery needs a separately verified OTP flow. */
@@ -72,7 +73,7 @@ export class ParentGatePinService {
       if (!record) throw new ForbiddenException('Parent PIN not configured');
       const now = new Date();
       if (record.lockedUntil && record.lockedUntil > now) {
-        throw new TooManyRequestsException('Parent gate temporarily locked');
+        throw new HttpException('Parent gate temporarily locked', HttpStatus.TOO_MANY_REQUESTS);
       }
       const candidate = await this.derive(pin, record.salt);
       const stored = Buffer.from(record.pinHash, 'hex');
