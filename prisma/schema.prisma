@@ -918,6 +918,19 @@ model ActivityEvent {
 
 /// Parent-only telemetry: no fabricated child play session (LMP-51).
 /// Future ingestion enforces authenticated parent ownership and server consent.
+/// Cross-table global idempotency claim for both child and parent activity events.
+/// The ingest service creates this record and its destination event atomically.
+model ActivityIngestKey {
+  eventId            String   @id @map("event_id") @db.Uuid
+  parentId           String   @map("parent_id") @db.Uuid
+  payloadFingerprint String   @map("payload_fingerprint") @db.VarChar(64)
+  eventClass         String   @map("event_class") @db.VarChar(16)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([parentId, createdAt], map: "activity_ingest_keys_parent_created_idx")
+  @@map("activity_ingest_keys")
+}
+
 model ParentActivityEvent {
   eventId                  String    @id @map("event_id") @db.Uuid
   parentId                 String    @map("parent_id") @db.Uuid
