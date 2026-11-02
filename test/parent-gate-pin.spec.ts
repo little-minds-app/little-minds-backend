@@ -19,7 +19,9 @@ describe('LMP-42 parent PIN gate', () => {
     parentGatePin: {
       findUnique: jest.fn(),
       update: jest.fn().mockResolvedValue({}),
+      create: jest.fn().mockResolvedValue({}),
     },
+    parentGateGrant: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
   };
   const db = {
     parentGatePin: {
@@ -34,10 +36,11 @@ describe('LMP-42 parent PIN gate', () => {
     $transaction: jest.fn(async (action: (client: typeof tx) => Promise<unknown>) =>
       action(tx)),
   };
+  const stepUp = { consumeParentGateTx: jest.fn().mockResolvedValue(undefined) };
   const service = new ParentGatePinService(
     { get db() { return db; } } as unknown as PrismaService,
     { get: () => 'unit-test-pepper-must-be-long' } as unknown as ConfigService<AppEnv, true>,
-    { consumeParentGateTx: jest.fn().mockResolvedValue(undefined) } as unknown as StepUpService,
+    stepUp as unknown as StepUpService,
   );
 
   beforeEach(() => {
@@ -49,6 +52,37 @@ describe('LMP-42 parent PIN gate', () => {
     await expect(service.setWithProof(parentId, sessionId, 'proof', '1234', '1234', false)).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.setWithProof(parentId, sessionId, 'proof', '123456', '654321', false)).rejects.toBeInstanceOf(BadRequestException);
     expect(db.parentGatePin.create).not.toHaveBeenCalled();
+  });
+
+  it('requires and atomically consumes a fresh linked identity proof on first setup', async () => {
+    tx.parentGatePin.findUnique.mockResolvedValue(null);
+    await expect(service.setWithProof(
+      parentId, sessionId, 'fresh-otp-step-up', '654321', '654321', false,
+    )).resolves.toEqual({ configured: true });
+    expect(stepUp.consumeParentGateTx).toHaveBeenCalledWith(tx, {
+      parentId, sessionId, stepUpToken: 'fresh-otp-step-up',
+    });
+    expect(tx.parentGatePin.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ parentId, salt: expect.any(String), pinHash: expect.any(String) }),
+    });
+  });
+
+  it('resets PIN only after OTP proof and revokes every old adult grant', async () => {
+    await expect(service.setWithProof(
+      parentId, sessionId, 'fresh-reset-proof', '654321', '654321', true,
+    )).resolves.toEqual({ configured: true });
+    expect(stepUp.consumeParentGateTx).toHaveBeenCalledWith(tx, {
+      parentId, sessionId, stepUpToken: 'fresh-reset-proof',
+    });
+    expect(tx.parentGateGrant.deleteMany).toHaveBeenCalledWith({ where: { parentId } });
+  });
+
+  it('fails closed when a missing PIN tries to reset', async () => {
+    tx.parentGatePin.findUnique.mockResolvedValue(null);
+    await expect(service.setWithProof(
+      parentId, sessionId, 'fresh-reset-proof', '654321', '654321', true,
+    )).rejects.toBeInstanceOf(ForbiddenException);
+    expect(stepUp.consumeParentGateTx).not.toHaveBeenCalled();
   });
 
   it('never grants access for a missing or malformed token', async () => {
