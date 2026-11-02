@@ -81,6 +81,8 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
     changed.payload = { ...(changed.payload as Record<string, unknown>), hints_used: 2 };
     const conflict = await ingestion.ingest(parentId, { sessions: [], events: [changed] });
     expect(conflict.results[0]).toMatchObject({ status: 'rejected', reason_code: 'idempotency.conflict' });
+    const crossClass = await ingestion.ingest(parentId, { sessions: [], events: [parentEvent(eid)] });
+    expect(crossClass.results[0]).toMatchObject({ status: 'rejected', reason_code: 'idempotency.conflict' });
   });
 
   it('allows out-of-order event arrival via retryable session dependency', async () => {
@@ -114,6 +116,16 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
     expect(await db.parentActivityEvent.count({ where: { eventId: id } })).toBe(1);
     expect(await db.parentActivityEvent.findUnique({ where: { eventId: id } })).toMatchObject({ consentPolicyVersion: consentPolicy, provenanceJson: expect.objectContaining({ actor_scope: 'parent' }) });
     expect(await db.activitySession.count({ where: { id } })).toBe(0);
+  });
+
+  it('fails closed on untrusted consent attestation source', async () => {
+    const rogue = await db.consentRecord.create({ data: { parentId, purpose: 'essential_play_events', policyVersion: consentPolicy, status: 'granted', source: 'client_decision', recordedAt: new Date('2026-10-29T00:00:00Z') } });
+    try {
+      const denied = await ingestion.ingest(parentId, { sessions: [], events: [parentEvent(randomUUID())] });
+      expect(denied.results[0]).toMatchObject({ status: 'rejected', reason_code: 'consent.not_authorized' });
+    } finally {
+      await db.consentRecord.delete({ where: { id: rogue.id } });
+    }
   });
 
   it('refuses another parent and rejects events after consent withdrawal', async () => {
