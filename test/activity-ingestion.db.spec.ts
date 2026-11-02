@@ -82,6 +82,15 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
     expect(conflict.results[0]).toMatchObject({ status: 'rejected', reason_code: 'idempotency.conflict' });
   });
 
+  it('allows out-of-order event arrival via retryable session dependency', async () => {
+    const sid = randomUUID(), eid = randomUUID();
+    const before = await ingestion.ingest(parentId, { sessions: [], events: [event(eid, sid)] });
+    expect(before.results[0]).toMatchObject({ status: 'retryable', reason_code: 'session.pending' });
+    expect(await db.activityEvent.count({ where: { eventId: eid } })).toBe(0);
+    const after = await ingestion.ingest(parentId, { sessions: [session(sid)], events: [event(eid, sid)] });
+    expect(after.results[0].status).toBe('accepted');
+  });
+
   it('saves parent-only events without a fabricated play session', async () => {
     const id = randomUUID();
     const result = await ingestion.ingest(parentId, { sessions: [], events: [parentEvent(id)] });
