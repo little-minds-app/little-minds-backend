@@ -881,6 +881,9 @@ model ActivitySession {
   completionStatus         String?   @map("completion_status")
   deviceId                 String?   @map("device_id") @db.Uuid
   schemaVersion            String    @map("schema_version")
+  consentScope             String?   @map("consent_scope")
+  consentPolicyVersion     String?   @map("consent_policy_version")
+  provenanceJson           Json?     @map("provenance_json")
   createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -907,6 +910,8 @@ model ActivityEvent {
   payloadJson              Json?    @map("payload_json")
   schemaVersion            String   @map("schema_version")
   consentScope             String   @map("consent_scope")
+  consentPolicyVersion     String?  @map("consent_policy_version")
+  provenanceJson           Json?    @map("provenance_json")
 
   playSession    ActivitySession @relation(fields: [playSessionId], references: [id], onDelete: Cascade)
   contentVersion ActivityVariant @relation(fields: [contentVersionId], references: [id], onDelete: Restrict)
@@ -943,6 +948,7 @@ model ParentActivityEvent {
   schemaVersion            String    @map("schema_version")
   consentScope             String    @map("consent_scope")
   consentPolicyVersion     String    @map("consent_policy_version")
+  provenanceJson           Json?     @map("provenance_json")
   payloadFingerprint       String    @map("payload_fingerprint") @db.VarChar(64)
 
   parent                   ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
