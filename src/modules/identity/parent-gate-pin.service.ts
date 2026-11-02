@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import type { AppEnv } from '../../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
+import { StepUpService } from './linking/step-up.service';
 
 const PIN_PATTERN = /^[0-9]{6}$/;
 const KEY_LENGTH = 32;
@@ -21,6 +22,7 @@ export class ParentGatePinService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnv, true>,
+    private readonly stepUp: StepUpService,
   ) {}
 
   private pepper(): string {
@@ -82,16 +84,42 @@ export class ParentGatePinService {
     });
   }
 
-  /** Setup is one-time only. PIN recovery needs a separately verified OTP flow. */
-  async setup(parentId: string, pin: unknown, confirmation: unknown): Promise<void> {
+  /**
+   * Setup and reset require a one-time fresh proof of a linked identity.
+   * Proof consumption and PIN mutation are committed atomically.
+   */
+  async setWithProof(
+    parentId: string,
+    sessionId: string,
+    proof: string,
+    pin: unknown,
+    confirmation: unknown,
+    reset: boolean,
+  ): Promise<{ configured: true }> {
     validPin(pin);
     validPin(confirmation);
     if (pin !== confirmation) throw new BadRequestException('PIN confirmation mismatch');
     const salt = randomBytes(32).toString('hex');
     const pinHash = (await this.derive(pin, salt)).toString('hex');
     try {
-      await this.prisma.db.parentGatePin.create({
-        data: { parentId, salt, pinHash },
+      await this.prisma.db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM parent_accounts WHERE id = ${parentId}::uuid FOR UPDATE`;
+        const existing = await tx.parentGatePin.findUnique({ where: { parentId } });
+        if (reset !== !!existing) {
+          throw new ForbiddenException(reset ? 'Parent PIN not configured' : 'PIN already configured');
+        }
+        await this.stepUp.consumeParentGateTx(tx, {
+          parentId, sessionId, stepUpToken: proof,
+        });
+        if (reset) {
+          await tx.parentGatePin.update({
+            where: { parentId },
+            data: { salt, pinHash, failedAttempts: 0, lockedUntil: null },
+          });
+          await tx.parentGateGrant.deleteMany({ where: { parentId } });
+        } else {
+          await tx.parentGatePin.create({ data: { parentId, salt, pinHash } });
+        }
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -99,6 +127,7 @@ export class ParentGatePinService {
       }
       throw error;
     }
+    return { configured: true };
   }
 
   /**
