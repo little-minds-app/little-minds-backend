@@ -20,13 +20,18 @@ Status: implementation in progress; **not accepted for release**.
 - Include database, service, HTTP E2E and revocation/race tests. Add authorization-negative cases.
 
 ## Implementation tracking
-- [x] Parent-scoped Prisma persistence model
-- [x] Explicit SQL migration
-- [ ] PIN create/change/reset endpoints with fresh identity proof (setup service exists but has deliberately no HTTP route)
-- [x] Initial atomic PIN attempt limiter, verification service and five-minute session-bound grant issuance/revocation (review/testing pending)
-- [ ] OpenAPI contract and generated clients (draft status/verify/grant-check/lock HTTP routes exist; not yet published as contract)
-- [ ] Flutter setup/challenge screens and navigation integration
-- [ ] Phone/tablet and session/account-switch regression tests
-- [ ] CI, security review and manual UAT (initial unit tests added; broader E2E pending)
+- [x] Parent-specific salted scrypt persistence, attempts and escalating lockout
+- [x] Fresh linked-identity step-up for setup and reset, with single-use proof
+- [x] Five-minute opaque grants bound to parent and current session
+- [x] Serialized PIN verification/grant issuance and OTP reset (parent-row lock)
+- [x] Token-scoped explicit revocation; a delayed lock cannot revoke a new grant
+- [x] Parent-sensitive profile read/write and child profile write authorization
+- [x] Minimal child-list/child-get remains accessible with active parent session, for Kids Mode profile selection only; output is child_id, nickname, age_months, preferred_locale. No adult profile fields, contact data, purchase/reporting data.
+- [x] OpenAPI contract and generated clients
+- [x] Flutter challenge, enrollment, recovery and background lock
+- [x] PostgreSQL two-client verification/reset race regression
+- [ ] Fresh CI and independent final security review
+- [ ] Manual iOS/Android device acceptance
 
-The persistence model alone does **not** enforce the gate. Do not merge or enable PIN UI until the full flow is implemented and verified.
+## Revocation and residual risks
+The mobile app deletes the local adult-mode grant immediately. The server revokes only the captured old token. If a DELETE fails due to network loss, the app retries every five seconds while alive and again on resume until the token's five-minute expiry. Remote revocation cannot be guaranteed while the device is offline or terminated: the previous token remains valid server-side until expiration, provided the parent session remains active. No token is persisted for retry across process death. This residual risk must be accepted explicitly before shipping; sensitive operations still check the parent session and current grant.
