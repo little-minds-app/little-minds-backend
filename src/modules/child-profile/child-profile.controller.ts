@@ -9,6 +9,9 @@ import { ChildProfileService } from './child-profile.service';
 export class ChildProfileController {
   constructor(private readonly children: ChildProfileService) {}
 
+  // Kids Mode needs this deliberately minimal projection for profile selection.
+  // No contact data, parent profile, reports or adult settings are returned.
+  // Authenticated parent session required; mutations require Parent Gate.
   @Get()
   list(@Req() req: Request) {
     return this.children.list(getParentAuth(req).parentId);
@@ -27,6 +30,7 @@ export class ChildProfileController {
     return this.children.create(getParentAuth(req).parentId, body);
   }
 
+  // Same minimal kids-safe projection as list(); never a full child record.
   @Get(':childId')
   get(@Req() req: Request, @Param('childId', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) childId: string) {
     return this.children.get(getParentAuth(req).parentId, childId);
