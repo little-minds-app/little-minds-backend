@@ -5,6 +5,7 @@ on:
     branches:
       - main
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
 
@@ -17,6 +18,7 @@ permissions:
 
 jobs:
   docs-checks:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: Docs and pointer checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -43,6 +45,7 @@ jobs:
           ./scripts/check-env-secrets.sh
 
   nest-ci:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: Nest lint, typecheck, test, build
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -76,6 +79,7 @@ jobs:
         run: npm run build
 
   contract-checks:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: OpenAPI contract validate and generate
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -111,6 +115,7 @@ jobs:
             test/openapi.negative.contract.spec.ts
 
   compose-checks:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: Docker Compose contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -125,6 +130,7 @@ jobs:
           ./scripts/check-compose.sh
 
   prisma-checks:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: Prisma migrate, seed, integrity
     runs-on: ubuntu-latest
     timeout-minutes: 15
