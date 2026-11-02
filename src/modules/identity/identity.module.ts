@@ -8,9 +8,12 @@ import { IdentityLinkController } from './controllers/identity-link.controller';
 import { MultiProviderAuthController } from './controllers/multi-provider-auth.controller';
 import { WebParentProfileController } from './controllers/web-parent-profile.controller';
 import { ParentProfileService } from './parent-profile.service';
+import { ParentGatePinService } from './parent-gate-pin.service';
 import { ParentController } from './controllers/parent.controller';
+import { ParentGateController } from './controllers/parent-gate.controller';
 import { PhoneAuthController } from './controllers/phone-auth.controller';
 import { ParentAuthGuard } from './auth/parent-auth.guard';
+import { ParentGateGrantGuard } from './auth/parent-gate-grant.guard';
 import { AccountLinkingService } from './linking/account-linking.service';
 import { StepUpService } from './linking/step-up.service';
 import { DisabledProductionMailSender } from './mail/disabled-production-mail.sender';
@@ -47,6 +50,7 @@ import { SMS_SENDER } from './sms/sms-sender';
     WebSessionController,
     WebParentProfileController,
     ParentController,
+    ParentGateController,
     DevAuthController,
     PhoneAuthController,
     MultiProviderAuthController,
@@ -58,7 +62,9 @@ import { SMS_SENDER } from './sms/sms-sender';
     WebParentSessionService,
     AuthRateLimitService,
     ParentAuthGuard,
+    ParentGateGrantGuard,
     ParentProfileService,
+    ParentGatePinService,
     OtpAbuseService,
     OtpRetentionService,
     PhoneOtpService,
@@ -124,6 +130,6 @@ import { SMS_SENDER } from './sms/sms-sender';
       },
     },
   ],
-  exports: [SessionIssuerService, JwtAccessService, ParentAuthGuard, WebParentSessionService],
+  exports: [SessionIssuerService, JwtAccessService, ParentAuthGuard, ParentGatePinService, ParentGateGrantGuard, WebParentSessionService],
 })
 export class IdentityModule {}

@@ -22,6 +22,7 @@ import { AuthRateLimitService } from '../session/auth-rate-limit.service';
 import { SessionIssuerService } from '../session/session-issuer.service';
 import type { LinkableProvider } from './account-linking.constants';
 import {
+  STEP_UP_PURPOSE_PARENT_GATE,
   STEP_UP_PURPOSE_IDENTITY_LINK,
   STEP_UP_TTL_SECONDS,
 } from './step-up.constants';
@@ -43,7 +44,7 @@ export type StepUpProofInput = {
 export type StepUpIssueResult = {
   step_up_token: string;
   expires_in: typeof STEP_UP_TTL_SECONDS;
-  purpose: typeof STEP_UP_PURPOSE_IDENTITY_LINK;
+  purpose: typeof STEP_UP_PURPOSE_IDENTITY_LINK | typeof STEP_UP_PURPOSE_PARENT_GATE;
 };
 
 /**
@@ -75,6 +76,18 @@ export class StepUpService {
   async issueForIdentityLink(
     req: Request,
     input: StepUpProofInput,
+  ): Promise<StepUpIssueResult> {
+    return this.issueForPurpose(req, input, STEP_UP_PURPOSE_IDENTITY_LINK);
+  }
+
+  issueForParentGate(req: Request, input: StepUpProofInput): Promise<StepUpIssueResult> {
+    return this.issueForPurpose(req, input, STEP_UP_PURPOSE_PARENT_GATE);
+  }
+
+  private async issueForPurpose(
+    req: Request,
+    input: StepUpProofInput,
+    purpose: typeof STEP_UP_PURPOSE_IDENTITY_LINK | typeof STEP_UP_PURPOSE_PARENT_GATE,
   ): Promise<StepUpIssueResult> {
     const ip = clientIp(req);
     this.rateLimit.consumeStepUpIp(ip);
@@ -116,7 +129,7 @@ export class StepUpService {
         tokenHash,
         parentId: input.parentId,
         sessionId: input.sessionId,
-        purpose: STEP_UP_PURPOSE_IDENTITY_LINK,
+        purpose,
         provider,
         expiresAt,
       },
@@ -125,7 +138,7 @@ export class StepUpService {
     return {
       step_up_token: plaintext,
       expires_in: STEP_UP_TTL_SECONDS,
-      purpose: STEP_UP_PURPOSE_IDENTITY_LINK,
+      purpose,
     };
   }
 
@@ -141,6 +154,22 @@ export class StepUpService {
       parentId: string;
       sessionId: string;
     },
+  ): Promise<void> {
+    return this.consumePurposeTx(tx, args, STEP_UP_PURPOSE_IDENTITY_LINK);
+  }
+
+  consumeParentGateTx(tx: Prisma.TransactionClient, args: {
+    stepUpToken: string;
+    parentId: string;
+    sessionId: string;
+  }): Promise<void> {
+    return this.consumePurposeTx(tx, args, STEP_UP_PURPOSE_PARENT_GATE);
+  }
+
+  private async consumePurposeTx(
+    tx: Prisma.TransactionClient,
+    args: { stepUpToken: string; parentId: string; sessionId: string },
+    purpose: typeof STEP_UP_PURPOSE_IDENTITY_LINK | typeof STEP_UP_PURPOSE_PARENT_GATE,
   ): Promise<void> {
     if (
       typeof args.stepUpToken !== 'string' ||
@@ -160,7 +189,7 @@ export class StepUpService {
       WHERE token_hash = ${tokenHash}
         AND parent_id = ${args.parentId}::uuid
         AND session_id = ${args.sessionId}::uuid
-        AND purpose = ${STEP_UP_PURPOSE_IDENTITY_LINK}
+        AND purpose = ${purpose}
         AND consumed_at IS NULL
         AND expires_at > ${now}
       RETURNING id

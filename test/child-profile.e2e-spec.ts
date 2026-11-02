@@ -5,6 +5,7 @@ import { App } from 'supertest/types';
 import { ChildProfileController } from '../src/modules/child-profile/child-profile.controller';
 import { ChildProfileService } from '../src/modules/child-profile/child-profile.service';
 import { ParentAuthGuard } from '../src/modules/identity/auth/parent-auth.guard';
+import { ParentGateGrantGuard } from '../src/modules/identity/auth/parent-gate-grant.guard';
 
 describe('LMP-39 HTTP child profile security boundary', () => {
   let app: INestApplication<App>;
@@ -20,11 +21,17 @@ describe('LMP-39 HTTP child profile security boundary', () => {
     },
   };
 
+  const gateGuard: CanActivate = { canActivate(context: ExecutionContext) {
+    const req = context.switchToHttp().getRequest();
+    return (req.headers.authorization === 'Bearer parent-A' || req.headers.authorization === 'Bearer parent-B') &&
+      req.headers['x-parent-gate-token'] === 'verified-parent-gate';
+  } };
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [ChildProfileController],
-      providers: [{ provide: ChildProfileService, useValue: { get, create } }, { provide: ParentAuthGuard, useValue: tokenGuard }],
-    }).overrideGuard(ParentAuthGuard).useValue(tokenGuard).compile();
+      providers: [{ provide: ChildProfileService, useValue: { get, create } }, { provide: ParentAuthGuard, useValue: tokenGuard }, { provide: ParentGateGrantGuard, useValue: gateGuard }],
+    }).overrideGuard(ParentAuthGuard).useValue(tokenGuard).overrideGuard(ParentGateGrantGuard).useValue(gateGuard).compile();
     app = moduleRef.createNestApplication();
     await app.init();
   });
@@ -51,9 +58,17 @@ describe('LMP-39 HTTP child profile security boundary', () => {
     expect(get).toHaveBeenCalledWith('parent-B', childId);
   });
 
+  it('rejects child profile writes without fresh adult authorization', async () => {
+    await request(app.getHttpServer()).post('/v1/children')
+      .set('Authorization', 'Bearer parent-A')
+      .send({ age_months: 24, reference_date: '2026-01-01' })
+      .expect(403);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('never trusts the parent from a request body', async () => {
     create.mockResolvedValue({ child_id: childId });
-    await request(app.getHttpServer()).post('/v1/children').set('Authorization', 'Bearer parent-A')
+    await request(app.getHttpServer()).post('/v1/children').set('Authorization', 'Bearer parent-A').set('X-Parent-Gate-Token', 'verified-parent-gate')
       .send({ age_months: 24, reference_date: '2026-01-01' }).expect(201);
     expect(create).toHaveBeenCalledWith('parent-A', { age_months: 24, reference_date: '2026-01-01' });
   });

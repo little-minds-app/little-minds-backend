@@ -2,6 +2,7 @@ name: LMP-38 Cross-repo Fullstack E2E
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
   workflow_dispatch:
 
@@ -13,7 +14,7 @@ jobs:
     name: Real Next + Nest + PostgreSQL OTP E2E
     # Protected by an explicit configuration gate until a read-only
     # cross-repository GitHub App/PAT token has been provisioned.
-    if: ${{ vars.LM_ENABLE_CROSS_REPO_E2E == 'true' }}
+    if: ${{ vars.LM_ENABLE_CROSS_REPO_E2E == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:

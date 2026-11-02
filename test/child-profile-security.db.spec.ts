@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
-import { INestApplication, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, INestApplication, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
@@ -13,6 +13,8 @@ import type { AppEnv } from '../src/config/env.validation';
 import { ChildProfileController } from '../src/modules/child-profile/child-profile.controller';
 import { ChildProfileService } from '../src/modules/child-profile/child-profile.service';
 import { ParentAuthGuard } from '../src/modules/identity/auth/parent-auth.guard';
+import { ParentGateGrantGuard } from '../src/modules/identity/auth/parent-gate-grant.guard';
+import { ParentGatePinService } from '../src/modules/identity/parent-gate-pin.service';
 import { JwtAccessService } from '../src/modules/identity/session/jwt-access.service';
 import { SessionIssuerService } from '../src/modules/identity/session/session-issuer.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
@@ -49,6 +51,10 @@ describeDb('LMP-39 real-session HTTP access and parent-row concurrency', () => {
         { provide: JwtAccessService, useValue: jwt },
         { provide: SessionIssuerService, useValue: sessions },
         ParentAuthGuard,
+        ParentGateGrantGuard,
+        { provide: ParentGatePinService, useValue: { requireGrant: async (_parentId: string, _sessionId: string, token: unknown) => {
+          if (token !== 'test-parent-grant') throw new ForbiddenException('Parent PIN required');
+        } } },
       ],
     }).compile();
     app = moduleRef.createNestApplication();
@@ -68,6 +74,7 @@ describeDb('LMP-39 real-session HTTP access and parent-row concurrency', () => {
     const b = await sessions.mintSession({ parentId: parentB });
     const created = await request(app.getHttpServer()).post('/v1/children')
       .set('Authorization', 'Bearer ' + a.access_token)
+      .set('X-Parent-Gate-Token', 'test-parent-grant')
       .send({ age_months: 32, reference_date: '2026-01-31' }).expect(201);
     const url = '/v1/children/' + created.body.child_id;
     await request(app.getHttpServer()).get(url)

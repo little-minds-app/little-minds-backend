@@ -31,7 +31,13 @@
     "/v1/children",
     "/v1/children/{childId}",
     "/v1/web/children",
-    "/v1/web/children/{childId}"
+    "/v1/web/children/{childId}",
+    "/v1/parent/gate/status",
+    "/v1/parent/gate/proof",
+    "/v1/parent/gate/setup",
+    "/v1/parent/gate/reset",
+    "/v1/parent/gate/verify",
+    "/v1/parent/gate/grant"
   ],
   "requiredOperations": [
     {

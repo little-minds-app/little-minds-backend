@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - design/lmp-38-backend-web-session
+      - feature/lmp-42-parent-pin
     paths:
       - 'contracts/openapi.yaml'
       - 'contracts/VERSION'
@@ -36,5 +37,5 @@ jobs:
           git add contracts/generated/
           if ! git diff --cached --quiet; then
             git commit -m "[LMP-38] Regenerate versioned OpenAPI clients"
-            git push origin HEAD:design/lmp-38-backend-web-session
+            git push origin HEAD:${{ github.ref_name }}
           fi

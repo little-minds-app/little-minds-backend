@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Patch, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { getParentAuth, ParentAuthGuard } from '../auth/parent-auth.guard';
+import { ParentGateGrantGuard } from '../auth/parent-gate-grant.guard';
 import { ParentProfileService } from '../parent-profile.service';
 import { SessionIssuerService } from '../session/session-issuer.service';
 
@@ -21,19 +22,19 @@ export class ParentController {
     };
   }
   @Get('v1/parent/profile')
-  @UseGuards(ParentAuthGuard)
+  @UseGuards(ParentGateGrantGuard)
   profile(@Req() req: Request) {
     return this.profiles.get(getParentAuth(req).parentId);
   }
 
   @Patch('v1/parent/profile')
-  @UseGuards(ParentAuthGuard)
+  @UseGuards(ParentGateGrantGuard)
   updateProfile(@Req() req: Request, @Body() body: unknown) {
     return this.profiles.update(getParentAuth(req).parentId, body);
   }
 
   @Delete('v1/parent/profile')
-  @UseGuards(ParentAuthGuard)
+  @UseGuards(ParentGateGrantGuard)
   deleteProfile(@Req() req: Request) {
     return this.profiles.clear(getParentAuth(req).parentId);
   }
