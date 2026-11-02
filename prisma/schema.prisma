@@ -125,6 +125,7 @@ model ParentAccount {
 
   identities                     ParentIdentity[]
   profile                        ParentProfile?
+  parentGatePin                  ParentGatePin?
   profileDrafts                  ProfileDraft[]
   privacyNoticeAcknowledgments   PrivacyNoticeAcknowledgment[]
   processingPreferences          ProcessingPreference[]
@@ -1197,4 +1198,20 @@ model DeletionRequest {
 
   @@index([parentId, status])
   @@map("deletion_requests")
+}
+
+/// Parent Gate PIN lock state (LMP-42).
+/// Only a salted, stretched hash is persisted. Raw PINs and gate grants
+/// must never be written to this table or to logs.
+model ParentGatePin {
+  parentId        String        @id @map("parent_id") @db.Uuid
+  salt            String        @db.VarChar(64)
+  pinHash         String        @map("pin_hash") @db.VarChar(128)
+  failedAttempts  Int           @default(0) @map("failed_attempts")
+  lockedUntil     DateTime?     @map("locked_until") @db.Timestamptz(6)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  parent          ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@map("parent_gate_pins")
 }
