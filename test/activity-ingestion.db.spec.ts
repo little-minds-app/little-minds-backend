@@ -76,6 +76,7 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
     expect(statuses.filter(status => status === 'duplicate_noop')).toHaveLength(3);
     expect(await db.activityIngestKey.count({ where: { eventId: eid } })).toBe(1);
     expect(await db.activityEvent.count({ where: { eventId: eid } })).toBe(1);
+    expect(await db.activityEvent.findUnique({ where: { eventId: eid } })).toMatchObject({ consentPolicyVersion: consentPolicy, provenanceJson: expect.objectContaining({ actor_scope: 'child_play' }) });
     const changed = event(eid, sid);
     changed.payload = { ...(changed.payload as Record<string, unknown>), hints_used: 2 };
     const conflict = await ingestion.ingest(parentId, { sessions: [], events: [changed] });
@@ -91,11 +92,27 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
     expect(after.results[0].status).toBe('accepted');
   });
 
+  it('upgrades a running session to completion without changing ownership', async () => {
+    const sid = randomUUID();
+    const active = session(sid);
+    delete active.ended_at;
+    delete active.monotonic_duration_seconds;
+    active.completion_status = 'started';
+    await ingestion.ingest(parentId, { sessions: [active], events: [] });
+    const initial = await db.activitySession.findUnique({ where: { id: sid } });
+    expect(initial?.endedAt).toBeNull();
+    await ingestion.ingest(parentId, { sessions: [session(sid)], events: [] });
+    const final = await db.activitySession.findUnique({ where: { id: sid } });
+    expect(final).toMatchObject({ completionStatus: 'completed', consentPolicyVersion: consentPolicy });
+    expect(final?.endedAt).not.toBeNull();
+  });
+
   it('saves parent-only events without a fabricated play session', async () => {
     const id = randomUUID();
     const result = await ingestion.ingest(parentId, { sessions: [], events: [parentEvent(id)] });
     expect(result.results[0].status).toBe('accepted');
     expect(await db.parentActivityEvent.count({ where: { eventId: id } })).toBe(1);
+    expect(await db.parentActivityEvent.findUnique({ where: { eventId: id } })).toMatchObject({ consentPolicyVersion: consentPolicy, provenanceJson: expect.objectContaining({ actor_scope: 'parent' }) });
     expect(await db.activitySession.count({ where: { id } })).toBe(0);
   });
 
