@@ -18,7 +18,7 @@ class MissionsApi {
 
   /// List mission interaction and parent-reported status for an owned child
   ///
-  /// LMP-130 read contract. Merges eligible child-play interaction events (`real_world_mission_offered`, `real_world_mission_opened`) with durable parent-reported assertions. Does not infer physical-world completion. 
+  /// LMP-130 read contract. Requires bounded half-open UTC window (`from`, `to`, max 90-day span). Loads all eligible rows inside the window (no silent scan cap); `limit` paginates merged results only. Does not infer physical-world completion. 
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -26,14 +26,14 @@ class MissionsApi {
   ///
   /// * [String] childId (required):
   ///
-  /// * [DateTime] from:
+  /// * [DateTime] from (required):
   ///   Inclusive UTC lower bound for report/interaction timestamps
   ///
-  /// * [DateTime] to:
+  /// * [DateTime] to (required):
   ///   Exclusive UTC upper bound for report/interaction timestamps
   ///
   /// * [int] limit:
-  Future<Response> listChildMissionStatusWithHttpInfo(String childId, { DateTime? from, DateTime? to, int? limit, Future<void>? abortTrigger, }) async {
+  Future<Response> listChildMissionStatusWithHttpInfo(String childId, DateTime from, DateTime to, { int? limit, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/v1/children/{childId}/missions'
       .replaceAll('{childId}', childId);
@@ -45,12 +45,8 @@ class MissionsApi {
     final headerParams = <String, String>{};
     final formParams = <String, String>{};
 
-    if (from != null) {
       queryParams.addAll(_queryParams('', 'from', from));
-    }
-    if (to != null) {
       queryParams.addAll(_queryParams('', 'to', to));
-    }
     if (limit != null) {
       queryParams.addAll(_queryParams('', 'limit', limit));
     }
@@ -72,21 +68,21 @@ class MissionsApi {
 
   /// List mission interaction and parent-reported status for an owned child
   ///
-  /// LMP-130 read contract. Merges eligible child-play interaction events (`real_world_mission_offered`, `real_world_mission_opened`) with durable parent-reported assertions. Does not infer physical-world completion. 
+  /// LMP-130 read contract. Requires bounded half-open UTC window (`from`, `to`, max 90-day span). Loads all eligible rows inside the window (no silent scan cap); `limit` paginates merged results only. Does not infer physical-world completion. 
   ///
   /// Parameters:
   ///
   /// * [String] childId (required):
   ///
-  /// * [DateTime] from:
+  /// * [DateTime] from (required):
   ///   Inclusive UTC lower bound for report/interaction timestamps
   ///
-  /// * [DateTime] to:
+  /// * [DateTime] to (required):
   ///   Exclusive UTC upper bound for report/interaction timestamps
   ///
   /// * [int] limit:
-  Future<MissionStatusListResponse?> listChildMissionStatus(String childId, { DateTime? from, DateTime? to, int? limit, Future<void>? abortTrigger, }) async {
-    final response = await listChildMissionStatusWithHttpInfo(childId, from: from, to: to, limit: limit, abortTrigger: abortTrigger,);
+  Future<MissionStatusListResponse?> listChildMissionStatus(String childId, DateTime from, DateTime to, { int? limit, Future<void>? abortTrigger, }) async {
+    final response = await listChildMissionStatusWithHttpInfo(childId, from, to, limit: limit, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

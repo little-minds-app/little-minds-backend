@@ -1,4 +1,4 @@
-/** LMP-130: mission status persistence, idempotency ledger, concurrency, consent reads. */
+/** LMP-130: mission status persistence, idempotency ledger, concurrency, bounded-window reads. */
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { NEAR_FAR_CANONICAL_IDS } from '../src/modules/mentor/near-far.ids';
@@ -7,6 +7,11 @@ import type { PrismaService } from '../src/modules/prisma/prisma.service';
 import { MISSION_STATUS_SCHEMA_VERSION } from '../src/modules/real-world-mission/mission-status.constants';
 
 const describeDb = process.env.DATABASE_URL ? describe : describe.skip;
+
+const LIST_WINDOW = {
+  from: '2026-01-01T00:00:00.000Z',
+  to: '2027-01-01T00:00:00.000Z',
+};
 
 describeDb('LMP-130 mission status / real PostgreSQL', () => {
   const db = new PrismaClient();
@@ -99,35 +104,52 @@ describeDb('LMP-130 mission status / real PostgreSQL', () => {
     expect(await db.parentMissionStatusIdempotencyKey.count({ where: { parentId: parentA } })).toBe(2);
   });
 
-  it('allows only one concurrent correction to win', async () => {
+  it('allows exactly one concurrent correction from not_now with revision 2', async () => {
     const occurrenceId = randomUUID();
     await service.submitFeedback(parentA, childA, missionId, {
       schema_version: MISSION_STATUS_SCHEMA_VERSION,
       idempotency_key: randomUUID(),
       occurrence_id: occurrenceId,
-      status: 'completed',
+      status: 'not_now',
     });
+
     const results = await Promise.allSettled([
+      service.submitFeedback(parentA, childA, missionId, {
+        schema_version: MISSION_STATUS_SCHEMA_VERSION,
+        idempotency_key: randomUUID(),
+        occurrence_id: occurrenceId,
+        status: 'completed',
+      }),
       service.submitFeedback(parentA, childA, missionId, {
         schema_version: MISSION_STATUS_SCHEMA_VERSION,
         idempotency_key: randomUUID(),
         occurrence_id: occurrenceId,
         status: 'skipped',
       }),
-      service.submitFeedback(parentA, childA, missionId, {
-        schema_version: MISSION_STATUS_SCHEMA_VERSION,
-        idempotency_key: randomUUID(),
-        occurrence_id: occurrenceId,
-        status: 'partial',
-      }),
     ]);
-    const fulfilled = results.filter((result) => result.status === 'fulfilled');
-    const rejected = results.filter((result) => result.status === 'rejected');
-    expect(fulfilled).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
+
+    const accepted = results.filter(
+      (result) => result.status === 'fulfilled' && result.value.status === 'accepted',
+    );
+    const conflicts = results.filter(
+      (result) => result.status === 'rejected' && (result.reason as { status?: number }).status === 409,
+    );
+    expect(accepted).toHaveLength(1);
+    expect(conflicts).toHaveLength(1);
+
+    const row = await db.parentMissionStatusReport.findFirstOrThrow({
+      where: { parentId: parentA, childId: childA, occurrenceId },
+    });
+    expect(row.revision).toBe(2);
+    expect(['completed', 'skipped']).toContain(row.reportStatus);
+    expect(
+      await db.parentMissionStatusIdempotencyKey.count({
+        where: { parentId: parentA, childId: childA, occurrenceId },
+      }),
+    ).toBe(2);
   });
 
-  it('paginates merged eligible rows after consent filtering', async () => {
+  it('returns all consent-eligible rows inside the required window without scan-cap loss', async () => {
     const parentId = randomUUID();
     const childId = randomUUID();
     await db.parentAccount.create({ data: { id: parentId, lifecycle: 'active' } });
@@ -161,18 +183,97 @@ describeDb('LMP-130 mission status / real PostgreSQL', () => {
       ],
     });
 
-    for (let index = 0; index < 3; index += 1) {
+    const occurrenceIds: string[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      const occurrenceId = randomUUID();
+      occurrenceIds.push(occurrenceId);
       await service.submitFeedback(parentId, childId, missionId, {
         schema_version: MISSION_STATUS_SCHEMA_VERSION,
         idempotency_key: randomUUID(),
-        occurrence_id: randomUUID(),
+        occurrence_id: occurrenceId,
         status: 'completed',
       });
     }
 
-    const limited = await service.listForChild(parentId, childId, { limit: '2' });
+    const limited = await service.listForChild(parentId, childId, { ...LIST_WINDOW, limit: '2' });
     expect(limited.items).toHaveLength(2);
     expect(limited.pagination.truncated).toBe(true);
+
+    const full = await service.listForChild(parentId, childId, { ...LIST_WINDOW, limit: '100' });
+    expect(full.items).toHaveLength(5);
+    expect(full.pagination.truncated).toBe(false);
+
+    await db.parentMissionStatusIdempotencyKey.deleteMany({ where: { parentId } });
+    await db.parentMissionStatusReport.deleteMany({ where: { parentId } });
+    await db.consentRecord.deleteMany({ where: { parentId } });
+    await db.childProfile.deleteMany({ where: { parentId } });
+    await db.parentAccount.delete({ where: { id: parentId } });
+  });
+
+  it('keeps older eligible reports when newer rows fail consent re-check', async () => {
+    const parentId = randomUUID();
+    const childId = randomUUID();
+    const olderOccurrence = randomUUID();
+    const newerOccurrence = randomUUID();
+    await db.parentAccount.create({ data: { id: parentId, lifecycle: 'active' } });
+    await db.childProfile.create({
+      data: {
+        id: childId,
+        parentId,
+        ageMonthsAtReference: 32,
+        ageReferenceDate: new Date('2026-01-15T00:00:00Z'),
+      },
+    });
+    await db.consentRecord.createMany({
+      data: [
+        {
+          parentId,
+          purpose: 'essential_play_events',
+          policyVersion: consentPolicy,
+          status: 'granted',
+          source: 'server_consent_store',
+          recordedAt: new Date('2026-01-01T00:00:00Z'),
+        },
+        {
+          parentId,
+          childId,
+          purpose: 'essential_play_events',
+          policyVersion: consentPolicy,
+          status: 'granted',
+          source: 'server_consent_store',
+          recordedAt: new Date('2026-01-01T00:00:00Z'),
+        },
+      ],
+    });
+
+    await service.submitFeedback(parentId, childId, missionId, {
+      schema_version: MISSION_STATUS_SCHEMA_VERSION,
+      idempotency_key: randomUUID(),
+      occurrence_id: olderOccurrence,
+      status: 'completed',
+    });
+    await db.parentMissionStatusReport.updateMany({
+      where: { parentId, childId, occurrenceId: olderOccurrence },
+      data: { recordedAt: new Date('2026-06-01T00:00:00.000Z') },
+    });
+
+    await service.submitFeedback(parentId, childId, missionId, {
+      schema_version: MISSION_STATUS_SCHEMA_VERSION,
+      idempotency_key: randomUUID(),
+      occurrence_id: newerOccurrence,
+      status: 'skipped',
+    });
+    await db.parentMissionStatusReport.updateMany({
+      where: { parentId, childId, occurrenceId: newerOccurrence },
+      data: {
+        recordedAt: new Date('2026-10-01T00:00:00.000Z'),
+        consentPolicyVersion: 'legacy-ungranted-policy',
+      },
+    });
+
+    const list = await service.listForChild(parentId, childId, LIST_WINDOW);
+    expect(list.items).toHaveLength(1);
+    expect(list.items[0]?.occurrence_id).toBe(olderOccurrence);
 
     await db.parentMissionStatusIdempotencyKey.deleteMany({ where: { parentId } });
     await db.parentMissionStatusReport.deleteMany({ where: { parentId } });
@@ -233,7 +334,7 @@ describeDb('LMP-130 mission status / real PostgreSQL', () => {
         revokedAt: new Date('2026-02-01T00:00:00Z'),
       },
     });
-    const list = await service.listForChild(parentId, childId, {});
+    const list = await service.listForChild(parentId, childId, LIST_WINDOW);
     expect(list.items).toHaveLength(0);
     await db.parentMissionStatusIdempotencyKey.deleteMany({ where: { parentId } });
     await db.parentMissionStatusReport.deleteMany({ where: { parentId } });

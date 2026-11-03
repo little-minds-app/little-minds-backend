@@ -16,7 +16,7 @@ import {
   DEFAULT_MISSION_READ_LIMIT,
   MAX_MISSION_READ_LIMIT,
   MISSION_INTERACTION_EVENT_TYPES,
-  MISSION_READ_SCAN_CAP,
+  MISSION_LIST_MAX_WINDOW_MS,
   MISSION_REPORT_STATUSES,
   MISSION_STATUS_CONSENT_POLICY,
   MISSION_STATUS_CONSENT_SCOPE,
@@ -105,29 +105,18 @@ export class MissionStatusService {
   ): Promise<MissionStatusListResponse> {
     await this.requireOwnedChild(parentId, childId);
     const limit = this.parseLimit(query.limit);
-    const from = query.from ? parseInstant(query.from) : null;
-    const to = query.to ? parseInstant(query.to) : null;
-    if (from && to && from.getTime() >= to.getTime()) {
-      throw new BadRequestException('Invalid time window');
-    }
+    const { from, to } = this.parseRequiredListWindow(query.from, query.to);
 
     const consent = await this.loadConsent(parentId, childId);
-    const timeFilter =
-      from || to
-        ? {
-            ...(from ? { gte: from } : {}),
-            ...(to ? { lt: to } : {}),
-          }
-        : undefined;
+    const timeFilter = { gte: from, lt: to };
 
     const reports = await this.prisma.db.parentMissionStatusReport.findMany({
       where: {
         parentId,
         childId,
-        ...(timeFilter ? { recordedAt: timeFilter } : {}),
+        recordedAt: timeFilter,
       },
       orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
-      take: MISSION_READ_SCAN_CAP,
     });
 
     const eligibleReports = reports.filter((row) =>
@@ -143,10 +132,9 @@ export class MissionStatusService {
       where: {
         childId,
         eventType: { in: [...MISSION_INTERACTION_EVENT_TYPES] },
-        ...(timeFilter ? { occurredAt: timeFilter } : {}),
+        occurredAt: timeFilter,
       },
       orderBy: [{ occurredAt: 'asc' }, { eventId: 'asc' }],
-      take: MISSION_READ_SCAN_CAP,
       select: {
         eventType: true,
         occurredAt: true,
@@ -221,10 +209,7 @@ export class MissionStatusService {
 
     const merged = [...byOccurrence.values()].sort((a, b) => this.compareOccurrenceRows(a, b));
     const items = merged.slice(0, limit);
-    const truncated =
-      merged.length > limit ||
-      reports.length >= MISSION_READ_SCAN_CAP ||
-      interactionEvents.length >= MISSION_READ_SCAN_CAP;
+    const truncated = merged.length > limit;
 
     return {
       schema_version: MISSION_STATUS_SCHEMA_VERSION,
@@ -232,8 +217,8 @@ export class MissionStatusService {
       generated_at: new Date().toISOString(),
       child_id: childId,
       window: {
-        from: from?.toISOString() ?? null,
-        to: to?.toISOString() ?? null,
+        from: from.toISOString(),
+        to: to.toISOString(),
         bounds: 'half_open_recorded_at',
       },
       items,
@@ -530,6 +515,24 @@ export class MissionStatusService {
       throw new BadRequestException(`Invalid ${field}`);
     }
     return value.toLowerCase();
+  }
+
+  private parseRequiredListWindow(fromRaw?: string, toRaw?: string): { from: Date; to: Date } {
+    if (!fromRaw || !toRaw) {
+      throw new BadRequestException('from and to query parameters are required');
+    }
+    const from = parseInstant(fromRaw);
+    const to = parseInstant(toRaw);
+    if (!from || !to) {
+      throw new BadRequestException('Invalid time window');
+    }
+    if (from.getTime() >= to.getTime()) {
+      throw new BadRequestException('Invalid time window');
+    }
+    if (to.getTime() - from.getTime() > MISSION_LIST_MAX_WINDOW_MS) {
+      throw new BadRequestException('Time window exceeds maximum span');
+    }
+    return { from, to };
   }
 
   private parseLimit(raw: string | undefined): number {

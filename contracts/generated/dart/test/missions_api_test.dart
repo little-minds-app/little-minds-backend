@@ -19,9 +19,9 @@ void main() {
   group('tests for MissionsApi', () {
     // List mission interaction and parent-reported status for an owned child
     //
-    // LMP-130 read contract. Merges eligible child-play interaction events (`real_world_mission_offered`, `real_world_mission_opened`) with durable parent-reported assertions. Does not infer physical-world completion. 
+    // LMP-130 read contract. Requires bounded half-open UTC window (`from`, `to`, max 90-day span). Loads all eligible rows inside the window (no silent scan cap); `limit` paginates merged results only. Does not infer physical-world completion. 
     //
-    //Future<MissionStatusListResponse> listChildMissionStatus(String childId, { DateTime from, DateTime to, int limit }) async
+    //Future<MissionStatusListResponse> listChildMissionStatus(String childId, DateTime from, DateTime to, { int limit }) async
     test('test listChildMissionStatus', () async {
       // TODO
     });

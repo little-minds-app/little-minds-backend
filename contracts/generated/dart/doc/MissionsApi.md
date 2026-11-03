@@ -18,7 +18,7 @@ Method | HTTP request | Description
 
 List mission interaction and parent-reported status for an owned child
 
-LMP-130 read contract. Merges eligible child-play interaction events (`real_world_mission_offered`, `real_world_mission_opened`) with durable parent-reported assertions. Does not infer physical-world completion. 
+LMP-130 read contract. Requires bounded half-open UTC window (`from`, `to`, max 90-day span). Loads all eligible rows inside the window (no silent scan cap); `limit` paginates merged results only. Does not infer physical-world completion. 
 
 ### Example
 ```dart
@@ -49,8 +49,8 @@ try {
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **childId** | **String**|  | 
- **from** | **DateTime**| Inclusive UTC lower bound for report/interaction timestamps | [optional] 
- **to** | **DateTime**| Exclusive UTC upper bound for report/interaction timestamps | [optional] 
+ **from** | **DateTime**| Inclusive UTC lower bound for report/interaction timestamps | 
+ **to** | **DateTime**| Exclusive UTC upper bound for report/interaction timestamps | 
  **limit** | **int**|  | [optional] [default to 50]
 
 ### Return type

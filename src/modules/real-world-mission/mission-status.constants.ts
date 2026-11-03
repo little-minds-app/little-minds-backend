@@ -24,5 +24,5 @@ export const MISSION_INTERACTION_EVENT_TYPES = [
 
 export const DEFAULT_MISSION_READ_LIMIT = 50;
 export const MAX_MISSION_READ_LIMIT = 100;
-/** Upper bound when scanning reports/events before merge pagination. */
-export const MISSION_READ_SCAN_CAP = 500;
+/** Maximum inclusive span for list queries (90 days). Avoids unbounded scans without cursors. */
+export const MISSION_LIST_MAX_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;

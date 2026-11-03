@@ -17,7 +17,7 @@ The canonical Prisma `mission_feedback` table requires a UUID FK to `real_world_
 3. **Occurrence model:** `occurrence_id` is a client-supplied UUID (Near/Far uses `play_session_id`). Repeated missions are distinct occurrences; no silent collapse.
 4. **Interaction facts:** read path merges eligible child `activity_events` (offered/opened) with parent reports; absence is explicit (`no_report`).
 5. **Write path:** authenticated `POST /v1/children/{childId}/missions/{missionId}/feedback` with Parent Gate (aligned with other caregiver mutations). Does **not** trust client parent/child IDs beyond path + session.
-6. **Read path:** authenticated `GET /v1/children/{childId}/missions` with optional half-open `from`/`to` on report/interaction times, consent re-check at read, bounded `limit`.
+6. **Read path:** authenticated `GET /v1/children/{childId}/missions` requires half-open `from`/`to` (max 90-day span). All eligible rows inside the window are loaded (no silent scan cap); `limit` paginates the merged result only. Consent re-checked at read.
 7. **Mission identity:** minimal registry (Near/Far `near_far_sock_soft_toy_v1` only) until LMP-74; validate stable editorial IDs, not UUID catalog FKs.
 8. **Non-goals:** LMP-75 reflections/history UI, LMP-74 catalog ingestion, deriving child-scoped status from `parent_activity_events` alone, backfills.
 

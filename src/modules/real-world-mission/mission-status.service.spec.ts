@@ -127,17 +127,23 @@ describe('MissionStatusService (LMP-130 unit)', () => {
   });
 
   it('rejects malformed limit query values', async () => {
-    parentMissionStatusReport.findMany.mockResolvedValue([]);
-    activityEvent.findMany.mockResolvedValue([]);
-    await expect(service.listForChild(parentId, childId, { limit: '10junk' })).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.listForChild(parentId, childId, {
+        from: '2026-01-01T00:00:00.000Z',
+        to: '2026-02-01T00:00:00.000Z',
+        limit: '10junk',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('lists empty mission status with explicit no_report', async () => {
+  it('requires bounded from/to window for list reads', async () => {
+    await expect(service.listForChild(parentId, childId, {})).rejects.toBeInstanceOf(BadRequestException);
     parentMissionStatusReport.findMany.mockResolvedValue([]);
     activityEvent.findMany.mockResolvedValue([]);
-    const result = await service.listForChild(parentId, childId, {});
+    const result = await service.listForChild(parentId, childId, {
+      from: '2026-01-01T00:00:00.000Z',
+      to: '2026-02-01T00:00:00.000Z',
+    });
     expect(result.items).toEqual([]);
     expect(result.schema_version).toBe(MISSION_STATUS_SCHEMA_VERSION);
   });
