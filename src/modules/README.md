@@ -14,9 +14,10 @@ LMP-20 wires **Health** + thin **Identity** Nest modules. LMP-32 adds **Observab
 | `mentor/` | Content validators (LMP-47); Nest routes deferred | Mentor serving APIs / recommendations |
 | `real-world-mission/` | Placeholder | Missions |
 | `screen-time-policy/` | Placeholder | Screen-time policy |
-| `activity-ingestion/` | Contract validators (LMP-50); Nest ingest routes deferred | `POST /v1/events/batch` + persistence |
+| `activity-ingestion/` | LMP-50 validators + LMP-51 `POST /v1/events/batch` | — |
+| `session-kpi/` | LMP-52 `GET /v1/insights/session-kpis` | Materialized aggregates (future) |
 | `analytics/` | Placeholder | Analytics |
-| `insight/` | Placeholder | Insights |
+| `insight/` | Placeholder | Insight templates |
 | `subscription/` | Placeholder | Subscriptions |
 | `consent-privacy/` | Placeholder | Consent / privacy |
 | `admin-review/` | Placeholder | Admin review |

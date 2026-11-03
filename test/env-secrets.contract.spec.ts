@@ -81,5 +81,6 @@ describe('Environment & secrets contract (LMP-28)', () => {
     expect(read('contracts/openapi.yaml')).toContain('/health/ready:');
     // LMP-51 adds a versioned, authenticated batch ingest path.
     expect(read('contracts/openapi.yaml')).toContain('/v1/events/batch:');
+    expect(read('contracts/openapi.yaml')).toContain('/v1/insights/session-kpis:');
   });
 });

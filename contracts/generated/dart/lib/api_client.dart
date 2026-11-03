@@ -289,6 +289,20 @@ class ApiClient {
           return ReadinessStatusChecks.fromJson(value);
         case 'RefreshTokenRequest':
           return RefreshTokenRequest.fromJson(value);
+        case 'SessionKpiActivityBreakdown':
+          return SessionKpiActivityBreakdown.fromJson(value);
+        case 'SessionKpiRateMetric':
+          return SessionKpiRateMetric.fromJson(value);
+        case 'SessionKpiResponse':
+          return SessionKpiResponse.fromJson(value);
+        case 'SessionKpiResponseFreshness':
+          return SessionKpiResponseFreshness.fromJson(value);
+        case 'SessionKpiResponseMetrics':
+          return SessionKpiResponseMetrics.fromJson(value);
+        case 'SessionKpiResponseSample':
+          return SessionKpiResponseSample.fromJson(value);
+        case 'SessionKpiResponseWindow':
+          return SessionKpiResponseWindow.fromJson(value);
         case 'StepUpRequest':
           return StepUpRequest.fromJson(value);
         case 'StepUpResponse':

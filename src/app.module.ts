@@ -1,4 +1,5 @@
 import { ActivityIngestionModule } from './modules/activity-ingestion/activity-ingestion.module';
+import { SessionKpiModule } from './modules/session-kpi/session-kpi.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.validation';
@@ -20,6 +21,7 @@ import { PrismaModule } from './modules/prisma/prisma.module';
     HealthModule,
     ChildProfileModule,
     ActivityIngestionModule,
+    SessionKpiModule,
     IdentityModule,
   ],
 })

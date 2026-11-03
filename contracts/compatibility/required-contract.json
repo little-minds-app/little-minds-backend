@@ -38,7 +38,8 @@
     "/v1/parent/gate/reset",
     "/v1/parent/gate/verify",
     "/v1/parent/gate/grant",
-    "/v1/events/batch"
+    "/v1/events/batch",
+    "/v1/insights/session-kpis"
   ],
   "requiredOperations": [
     {
