@@ -21,6 +21,7 @@ describe('MissionStatusService (LMP-130 unit)', () => {
     create: jest.fn(),
     updateMany: jest.fn(),
   };
+  const executeRaw = jest.fn().mockResolvedValue(undefined);
   const parentMissionStatusIdempotencyKey = {
     findUnique: jest.fn(),
     create: jest.fn(),
@@ -32,6 +33,7 @@ describe('MissionStatusService (LMP-130 unit)', () => {
     parentMissionStatusReport: typeof parentMissionStatusReport;
     parentMissionStatusIdempotencyKey: typeof parentMissionStatusIdempotencyKey;
     activityEvent: typeof activityEvent;
+    $executeRaw: typeof executeRaw;
     $transaction: jest.Mock;
   } = {
     childProfile,
@@ -39,6 +41,7 @@ describe('MissionStatusService (LMP-130 unit)', () => {
     parentMissionStatusReport,
     parentMissionStatusIdempotencyKey,
     activityEvent,
+    $executeRaw: executeRaw,
     $transaction: jest.fn(),
   };
   db.$transaction.mockImplementation(async (fn: (client: typeof db) => Promise<unknown>) => fn(db));
@@ -47,6 +50,7 @@ describe('MissionStatusService (LMP-130 unit)', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    executeRaw.mockResolvedValue(undefined);
     db.$transaction.mockImplementation(async (fn: (client: typeof db) => Promise<unknown>) => fn(db));
     childProfile.findFirst.mockResolvedValue({ id: childId });
     consentRecord.findMany.mockResolvedValue([
@@ -136,7 +140,7 @@ describe('MissionStatusService (LMP-130 unit)', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('returns 409 when revision guard rejects stale correction', async () => {
+  it('returns 409 when revision changed before row lock completes', async () => {
     parentMissionStatusIdempotencyKey.findUnique.mockResolvedValueOnce(null);
     parentMissionStatusReport.findUnique.mockResolvedValueOnce({
       id: '00000000-0000-4000-8000-000000000099',
@@ -148,13 +152,22 @@ describe('MissionStatusService (LMP-130 unit)', () => {
       revision: 1,
       recordedAt: new Date(),
     });
-    parentMissionStatusReport.updateMany.mockResolvedValueOnce({ count: 0 });
+    parentMissionStatusReport.findUniqueOrThrow.mockResolvedValueOnce({
+      id: '00000000-0000-4000-8000-000000000099',
+      parentId,
+      childId,
+      missionId,
+      occurrenceId,
+      reportStatus: 'completed',
+      revision: 2,
+      recordedAt: new Date(),
+    });
     await expect(
       service.submitFeedback(parentId, childId, missionId, {
         schema_version: MISSION_STATUS_SCHEMA_VERSION,
         idempotency_key: '00000000-0000-4000-8000-000000000012',
         occurrence_id: occurrenceId,
-        status: 'completed',
+        status: 'skipped',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
