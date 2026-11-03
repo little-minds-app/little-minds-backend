@@ -142,6 +142,7 @@ model ParentAccount {
   webSessions                    WebParentSession[]
   accountLinkAudits              AccountLinkAudit[]
   parentActivityEvents            ParentActivityEvent[]
+  parentMissionStatusReports      ParentMissionStatusReport[]
 
   @@map("parent_accounts")
 }
@@ -467,6 +468,7 @@ model ChildProfile {
   screenTimeIntervals     ScreenTimeInterval[]
   screenTimeResetHistory  ScreenTimeResetHistory[]
   syncCursors             SyncCursor[]
+  parentMissionStatusReports ParentMissionStatusReport[]
 
   @@index([parentId, deletedAt], map: "child_profiles_parent_id_deleted_at_idx")
   @@map("child_profiles")
@@ -955,6 +957,33 @@ model ParentActivityEvent {
 
   @@index([parentId, receivedAt], map: "parent_activity_events_parent_received_idx")
   @@map("parent_activity_events")
+}
+
+/// Parent-reported mission status per child occurrence (LMP-130). Distinct from
+/// catalog-backed MissionFeedback (LMP-75) and parent-only ingest events without child scope.
+model ParentMissionStatusReport {
+  id                   String   @id @default(uuid()) @db.Uuid
+  parentId             String   @map("parent_id") @db.Uuid
+  childId              String   @map("child_id") @db.Uuid
+  missionId            String   @map("mission_id") @db.VarChar(128)
+  occurrenceId         String   @map("occurrence_id") @db.Uuid
+  reportStatus         String   @map("report_status") @db.VarChar(32)
+  idempotencyKey       String   @map("idempotency_key") @db.Uuid
+  schemaVersion        String   @map("schema_version") @db.VarChar(32)
+  consentScope         String   @map("consent_scope") @db.VarChar(64)
+  consentPolicyVersion String   @map("consent_policy_version") @db.VarChar(128)
+  actorScope           String   @default("parent") @map("actor_scope") @db.VarChar(32)
+  source               String   @default("caregiver_report") @db.VarChar(32)
+  revision             Int      @default(1)
+  recordedAt           DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+
+  parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  child  ChildProfile  @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, idempotencyKey], map: "parent_mission_status_reports_idempotency_uq")
+  @@unique([parentId, childId, missionId, occurrenceId], map: "parent_mission_status_reports_occurrence_uq")
+  @@index([parentId, childId, recordedAt], map: "parent_mission_status_reports_parent_child_recorded_idx")
+  @@map("parent_mission_status_reports")
 }
 
 model SkillObservation {
