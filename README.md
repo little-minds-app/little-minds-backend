@@ -158,6 +158,7 @@ Rollback / recovery strategy, mapping table, and open questions: [`prisma/README
 | `npm test` | Jest unit tests (includes Prisma schema/seed contract) |
 | `npm run test:e2e` | HTTP e2e (supertest) |
 | `npm run test:db` | Live Postgres migrate/seed integrity (needs `DATABASE_URL`) |
+| `npm run verify:local` | LMP-132 one-shot lint/typecheck/tests/contracts + PASS/FAIL/SKIP summary (see below) |
 | `npm run db:migrate` | Apply versioned Prisma migrations |
 | `npm run db:seed` | Deterministic synthetic seed |
 | `npm run db:reset` | Drop, remigrate, seed |
@@ -169,6 +170,34 @@ Rollback / recovery strategy, mapping table, and open questions: [`prisma/README
 | `npm run contracts:compat` | Allowlist + breaking-change gate |
 | `npm run contracts:generate` | Regen checked-in TS + Dart clients |
 | `npm run contracts:check` | Full contract CI entrypoint (incl. drift) |
+
+### LMP-132 local verification (`verify:local`)
+
+Fast path (default — no Postgres required):
+
+```bash
+npm run verify:local
+```
+
+Database integration is **opt-in only** (`--with-db` or `LM_VERIFY_WITH_DB=1`). It never runs from `DATABASE_URL` alone. The guard requires a **disposable** database name on loopback/compose:
+
+`little_minds_test` | `little_minds_ci` | `little_minds_local` | `little_minds_dev`
+
+Example with an existing isolated URL:
+
+```bash
+LM_VERIFY_WITH_DB=1 \
+  DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/little_minds_ci?schema=public' \
+  npm run verify:local -- --with-db
+```
+
+Optional ephemeral Postgres (Docker) when no URL is set:
+
+```bash
+LM_VERIFY_EPHEMERAL_PG=1 npm run verify:local -- --with-db
+```
+
+Delivered-feature coverage matrix: [`docs/lmp-132-coverage-matrix.md`](./docs/lmp-132-coverage-matrix.md).
 
 ## Configuration
 
