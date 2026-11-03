@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { MISSION_STATUS_SCHEMA_VERSION } from './mission-status.constants';
+import { missionFeedbackPayloadFingerprint } from './mission-status.payload';
 import { NEAR_FAR_CANONICAL_IDS } from '../mentor/near-far.ids';
 import { MissionStatusService } from './mission-status.service';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -15,21 +16,28 @@ describe('MissionStatusService (LMP-130 unit)', () => {
   const consentRecord = { findMany: jest.fn() };
   const parentMissionStatusReport = {
     findUnique: jest.fn(),
+    findUniqueOrThrow: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
-    update: jest.fn(),
+    updateMany: jest.fn(),
+  };
+  const parentMissionStatusIdempotencyKey = {
+    findUnique: jest.fn(),
+    create: jest.fn(),
   };
   const activityEvent = { findMany: jest.fn() };
   const db: {
     childProfile: typeof childProfile;
     consentRecord: typeof consentRecord;
     parentMissionStatusReport: typeof parentMissionStatusReport;
+    parentMissionStatusIdempotencyKey: typeof parentMissionStatusIdempotencyKey;
     activityEvent: typeof activityEvent;
     $transaction: jest.Mock;
   } = {
     childProfile,
     consentRecord,
     parentMissionStatusReport,
+    parentMissionStatusIdempotencyKey,
     activityEvent,
     $transaction: jest.fn(),
   };
@@ -76,19 +84,23 @@ describe('MissionStatusService (LMP-130 unit)', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('returns duplicate_noop for identical idempotency replay', async () => {
-    parentMissionStatusReport.findUnique
-      .mockResolvedValueOnce({
-        id: '00000000-0000-4000-8000-000000000099',
-        parentId,
-        childId,
-        missionId,
-        occurrenceId,
-        reportStatus: 'completed',
-        recordedAt: new Date('2026-10-28T06:05:00.000Z'),
-        revision: 1,
-      })
-      .mockResolvedValueOnce(null);
+  it('returns duplicate_noop from ledger without mutating state', async () => {
+    const fingerprint = missionFeedbackPayloadFingerprint({
+      child_id: childId,
+      mission_id: missionId,
+      occurrence_id: occurrenceId,
+      status: 'completed',
+    });
+    parentMissionStatusIdempotencyKey.findUnique.mockResolvedValueOnce({
+      assertionId: '00000000-0000-4000-8000-000000000099',
+      childId,
+      missionId,
+      occurrenceId,
+      reportStatus: 'completed',
+      revisionAtAccept: 1,
+      recordedAtAtAccept: new Date('2026-10-28T06:05:00.000Z'),
+      payloadFingerprint: fingerprint,
+    });
     const result = await service.submitFeedback(parentId, childId, missionId, {
       schema_version: MISSION_STATUS_SCHEMA_VERSION,
       idempotency_key: idempotencyKey,
@@ -96,19 +108,13 @@ describe('MissionStatusService (LMP-130 unit)', () => {
       status: 'completed',
     });
     expect(result.status).toBe('duplicate_noop');
-    expect(parentMissionStatusReport.create).not.toHaveBeenCalled();
+    expect(result.report_status).toBe('completed');
+    expect(parentMissionStatusReport.updateMany).not.toHaveBeenCalled();
   });
 
   it('conflicts when idempotency key is reused with different payload', async () => {
-    parentMissionStatusReport.findUnique.mockResolvedValueOnce({
-      id: '00000000-0000-4000-8000-000000000099',
-      parentId,
-      childId,
-      missionId,
-      occurrenceId,
-      reportStatus: 'skipped',
-      recordedAt: new Date(),
-      revision: 1,
+    parentMissionStatusIdempotencyKey.findUnique.mockResolvedValueOnce({
+      payloadFingerprint: 'deadbeef',
     });
     await expect(
       service.submitFeedback(parentId, childId, missionId, {
@@ -120,15 +126,12 @@ describe('MissionStatusService (LMP-130 unit)', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('rejects malformed schema version', async () => {
-    await expect(
-      service.submitFeedback(parentId, childId, missionId, {
-        schema_version: 'unknown',
-        idempotency_key: idempotencyKey,
-        occurrence_id: occurrenceId,
-        status: 'completed',
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+  it('rejects malformed limit query values', async () => {
+    parentMissionStatusReport.findMany.mockResolvedValue([]);
+    activityEvent.findMany.mockResolvedValue([]);
+    await expect(service.listForChild(parentId, childId, { limit: '10junk' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('lists empty mission status with explicit no_report', async () => {

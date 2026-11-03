@@ -143,6 +143,7 @@ model ParentAccount {
   accountLinkAudits              AccountLinkAudit[]
   parentActivityEvents            ParentActivityEvent[]
   parentMissionStatusReports      ParentMissionStatusReport[]
+  parentMissionStatusIdempotencyKeys ParentMissionStatusIdempotencyKey[]
 
   @@map("parent_accounts")
 }
@@ -968,7 +969,6 @@ model ParentMissionStatusReport {
   missionId            String   @map("mission_id") @db.VarChar(128)
   occurrenceId         String   @map("occurrence_id") @db.Uuid
   reportStatus         String   @map("report_status") @db.VarChar(32)
-  idempotencyKey       String   @map("idempotency_key") @db.Uuid
   schemaVersion        String   @map("schema_version") @db.VarChar(32)
   consentScope         String   @map("consent_scope") @db.VarChar(64)
   consentPolicyVersion String   @map("consent_policy_version") @db.VarChar(128)
@@ -979,11 +979,32 @@ model ParentMissionStatusReport {
 
   parent ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
   child  ChildProfile  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  idempotencyKeys ParentMissionStatusIdempotencyKey[]
 
-  @@unique([parentId, idempotencyKey], map: "parent_mission_status_reports_idempotency_uq")
   @@unique([parentId, childId, missionId, occurrenceId], map: "parent_mission_status_reports_occurrence_uq")
   @@index([parentId, childId, recordedAt], map: "parent_mission_status_reports_parent_child_recorded_idx")
   @@map("parent_mission_status_reports")
+}
+
+/// Append-only accepted operation keys (LMP-130). Retries return frozen ack without mutating current state.
+model ParentMissionStatusIdempotencyKey {
+  parentId             String   @map("parent_id") @db.Uuid
+  idempotencyKey       String   @map("idempotency_key") @db.Uuid
+  childId              String   @map("child_id") @db.Uuid
+  missionId            String   @map("mission_id") @db.VarChar(128)
+  occurrenceId         String   @map("occurrence_id") @db.Uuid
+  reportStatus         String   @map("report_status") @db.VarChar(32)
+  payloadFingerprint   String   @map("payload_fingerprint") @db.VarChar(64)
+  assertionId          String   @map("assertion_id") @db.Uuid
+  revisionAtAccept     Int      @map("revision_at_accept")
+  recordedAtAtAccept   DateTime @map("recorded_at_at_accept") @db.Timestamptz(6)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  parent    ParentAccount           @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  assertion ParentMissionStatusReport @relation(fields: [assertionId], references: [id], onDelete: Cascade)
+
+  @@id([parentId, idempotencyKey])
+  @@map("parent_mission_status_idempotency_keys")
 }
 
 model SkillObservation {

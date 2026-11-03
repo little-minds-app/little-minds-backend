@@ -13,7 +13,7 @@ The canonical Prisma `mission_feedback` table requires a UUID FK to `real_world_
 ## Decision
 
 1. **Source of truth for authoritative mission completion:** parent-reported status only (`completed`, `skipped` are authoritative; `not_now` / `partial` are caregiver signals, not verified physical completion).
-2. **Persistence:** new `parent_mission_status_reports` table keyed by `(parent_id, child_id, stable mission_id, occurrence_id)` with global idempotency on `(parent_id, idempotency_key)`. Server sets `recorded_at` (UTC). Actor `parent`, source `caregiver_report`.
+2. **Persistence:** `parent_mission_status_reports` holds **current state** per `(parent_id, child_id, stable mission_id, occurrence_id)`. Append-only `parent_mission_status_idempotency_keys` ledger stores every accepted `(parent_id, idempotency_key)` with payload fingerprint and frozen ack fields. Retries never mutate current state or roll back corrections. Server sets `recorded_at` (UTC). Actor `parent`, source `caregiver_report`.
 3. **Occurrence model:** `occurrence_id` is a client-supplied UUID (Near/Far uses `play_session_id`). Repeated missions are distinct occurrences; no silent collapse.
 4. **Interaction facts:** read path merges eligible child `activity_events` (offered/opened) with parent reports; absence is explicit (`no_report`).
 5. **Write path:** authenticated `POST /v1/children/{childId}/missions/{missionId}/feedback` with Parent Gate (aligned with other caregiver mutations). Does **not** trust client parent/child IDs beyond path + session.
@@ -32,7 +32,7 @@ The canonical Prisma `mission_feedback` table requires a UUID FK to `real_world_
 
 ## Corrections / re-report policy
 
-Same `idempotency_key` with identical payload → `duplicate_noop`. Same occurrence with a new key → allowed transition per `mission-status.transitions.ts` (parent may correct between `completed` ↔ `skipped`, or advance from `not_now`/`partial`).
+Same `idempotency_key` with identical payload → `duplicate_noop` returning **ledger-frozen** ack (even if occurrence state was later corrected). Same occurrence with a new key → revision-guarded update per `mission-status.transitions.ts` (409 on concurrent stale write).
 
 ## Open product blockers
 

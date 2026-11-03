@@ -16,6 +16,7 @@ import {
   DEFAULT_MISSION_READ_LIMIT,
   MAX_MISSION_READ_LIMIT,
   MISSION_INTERACTION_EVENT_TYPES,
+  MISSION_READ_SCAN_CAP,
   MISSION_REPORT_STATUSES,
   MISSION_STATUS_CONSENT_POLICY,
   MISSION_STATUS_CONSENT_SCOPE,
@@ -24,6 +25,10 @@ import {
   type MissionReportStatus,
 } from './mission-status.constants';
 import { isSupportedMissionId } from './mission-status.registry';
+import {
+  missionFeedbackPayloadFingerprint,
+  type MissionFeedbackPayload,
+} from './mission-status.payload';
 import { canTransitionMissionReport } from './mission-status.transitions';
 import { parseInstant } from '../session-kpi/session-kpi-time';
 
@@ -107,21 +112,22 @@ export class MissionStatusService {
     }
 
     const consent = await this.loadConsent(parentId, childId);
+    const timeFilter =
+      from || to
+        ? {
+            ...(from ? { gte: from } : {}),
+            ...(to ? { lt: to } : {}),
+          }
+        : undefined;
+
     const reports = await this.prisma.db.parentMissionStatusReport.findMany({
       where: {
         parentId,
         childId,
-        ...(from || to
-          ? {
-              recordedAt: {
-                ...(from ? { gte: from } : {}),
-                ...(to ? { lt: to } : {}),
-              },
-            }
-          : {}),
+        ...(timeFilter ? { recordedAt: timeFilter } : {}),
       },
       orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
+      take: MISSION_READ_SCAN_CAP,
     });
 
     const eligibleReports = reports.filter((row) =>
@@ -132,23 +138,15 @@ export class MissionStatusService {
         consent.child,
       ),
     );
-    const truncatedReports = eligibleReports.length > limit;
-    const reportSlice = eligibleReports.slice(0, limit);
 
     const interactionEvents = await this.prisma.db.activityEvent.findMany({
       where: {
         childId,
         eventType: { in: [...MISSION_INTERACTION_EVENT_TYPES] },
-        ...(from || to
-          ? {
-              occurredAt: {
-                ...(from ? { gte: from } : {}),
-                ...(to ? { lt: to } : {}),
-              },
-            }
-          : {}),
+        ...(timeFilter ? { occurredAt: timeFilter } : {}),
       },
       orderBy: [{ occurredAt: 'asc' }, { eventId: 'asc' }],
+      take: MISSION_READ_SCAN_CAP,
       select: {
         eventType: true,
         occurredAt: true,
@@ -200,7 +198,7 @@ export class MissionStatusService {
       byOccurrence.set(key, existing);
     }
 
-    for (const row of reportSlice) {
+    for (const row of eligibleReports) {
       if (!isSupportedMissionId(row.missionId)) {
         continue;
       }
@@ -221,11 +219,12 @@ export class MissionStatusService {
       byOccurrence.set(key, existing);
     }
 
-    const items = [...byOccurrence.values()].sort((a, b) => {
-      const aTime = a.parent_report.recorded_at ?? a.interaction.opened_at ?? a.interaction.offered_at ?? '';
-      const bTime = b.parent_report.recorded_at ?? b.interaction.opened_at ?? b.interaction.offered_at ?? '';
-      return bTime.localeCompare(aTime);
-    });
+    const merged = [...byOccurrence.values()].sort((a, b) => this.compareOccurrenceRows(a, b));
+    const items = merged.slice(0, limit);
+    const truncated =
+      merged.length > limit ||
+      reports.length >= MISSION_READ_SCAN_CAP ||
+      interactionEvents.length >= MISSION_READ_SCAN_CAP;
 
     return {
       schema_version: MISSION_STATUS_SCHEMA_VERSION,
@@ -237,11 +236,8 @@ export class MissionStatusService {
         to: to?.toISOString() ?? null,
         bounds: 'half_open_recorded_at',
       },
-      items: items.slice(0, limit),
-      pagination: {
-        limit,
-        truncated: truncatedReports || items.length > limit,
-      },
+      items,
+      pagination: { limit, truncated },
     };
   }
 
@@ -257,10 +253,17 @@ export class MissionStatusService {
     await this.requireOwnedChild(parentId, childId);
     const body = this.parseFeedbackBody(raw);
     await this.requireWriteConsent(parentId, childId);
+    const payload: MissionFeedbackPayload = {
+      child_id: childId,
+      mission_id: missionId,
+      occurrence_id: body.occurrence_id,
+      status: body.status,
+    };
+    const fingerprint = missionFeedbackPayloadFingerprint(payload);
 
     try {
       return await this.prisma.db.$transaction(async (tx) => {
-        const existingByKey = await tx.parentMissionStatusReport.findUnique({
+        const ledger = await tx.parentMissionStatusIdempotencyKey.findUnique({
           where: {
             parentId_idempotencyKey: {
               parentId,
@@ -268,16 +271,11 @@ export class MissionStatusService {
             },
           },
         });
-        if (existingByKey) {
-          if (
-            existingByKey.childId !== childId ||
-            existingByKey.missionId !== missionId ||
-            existingByKey.occurrenceId !== body.occurrence_id ||
-            existingByKey.reportStatus !== body.status
-          ) {
+        if (ledger) {
+          if (ledger.payloadFingerprint !== fingerprint) {
             throw new ConflictException('Idempotency key reused with different payload');
           }
-          return this.writeResponse(existingByKey, 'duplicate_noop');
+          return this.frozenWriteResponse(ledger, 'duplicate_noop');
         }
 
         const existingOccurrence = await tx.parentMissionStatusReport.findUnique({
@@ -290,24 +288,59 @@ export class MissionStatusService {
             },
           },
         });
+
         if (existingOccurrence) {
           const fromStatus = existingOccurrence.reportStatus as MissionReportStatus;
           if (!canTransitionMissionReport(fromStatus, body.status)) {
             throw new ConflictException('Invalid mission status transition');
           }
           if (fromStatus === body.status) {
+            await tx.parentMissionStatusIdempotencyKey.create({
+              data: {
+                parentId,
+                idempotencyKey: body.idempotency_key,
+                childId,
+                missionId,
+                occurrenceId: body.occurrence_id,
+                reportStatus: body.status,
+                payloadFingerprint: fingerprint,
+                assertionId: existingOccurrence.id,
+                revisionAtAccept: existingOccurrence.revision,
+                recordedAtAtAccept: existingOccurrence.recordedAt,
+              },
+            });
             return this.writeResponse(existingOccurrence, 'duplicate_noop');
           }
-          const updated = await tx.parentMissionStatusReport.update({
-            where: { id: existingOccurrence.id },
+
+          const updated = await tx.parentMissionStatusReport.updateMany({
+            where: { id: existingOccurrence.id, revision: existingOccurrence.revision },
             data: {
               reportStatus: body.status,
-              idempotencyKey: body.idempotency_key,
               revision: existingOccurrence.revision + 1,
               recordedAt: new Date(),
             },
           });
-          return this.writeResponse(updated, 'accepted');
+          if (updated.count !== 1) {
+            throw new ConflictException('Concurrent mission status write conflict');
+          }
+          const row = await tx.parentMissionStatusReport.findUniqueOrThrow({
+            where: { id: existingOccurrence.id },
+          });
+          await tx.parentMissionStatusIdempotencyKey.create({
+            data: {
+              parentId,
+              idempotencyKey: body.idempotency_key,
+              childId,
+              missionId,
+              occurrenceId: body.occurrence_id,
+              reportStatus: body.status,
+              payloadFingerprint: fingerprint,
+              assertionId: row.id,
+              revisionAtAccept: row.revision,
+              recordedAtAtAccept: row.recordedAt,
+            },
+          });
+          return this.writeResponse(row, 'accepted');
         }
 
         const created = await tx.parentMissionStatusReport.create({
@@ -317,20 +350,96 @@ export class MissionStatusService {
             missionId,
             occurrenceId: body.occurrence_id,
             reportStatus: body.status,
-            idempotencyKey: body.idempotency_key,
             schemaVersion: MISSION_STATUS_SCHEMA_VERSION,
             consentScope: MISSION_STATUS_CONSENT_SCOPE,
             consentPolicyVersion: MISSION_STATUS_CONSENT_POLICY,
+          },
+        });
+        await tx.parentMissionStatusIdempotencyKey.create({
+          data: {
+            parentId,
+            idempotencyKey: body.idempotency_key,
+            childId,
+            missionId,
+            occurrenceId: body.occurrence_id,
+            reportStatus: body.status,
+            payloadFingerprint: fingerprint,
+            assertionId: created.id,
+            revisionAtAccept: created.revision,
+            recordedAtAtAccept: created.recordedAt,
           },
         });
         return this.writeResponse(created, 'accepted');
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const ledger = await this.prisma.db.parentMissionStatusIdempotencyKey.findUnique({
+          where: {
+            parentId_idempotencyKey: {
+              parentId,
+              idempotencyKey: body.idempotency_key,
+            },
+          },
+        });
+        if (ledger?.payloadFingerprint === fingerprint) {
+          return this.frozenWriteResponse(ledger, 'duplicate_noop');
+        }
         throw new ConflictException('Concurrent mission status write conflict');
       }
       throw error;
     }
+  }
+
+  private compareOccurrenceRows(a: MissionOccurrenceRow, b: MissionOccurrenceRow): number {
+    const aTime = this.effectiveSortTime(a);
+    const bTime = this.effectiveSortTime(b);
+    if (aTime !== bTime) {
+      return bTime.localeCompare(aTime);
+    }
+    if (a.mission_id !== b.mission_id) {
+      return a.mission_id.localeCompare(b.mission_id);
+    }
+    return a.occurrence_id.localeCompare(b.occurrence_id);
+  }
+
+  private effectiveSortTime(row: MissionOccurrenceRow): string {
+    return (
+      row.parent_report.recorded_at ??
+      row.interaction.opened_at ??
+      row.interaction.offered_at ??
+      '1970-01-01T00:00:00.000Z'
+    );
+  }
+
+  private frozenWriteResponse(
+    ledger: {
+      assertionId: string;
+      childId: string;
+      missionId: string;
+      occurrenceId: string;
+      reportStatus: string;
+      revisionAtAccept: number;
+      recordedAtAtAccept: Date;
+    },
+    status: 'accepted' | 'duplicate_noop',
+  ): MissionFeedbackWriteResponse {
+    const reportStatus = ledger.reportStatus as MissionReportStatus;
+    return {
+      schema_version: MISSION_STATUS_SCHEMA_VERSION,
+      status,
+      assertion_id: ledger.assertionId,
+      child_id: ledger.childId,
+      mission_id: ledger.missionId,
+      occurrence_id: ledger.occurrenceId,
+      report_status: reportStatus,
+      authoritative: (AUTHORITATIVE_PARENT_REPORT_STATUSES as readonly string[]).includes(
+        reportStatus,
+      ),
+      recorded_at: ledger.recordedAtAtAccept.toISOString(),
+      revision: ledger.revisionAtAccept,
+      actor: 'parent',
+      source: 'caregiver_report',
+    };
   }
 
   private writeResponse(
@@ -427,8 +536,11 @@ export class MissionStatusService {
     if (raw === undefined) {
       return DEFAULT_MISSION_READ_LIMIT;
     }
+    if (!/^[1-9]\d*$/.test(raw)) {
+      throw new BadRequestException('Invalid limit');
+    }
     const parsed = Number.parseInt(raw, 10);
-    if (!Number.isFinite(parsed) || parsed < 1 || parsed > MAX_MISSION_READ_LIMIT) {
+    if (parsed > MAX_MISSION_READ_LIMIT) {
       throw new BadRequestException('Invalid limit');
     }
     return parsed;

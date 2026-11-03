@@ -24,3 +24,5 @@ export const MISSION_INTERACTION_EVENT_TYPES = [
 
 export const DEFAULT_MISSION_READ_LIMIT = 50;
 export const MAX_MISSION_READ_LIMIT = 100;
+/** Upper bound when scanning reports/events before merge pagination. */
+export const MISSION_READ_SCAN_CAP = 500;
