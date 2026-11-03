@@ -118,6 +118,25 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
     expect(await db.activitySession.count({ where: { id } })).toBe(0);
   });
 
+  it('rejects draft variants and draft definitions without persisting events', async () => {
+    const sid = randomUUID(), eid = randomUUID();
+    await db.activityVariant.update({ where: { id: variantId }, data: { reviewStatus: 'draft' } });
+    try {
+      const draftVariant = await ingestion.ingest(parentId, { sessions: [session(sid)], events: [event(eid, sid)] });
+      expect(draftVariant.results[0]).toMatchObject({ status: 'rejected', reason_code: 'content.not_published' });
+      expect(await db.activityEvent.count({ where: { eventId: eid } })).toBe(0);
+    } finally {
+      await db.activityVariant.update({ where: { id: variantId }, data: { reviewStatus: 'published' } });
+    }
+    await db.activityDefinition.update({ where: { id: definitionId }, data: { status: 'draft' } });
+    try {
+      const draftDefinition = await ingestion.ingest(parentId, { sessions: [session(randomUUID())], events: [parentEvent(randomUUID())] });
+      expect(draftDefinition.results[0]).toMatchObject({ status: 'rejected', reason_code: 'content.not_published' });
+    } finally {
+      await db.activityDefinition.update({ where: { id: definitionId }, data: { status: 'published' } });
+    }
+  });
+
   it('fails closed on untrusted consent attestation source', async () => {
     const rogue = await db.consentRecord.create({ data: { parentId, purpose: 'essential_play_events', policyVersion: consentPolicy, status: 'granted', source: 'client_decision', recordedAt: new Date('2026-10-29T00:00:00Z') } });
     try {
