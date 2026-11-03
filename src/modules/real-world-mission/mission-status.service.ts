@@ -275,12 +275,19 @@ export class MissionStatusService {
         });
 
         if (existingOccurrence) {
+          const expectedRevision = existingOccurrence.revision;
           await tx.$executeRaw`
             SELECT id FROM parent_mission_status_reports
             WHERE id = ${existingOccurrence.id}::uuid
             FOR UPDATE
           `;
-          const fromStatus = existingOccurrence.reportStatus as MissionReportStatus;
+          const locked = await tx.parentMissionStatusReport.findUniqueOrThrow({
+            where: { id: existingOccurrence.id },
+          });
+          if (locked.revision !== expectedRevision) {
+            throw new ConflictException('Concurrent mission status write conflict');
+          }
+          const fromStatus = locked.reportStatus as MissionReportStatus;
           if (!canTransitionMissionReport(fromStatus, body.status)) {
             throw new ConflictException('Invalid mission status transition');
           }
@@ -294,19 +301,19 @@ export class MissionStatusService {
                 occurrenceId: body.occurrence_id,
                 reportStatus: body.status,
                 payloadFingerprint: fingerprint,
-                assertionId: existingOccurrence.id,
-                revisionAtAccept: existingOccurrence.revision,
-                recordedAtAtAccept: existingOccurrence.recordedAt,
+                assertionId: locked.id,
+                revisionAtAccept: locked.revision,
+                recordedAtAtAccept: locked.recordedAt,
               },
             });
-            return this.writeResponse(existingOccurrence, 'duplicate_noop');
+            return this.writeResponse(locked, 'duplicate_noop');
           }
 
           const updated = await tx.parentMissionStatusReport.updateMany({
-            where: { id: existingOccurrence.id, revision: existingOccurrence.revision },
+            where: { id: locked.id, revision: expectedRevision },
             data: {
               reportStatus: body.status,
-              revision: existingOccurrence.revision + 1,
+              revision: expectedRevision + 1,
               recordedAt: new Date(),
             },
           });
@@ -314,7 +321,7 @@ export class MissionStatusService {
             throw new ConflictException('Concurrent mission status write conflict');
           }
           const row = await tx.parentMissionStatusReport.findUniqueOrThrow({
-            where: { id: existingOccurrence.id },
+            where: { id: locked.id },
           });
           await tx.parentMissionStatusIdempotencyKey.create({
             data: {
