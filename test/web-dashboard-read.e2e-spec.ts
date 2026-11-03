@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { ChildProfileService } from '../src/modules/child-profile/child-profile.service';
+import { WebChildProfileController } from '../src/modules/child-profile/web-child-profile.controller';
 import { WebParentSessionService } from '../src/modules/identity/session/web-parent-session.service';
 import { MissionStatusService } from '../src/modules/real-world-mission/mission-status.service';
 import { WebMissionStatusController } from '../src/modules/real-world-mission/web-mission-status.controller';
@@ -13,6 +15,7 @@ describe('LMP-54 web dashboard passive read APIs', () => {
   let app: INestApplication<App>;
   const aggregate = jest.fn();
   const listForChild = jest.fn();
+  const listChildren = jest.fn();
   const sessions = { requireActive: jest.fn() };
   const bffSecret = 'synthetic-bff-secret-at-least-32-bytes-long';
   const handle = 'A'.repeat(43);
@@ -20,10 +23,11 @@ describe('LMP-54 web dashboard passive read APIs', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      controllers: [WebSessionKpiController, WebMissionStatusController],
+      controllers: [WebSessionKpiController, WebMissionStatusController, WebChildProfileController],
       providers: [
         { provide: SessionKpiService, useValue: { aggregate } },
         { provide: MissionStatusService, useValue: { listForChild } },
+        { provide: ChildProfileService, useValue: { list: listChildren } },
         { provide: WebParentSessionService, useValue: sessions },
         {
           provide: ConfigService,
@@ -50,10 +54,21 @@ describe('LMP-54 web dashboard passive read APIs', () => {
     });
     aggregate.mockResolvedValue({ definition_version: 'session-kpi-v1' });
     listForChild.mockResolvedValue({ schema_version: 'mission-status-v1', items: [] });
+    listChildren.mockResolvedValue([]);
   });
 
   const headers = (req: request.Test) =>
     req.set('x-lm-web-session', handle).set('x-lm-bff-secret', bffSecret);
+
+  describe('GET /v1/web/children', () => {
+    it('keeps successful child list reads passive', async () => {
+      await headers(request(app.getHttpServer()).get('/v1/web/children')).expect(200);
+      expect(sessions.requireActive).toHaveBeenCalledTimes(1);
+      expect(sessions.requireActive).toHaveBeenCalledWith(handle, false);
+      expect(sessions.requireActive).not.toHaveBeenCalledWith(handle, true);
+      expect(listChildren).toHaveBeenCalledWith('parent-A');
+    });
+  });
 
   describe('GET /v1/web/insights/session-kpis', () => {
     it('rejects absent BFF authority without touching the session', async () => {
@@ -61,6 +76,17 @@ describe('LMP-54 web dashboard passive read APIs', () => {
         .get('/v1/web/insights/session-kpis')
         .query({ from: 'a', to: 'b', timezone: 'UTC' })
         .set('x-lm-web-session', handle)
+        .expect(401);
+      expect(sessions.requireActive).not.toHaveBeenCalled();
+      expect(aggregate).not.toHaveBeenCalled();
+    });
+
+    it('rejects incorrect BFF secret without touching session', async () => {
+      await request(app.getHttpServer())
+        .get('/v1/web/insights/session-kpis')
+        .query({ from: '2026-01-01T00:00:00.000Z', to: '2026-01-02T00:00:00.000Z', timezone: 'Europe/Istanbul' })
+        .set('x-lm-web-session', handle)
+        .set('x-lm-bff-secret', 'incorrect-bff-secret-at-least-32-bytes-long')
         .expect(401);
       expect(sessions.requireActive).not.toHaveBeenCalled();
       expect(aggregate).not.toHaveBeenCalled();
