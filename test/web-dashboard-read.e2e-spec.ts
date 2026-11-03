@@ -54,7 +54,7 @@ describe('LMP-54 web dashboard passive read APIs', () => {
     });
     aggregate.mockResolvedValue({ definition_version: 'session-kpi-v1' });
     listForChild.mockResolvedValue({ schema_version: 'mission-status-v1', items: [] });
-    listChildren.mockResolvedValue([]);
+    listChildren.mockResolvedValue({ children: [] });
   });
 
   const headers = (req: request.Test) =>
@@ -133,6 +133,20 @@ describe('LMP-54 web dashboard passive read APIs', () => {
           to: '2026-01-02T00:00:00.000Z',
         })
         .set('x-lm-web-session', handle)
+        .expect(401);
+      expect(sessions.requireActive).not.toHaveBeenCalled();
+      expect(listForChild).not.toHaveBeenCalled();
+    });
+
+    it('rejects wrong BFF secret without touching the session', async () => {
+      await request(app.getHttpServer())
+        .get(`/v1/web/children/${childId}/missions`)
+        .query({
+          from: '2026-01-01T00:00:00.000Z',
+          to: '2026-01-02T00:00:00.000Z',
+        })
+        .set('x-lm-web-session', handle)
+        .set('x-lm-bff-secret', 'wrong-bff-secret-that-is-long-enough-32b')
         .expect(401);
       expect(sessions.requireActive).not.toHaveBeenCalled();
       expect(listForChild).not.toHaveBeenCalled();
