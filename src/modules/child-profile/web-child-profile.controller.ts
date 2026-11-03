@@ -23,16 +23,10 @@ export class WebChildProfileController {
     return readTrustedWebSessionHandle(this.config, req);
   }
 
-  private async successfulActivity(req: Request): Promise<void> {
-    const handle = req.headers['x-lm-web-session'];
-    if (typeof handle === 'string') await this.web.requireActive(handle, true);
-  }
-
+  /** Passive child-list read; explicit activity endpoint handles real user interaction. */
   @Get()
   async list(@Req() req: Request) {
-    const result = await this.profiles.list(await this.parent(req));
-    await this.successfulActivity(req);
-    return result;
+    return this.profiles.list(await this.parent(req));
   }
 
   @Post()
