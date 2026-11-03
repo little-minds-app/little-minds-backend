@@ -12,7 +12,10 @@ import {
   consentRecordsFromRows,
   isSessionConsentEligibleAtRead,
 } from './session-kpi.consent';
-import { parseFirstAttemptCounters } from './session-kpi-accuracy-payload';
+import {
+  accumulateFirstAttemptTotals,
+  parseFirstAttemptCounters,
+} from './session-kpi-accuracy-payload';
 import { resolveSessionDurationSeconds } from './session-kpi-duration';
 import { isValidIanaTimeZone, localDateKey, parseInstant } from './session-kpi-time';
 
@@ -373,8 +376,17 @@ export class SessionKpiService {
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) continue;
       const counters = parseFirstAttemptCounters(payload as Record<string, unknown>);
       if (!counters) continue;
-      denominator += counters.eligible;
-      numerator += counters.correct;
+      const nextTotals = accumulateFirstAttemptTotals({ numerator, denominator }, counters);
+      if (!nextTotals) {
+        return {
+          availability_status: 'unavailable',
+          reason_code: 'counter_overflow',
+          numerator: 0,
+          denominator: 0,
+        };
+      }
+      numerator = nextTotals.numerator;
+      denominator = nextTotals.denominator;
     }
 
     if (denominator <= 0) {

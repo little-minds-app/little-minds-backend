@@ -185,6 +185,76 @@ describe('SessionKpiService', () => {
     });
   });
 
+  it('returns counter_overflow when cumulative accuracy totals exceed safe integers', async () => {
+    const chunk = Math.floor(Number.MAX_SAFE_INTEGER / 2) + 1;
+    db.activitySession.findMany.mockResolvedValue([
+      {
+        id: 's1',
+        childId: 'child',
+        contentVersionId: 'v1',
+        startedAt: new Date('2026-01-01T12:00:00.000Z'),
+        endedAt: new Date('2026-01-01T12:05:00.000Z'),
+        monotonicDurationSeconds: 300,
+        completionStatus: 'completed',
+        schemaVersion: '1.0.0',
+        consentScope: 'essential_play_events',
+        consentPolicyVersion: 'p1',
+      },
+      {
+        id: 's2',
+        childId: 'child',
+        contentVersionId: 'v1',
+        startedAt: new Date('2026-01-01T13:00:00.000Z'),
+        endedAt: new Date('2026-01-01T13:05:00.000Z'),
+        monotonicDurationSeconds: 300,
+        completionStatus: 'completed',
+        schemaVersion: '1.0.0',
+        consentScope: 'essential_play_events',
+        consentPolicyVersion: 'p1',
+      },
+    ]);
+    db.consentRecord.findMany.mockResolvedValue([parentConsentRow]);
+    db.activityEvent.findMany.mockResolvedValue([
+      {
+        eventId: 'e1',
+        playSessionId: 's1',
+        childId: 'child',
+        occurredAt: new Date('2026-01-01T12:05:00.000Z'),
+        schemaVersion: '1.0.0',
+        consentScope: 'essential_play_events',
+        consentPolicyVersion: 'p1',
+        payloadJson: { eligible_first_attempts: chunk, correct_first_attempts: 1 },
+      },
+      {
+        eventId: 'e2',
+        playSessionId: 's2',
+        childId: 'child',
+        occurredAt: new Date('2026-01-01T13:05:00.000Z'),
+        schemaVersion: '1.0.0',
+        consentScope: 'essential_play_events',
+        consentPolicyVersion: 'p1',
+        payloadJson: { eligible_first_attempts: chunk, correct_first_attempts: 1 },
+      },
+    ]);
+    db.activityEvent.findFirst.mockResolvedValue(null);
+    db.activitySession.findFirst.mockResolvedValue(null);
+
+    const result = await service.aggregate(
+      'parent',
+      {
+        from: '2026-01-01T00:00:00.000Z',
+        to: '2026-01-02T00:00:00.000Z',
+        timezone: 'UTC',
+      },
+      new Date('2026-01-02T00:00:00.000Z'),
+    );
+
+    expect(result.metrics.first_attempt_accuracy).toMatchObject({
+      availability_status: 'unavailable',
+      reason_code: 'counter_overflow',
+    });
+  });
+
   it('does not resurrect older eligible accuracy when latest event is ineligible', async () => {
     db.activitySession.findMany.mockResolvedValue([
       {

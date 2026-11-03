@@ -146,13 +146,20 @@ describeDb('LMP-52 session KPI aggregation / real PostgreSQL', () => {
     expect(result.sample.excluded_consent).toBe(0);
   });
 
-  it('scopes freshness to eligible sessions only', async () => {
+  it('scopes freshness to eligible sessions only and ignores recent excluded ingest', async () => {
     const eligibleSid = randomUUID();
     const excludedSid = randomUUID();
     const eligibleEid = randomUUID();
+    const oldEligibleReceived = new Date('2026-01-01T10:00:00.000Z');
+    const recentExcludedReceived = new Date('2026-02-10T11:59:00.000Z');
+    const now = new Date('2026-02-10T12:00:00.000Z');
     await ingestion.ingest(parentA, {
       sessions: [session(eligibleSid, { started_at: '2026-02-10T10:00:00.000Z', ended_at: '2026-02-10T10:02:00.000Z' })],
       events: [event(eligibleEid, eligibleSid, { occurred_at: '2026-02-10T10:02:00.000Z' })],
+    });
+    await db.activityEvent.update({
+      where: { eventId: eligibleEid },
+      data: { receivedAt: oldEligibleReceived },
     });
     await db.activitySession.create({
       data: {
@@ -176,7 +183,7 @@ describeDb('LMP-52 session KPI aggregation / real PostgreSQL', () => {
         contentVersionId: variantId,
         eventType: 'activity_completed',
         occurredAt: new Date('2026-02-10T11:02:00.000Z'),
-        receivedAt: new Date('2026-02-10T11:59:00.000Z'),
+        receivedAt: recentExcludedReceived,
         schemaVersion: '9.9.9',
         consentScope: 'essential_play_events',
         consentPolicyVersion: consentPolicy,
@@ -190,11 +197,12 @@ describeDb('LMP-52 session KPI aggregation / real PostgreSQL', () => {
         timezone: 'UTC',
         childId: childA,
       },
-      new Date('2026-02-10T12:00:00.000Z'),
+      now,
     );
     expect(result.sample.excluded_unsupported_schema).toBeGreaterThanOrEqual(1);
     expect(result.metrics.eligible_session_count).toBe(1);
-    expect(result.freshness.status).toBe('fresh');
+    expect(result.latest_ingested_at).toBe(oldEligibleReceived.toISOString());
+    expect(result.freshness.status).toBe('stale');
   });
 
   it('uses window-scoped freshness for an empty KPI window', async () => {
