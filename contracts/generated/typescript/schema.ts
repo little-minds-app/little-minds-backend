@@ -28,6 +28,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/insights/session-kpis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Canonical session KPI aggregation for authenticated parent scope
+         * @description LMP-52 query-time aggregation over accepted ActivitySessionV1 rows and related
+         *     activity_completed events. Excludes rejected ingest, unsupported schema versions,
+         *     and sessions failing current consent re-check. Returns freshness and sample metadata.
+         */
+        get: operations["getSessionKpis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/web/session": {
         parameters: {
             query?: never;
@@ -1146,6 +1168,67 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        SessionKpiRateMetric: {
+            /** @enum {string} */
+            availability_status: "available" | "unavailable";
+            value?: number;
+            reason_code?: string;
+            numerator: number;
+            denominator: number;
+        };
+        SessionKpiActivityBreakdown: {
+            /** Format: uuid */
+            content_version_id: string;
+            session_starts: number;
+            completed_sessions: number;
+            play_duration_seconds: number;
+        };
+        SessionKpiResponse: {
+            /** @example session-kpi-v1 */
+            definition_version: string;
+            /** @enum {string} */
+            source: "server_activity_sessions";
+            /** Format: date-time */
+            generated_at: string;
+            /** Format: date-time */
+            latest_ingested_at?: string | null;
+            /** Format: date-time */
+            latest_activity_at?: string | null;
+            window: {
+                /** Format: date-time */
+                from: string;
+                /** Format: date-time */
+                to: string;
+                timezone: string;
+                /** @enum {string} */
+                bounds: "half_open_started_at";
+            };
+            freshness: {
+                /** @enum {string} */
+                status: "fresh" | "stale" | "no_data" | "unknown";
+                stale_threshold_seconds: number;
+                /** @enum {string} */
+                data_completeness: "complete" | "partial" | "unknown";
+            };
+            sample: {
+                eligible_sessions: number;
+                terminal_sessions: number;
+                excluded_unsupported_schema: number;
+                excluded_consent: number;
+            };
+            metrics: {
+                eligible_session_count: number;
+                completed_session_count: number;
+                interrupted_session_count: number;
+                abandoned_session_count: number;
+                in_progress_session_count: number;
+                total_play_duration_seconds: number;
+                completed_session_rate: components["schemas"]["SessionKpiRateMetric"];
+                distinct_play_days: number;
+                by_activity: components["schemas"]["SessionKpiActivityBreakdown"][];
+                first_attempt_accuracy: components["schemas"]["SessionKpiRateMetric"];
+            };
+        };
     };
     responses: never;
     parameters: never;
@@ -1212,6 +1295,56 @@ export interface operations {
             };
             /** @description Rate limited; honor Retry-After */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getSessionKpis: {
+        parameters: {
+            query: {
+                /** @description Inclusive UTC window start (session started_at) */
+                from: string;
+                /** @description Exclusive UTC window end (session started_at) */
+                to: string;
+                /** @description IANA timezone for distinct play-day boundaries */
+                timezone: string;
+                /** @description Optional child filter; omit for all active children owned by the parent */
+                child_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Versioned KPI dictionary with freshness metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionKpiResponse"];
+                };
+            };
+            /** @description Invalid window or timezone */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child filter not found for authenticated parent */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

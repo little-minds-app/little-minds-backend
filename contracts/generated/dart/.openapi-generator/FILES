@@ -34,6 +34,7 @@ doc/HealthStatus.md
 doc/IngestActivityEventBatch200Response.md
 doc/IngestActivityEventBatch200ResponseResultsInner.md
 doc/IngestActivityEventBatchRequest.md
+doc/InsightsApi.md
 doc/LinkIdentityRequest.md
 doc/LinkIdentityResponse.md
 doc/ListChildProfiles200Response.md
@@ -60,6 +61,13 @@ doc/PhoneOtpVerifyRequest.md
 doc/ReadinessStatus.md
 doc/ReadinessStatusChecks.md
 doc/RefreshTokenRequest.md
+doc/SessionKpiActivityBreakdown.md
+doc/SessionKpiRateMetric.md
+doc/SessionKpiResponse.md
+doc/SessionKpiResponseFreshness.md
+doc/SessionKpiResponseMetrics.md
+doc/SessionKpiResponseSample.md
+doc/SessionKpiResponseWindow.md
 doc/StepUpRequest.md
 doc/StepUpResponse.md
 doc/TokenPairResponse.md
@@ -71,6 +79,7 @@ lib/api.dart
 lib/api/activity_api.dart
 lib/api/auth_api.dart
 lib/api/health_api.dart
+lib/api/insights_api.dart
 lib/api/parent_api.dart
 lib/api_client.dart
 lib/api_exception.dart
@@ -133,6 +142,13 @@ lib/model/phone_otp_verify_request.dart
 lib/model/readiness_status.dart
 lib/model/readiness_status_checks.dart
 lib/model/refresh_token_request.dart
+lib/model/session_kpi_activity_breakdown.dart
+lib/model/session_kpi_rate_metric.dart
+lib/model/session_kpi_response.dart
+lib/model/session_kpi_response_freshness.dart
+lib/model/session_kpi_response_metrics.dart
+lib/model/session_kpi_response_sample.dart
+lib/model/session_kpi_response_window.dart
 lib/model/step_up_request.dart
 lib/model/step_up_response.dart
 lib/model/token_pair_response.dart
@@ -171,6 +187,7 @@ test/health_status_test.dart
 test/ingest_activity_event_batch200_response_results_inner_test.dart
 test/ingest_activity_event_batch200_response_test.dart
 test/ingest_activity_event_batch_request_test.dart
+test/insights_api_test.dart
 test/link_identity_request_test.dart
 test/link_identity_response_test.dart
 test/list_child_profiles200_response_test.dart
@@ -197,6 +214,13 @@ test/phone_otp_verify_request_test.dart
 test/readiness_status_checks_test.dart
 test/readiness_status_test.dart
 test/refresh_token_request_test.dart
+test/session_kpi_activity_breakdown_test.dart
+test/session_kpi_rate_metric_test.dart
+test/session_kpi_response_freshness_test.dart
+test/session_kpi_response_metrics_test.dart
+test/session_kpi_response_sample_test.dart
+test/session_kpi_response_test.dart
+test/session_kpi_response_window_test.dart
 test/step_up_request_test.dart
 test/step_up_response_test.dart
 test/token_pair_response_test.dart
