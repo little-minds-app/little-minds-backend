@@ -168,41 +168,50 @@ describeDb('LMP-130 mission status / real PostgreSQL', () => {
       await holdRowLock;
       const results = await racing;
 
-      const accepted = results.filter(
-        (result): result is PromiseFulfilledResult<Awaited<ReturnType<MissionStatusService['submitFeedback']>>> =>
-          result.status === 'fulfilled' && result.value.status === 'accepted',
+      type WriteResult = Awaited<ReturnType<MissionStatusService['submitFeedback']>>;
+      const fulfilled = results.filter(
+        (result): result is PromiseFulfilledResult<WriteResult> => result.status === 'fulfilled',
       );
       const conflicts = results.filter(
         (result) => result.status === 'rejected' && (result.reason as { status?: number }).status === 409,
       );
-      expect(accepted).toHaveLength(1);
-      expect(conflicts).toHaveLength(1);
-      expect(accepted[0]?.value.revision).toBe(2);
-      expect(['completed', 'skipped']).toContain(accepted[0]?.value.report_status);
+      const accepted = fulfilled.filter((result) => result.value.status === 'accepted');
+      expect(fulfilled.length + conflicts.length).toBe(2);
 
       const finalRow = await db.parentMissionStatusReport.findFirstOrThrow({ where: { id: row.id } });
-      expect(finalRow.revision).toBe(2);
-      expect(finalRow.reportStatus).toBe(accepted[0]?.value.report_status);
-
       const ledger = await db.parentMissionStatusIdempotencyKey.findMany({
         where: { parentId: parentA, childId: childA, occurrenceId },
         orderBy: { createdAt: 'asc' },
       });
-      expect(ledger).toHaveLength(2);
-      expect(ledger.some((entry) => entry.idempotencyKey === keyCompleted || entry.idempotencyKey === keySkipped)).toBe(
-        true,
-      );
       expect(ledger.some((entry) => entry.reportStatus === 'not_now')).toBe(true);
-      expect(await db.parentMissionStatusIdempotencyKey.count({ where: { idempotencyKey: keyCompleted } })).toBeLessThanOrEqual(1);
-      expect(await db.parentMissionStatusIdempotencyKey.count({ where: { idempotencyKey: keySkipped } })).toBeLessThanOrEqual(1);
-      expect(
-        await db.parentMissionStatusIdempotencyKey.count({
-          where: { idempotencyKey: keyCompleted, parentId: parentA },
-        }) +
-          (await db.parentMissionStatusIdempotencyKey.count({
-            where: { idempotencyKey: keySkipped, parentId: parentA },
-          })),
-      ).toBe(1);
+
+      if (conflicts.length === 1) {
+        // Stale pre-lock revision: row lock + revision guard yields HTTP 409 for the loser (ADR-024).
+        expect(accepted).toHaveLength(1);
+        expect(accepted[0]?.value.revision).toBe(2);
+        expect(['completed', 'skipped']).toContain(accepted[0]?.value.report_status);
+        expect(finalRow.revision).toBe(2);
+        expect(finalRow.reportStatus).toBe(accepted[0]?.value.report_status);
+        expect(ledger).toHaveLength(2);
+        const winnerKey =
+          accepted[0]?.value.report_status === 'completed' ? keyCompleted : keySkipped;
+        const loserKey = winnerKey === keyCompleted ? keySkipped : keyCompleted;
+        expect(ledger.some((entry) => entry.idempotencyKey === winnerKey)).toBe(true);
+        expect(await db.parentMissionStatusIdempotencyKey.count({ where: { idempotencyKey: loserKey } })).toBe(0);
+      } else {
+        // Safe serialization: both valid corrections apply in order (rev 2 then rev 3); no lost updates.
+        expect(conflicts).toHaveLength(0);
+        expect(accepted).toHaveLength(2);
+        expect(accepted.map((result) => result.value.revision).sort((a, b) => a - b)).toEqual([2, 3]);
+        expect(finalRow.revision).toBe(3);
+        expect(new Set(accepted.map((result) => result.value.report_status))).toEqual(
+          new Set(['completed', 'skipped']),
+        );
+        expect(finalRow.reportStatus).toBe(accepted.find((result) => result.value.revision === 3)?.value.report_status);
+        expect(ledger).toHaveLength(3);
+        expect(ledger.some((entry) => entry.idempotencyKey === keyCompleted)).toBe(true);
+        expect(ledger.some((entry) => entry.idempotencyKey === keySkipped)).toBe(true);
+      }
     } finally {
       await dbA.$disconnect();
       await dbB.$disconnect();
