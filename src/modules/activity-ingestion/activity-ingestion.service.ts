@@ -27,8 +27,8 @@ export class ActivityIngestionService {
     const knownSessions = new Map<string, { childId: string; contentVersionId: string; deviceId: string }>();
     for (const session of sessions) {
       const device = await db.device.findFirst({ where: { id: session.device_id, parentId, revokedAt: null, childId: { not: null }, child: { deletedAt: null } }, select: { childId: true } });
-      const variant = await db.activityVariant.findUnique({ where: { id: session.content_version_id }, select: { id: true } });
-      if (!device?.childId || !variant) continue;
+      const variant = await db.activityVariant.findUnique({ where: { id: session.content_version_id }, select: { reviewStatus: true, activity: { select: { status: true } } } });
+      if (!device?.childId || variant?.reviewStatus !== 'published' || variant.activity.status !== 'published') continue;
       const consent = await this.checkConsent(db, parentId, device.childId, session.consent.consent_scope, session.consent.policy_version);
       if (!consent) continue;
       try {
@@ -91,8 +91,9 @@ export class ActivityIngestionService {
     const parentOnly = isParentEvent(event);
     const device = await db.device.findFirst({ where: { id: event.device_id, parentId, revokedAt: null }, select: { childId: true } });
     if (!device) return reject('ownership.invalid_device');
-    const variant = await db.activityVariant.findUnique({ where: { id: event.content_version_id }, select: { id: true } });
+    const variant = await db.activityVariant.findUnique({ where: { id: event.content_version_id }, select: { reviewStatus: true, activity: { select: { status: true } } } });
     if (!variant) return reject('content.unknown_version');
+    if (variant.reviewStatus !== 'published' || variant.activity.status !== 'published') return reject('content.not_published');
     let session: { childId: string; contentVersionId: string; deviceId: string } | undefined;
     if (!parentOnly) {
       if (!event.play_session_id || !device.childId) return reject('session.required');
