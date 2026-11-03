@@ -233,6 +233,12 @@ class ApiClient {
           return GooglePkceStartResponse.fromJson(value);
         case 'HealthStatus':
           return HealthStatus.fromJson(value);
+        case 'IngestActivityEventBatch200Response':
+          return IngestActivityEventBatch200Response.fromJson(value);
+        case 'IngestActivityEventBatch200ResponseResultsInner':
+          return IngestActivityEventBatch200ResponseResultsInner.fromJson(value);
+        case 'IngestActivityEventBatchRequest':
+          return IngestActivityEventBatchRequest.fromJson(value);
         case 'LinkIdentityRequest':
           return LinkIdentityRequest.fromJson(value);
         case 'LinkIdentityResponse':

@@ -28,6 +28,7 @@ part 'auth/oauth.dart';
 part 'auth/http_basic_auth.dart';
 part 'auth/http_bearer_auth.dart';
 
+part 'api/activity_api.dart';
 part 'api/auth_api.dart';
 part 'api/health_api.dart';
 part 'api/parent_api.dart';
@@ -57,6 +58,9 @@ part 'model/google_auth_request.dart';
 part 'model/google_pkce_start_request.dart';
 part 'model/google_pkce_start_response.dart';
 part 'model/health_status.dart';
+part 'model/ingest_activity_event_batch200_response.dart';
+part 'model/ingest_activity_event_batch200_response_results_inner.dart';
+part 'model/ingest_activity_event_batch_request.dart';
 part 'model/link_identity_request.dart';
 part 'model/link_identity_response.dart';
 part 'model/list_child_profiles200_response.dart';

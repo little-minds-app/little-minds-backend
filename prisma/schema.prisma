@@ -141,6 +141,7 @@ model ParentAccount {
   sessions                       ParentSession[]
   webSessions                    WebParentSession[]
   accountLinkAudits              AccountLinkAudit[]
+  parentActivityEvents            ParentActivityEvent[]
 
   @@map("parent_accounts")
 }
@@ -880,6 +881,9 @@ model ActivitySession {
   completionStatus         String?   @map("completion_status")
   deviceId                 String?   @map("device_id") @db.Uuid
   schemaVersion            String    @map("schema_version")
+  consentScope             String?   @map("consent_scope")
+  consentPolicyVersion     String?   @map("consent_policy_version")
+  provenanceJson           Json?     @map("provenance_json")
   createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -906,6 +910,8 @@ model ActivityEvent {
   payloadJson              Json?    @map("payload_json")
   schemaVersion            String   @map("schema_version")
   consentScope             String   @map("consent_scope")
+  consentPolicyVersion     String?  @map("consent_policy_version")
+  provenanceJson           Json?    @map("provenance_json")
 
   playSession    ActivitySession @relation(fields: [playSessionId], references: [id], onDelete: Cascade)
   contentVersion ActivityVariant @relation(fields: [contentVersionId], references: [id], onDelete: Restrict)
@@ -913,6 +919,42 @@ model ActivityEvent {
 
   @@index([childId, receivedAt], map: "activity_events_child_id_received_at_idx")
   @@map("activity_events")
+}
+
+/// Parent-only telemetry: no fabricated child play session (LMP-51).
+/// Future ingestion enforces authenticated parent ownership and server consent.
+/// Cross-table global idempotency claim for both child and parent activity events.
+/// The ingest service creates this record and its destination event atomically.
+model ActivityIngestKey {
+  eventId            String   @id @map("event_id") @db.Uuid
+  parentId           String   @map("parent_id") @db.Uuid
+  payloadFingerprint String   @map("payload_fingerprint") @db.VarChar(64)
+  eventClass         String   @map("event_class") @db.VarChar(16)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([parentId, createdAt], map: "activity_ingest_keys_parent_created_idx")
+  @@map("activity_ingest_keys")
+}
+
+model ParentActivityEvent {
+  eventId                  String    @id @map("event_id") @db.Uuid
+  parentId                 String    @map("parent_id") @db.Uuid
+  deviceId                 String    @map("device_id") @db.Uuid
+  contentVersionId         String    @map("content_version_id") @db.Uuid
+  eventType                String    @map("event_type")
+  occurredAt               DateTime  @map("occurred_at") @db.Timestamptz(6)
+  receivedAt               DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+  payloadJson              Json      @map("payload_json")
+  schemaVersion            String    @map("schema_version")
+  consentScope             String    @map("consent_scope")
+  consentPolicyVersion     String    @map("consent_policy_version")
+  provenanceJson           Json?     @map("provenance_json")
+  payloadFingerprint       String    @map("payload_fingerprint") @db.VarChar(64)
+
+  parent                   ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId, receivedAt], map: "parent_activity_events_parent_received_idx")
+  @@map("parent_activity_events")
 }
 
 model SkillObservation {

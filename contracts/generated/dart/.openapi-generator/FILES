@@ -3,6 +3,7 @@
 .travis.yml
 README.md
 analysis_options.yaml
+doc/ActivityApi.md
 doc/ActivityEventProvenance.md
 doc/ActivityEventType.md
 doc/ActivityEventV1.md
@@ -30,6 +31,9 @@ doc/GooglePkceStartRequest.md
 doc/GooglePkceStartResponse.md
 doc/HealthApi.md
 doc/HealthStatus.md
+doc/IngestActivityEventBatch200Response.md
+doc/IngestActivityEventBatch200ResponseResultsInner.md
+doc/IngestActivityEventBatchRequest.md
 doc/LinkIdentityRequest.md
 doc/LinkIdentityResponse.md
 doc/ListChildProfiles200Response.md
@@ -64,6 +68,7 @@ doc/UpdateOptionalParentProfile.md
 doc/UpdateWebChildProfileRequest.md
 git_push.sh
 lib/api.dart
+lib/api/activity_api.dart
 lib/api/auth_api.dart
 lib/api/health_api.dart
 lib/api/parent_api.dart
@@ -100,6 +105,9 @@ lib/model/google_auth_request.dart
 lib/model/google_pkce_start_request.dart
 lib/model/google_pkce_start_response.dart
 lib/model/health_status.dart
+lib/model/ingest_activity_event_batch200_response.dart
+lib/model/ingest_activity_event_batch200_response_results_inner.dart
+lib/model/ingest_activity_event_batch_request.dart
 lib/model/link_identity_request.dart
 lib/model/link_identity_response.dart
 lib/model/list_child_profiles200_response.dart
@@ -132,6 +140,7 @@ lib/model/update_child_profile_request.dart
 lib/model/update_optional_parent_profile.dart
 lib/model/update_web_child_profile_request.dart
 pubspec.yaml
+test/activity_api_test.dart
 test/activity_event_provenance_test.dart
 test/activity_event_type_test.dart
 test/activity_event_v1_test.dart
@@ -159,6 +168,9 @@ test/google_pkce_start_request_test.dart
 test/google_pkce_start_response_test.dart
 test/health_api_test.dart
 test/health_status_test.dart
+test/ingest_activity_event_batch200_response_results_inner_test.dart
+test/ingest_activity_event_batch200_response_test.dart
+test/ingest_activity_event_batch_request_test.dart
 test/link_identity_request_test.dart
 test/link_identity_response_test.dart
 test/list_child_profiles200_response_test.dart

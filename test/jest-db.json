@@ -16,7 +16,8 @@
     "<rootDir>/test/phone-identity-lock.db.spec.ts",
     "<rootDir>/test/child-profile.db.spec.ts",
     "<rootDir>/test/child-profile-security.db.spec.ts",
-    "<rootDir>/test/parent-profile.db.spec.ts"
+    "<rootDir>/test/parent-profile.db.spec.ts",
+    "<rootDir>/test/activity-ingestion.db.spec.ts"
   ],
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"

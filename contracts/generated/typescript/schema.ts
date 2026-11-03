@@ -4,6 +4,30 @@
  */
 
 export interface paths {
+    "/v1/events/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest a bounded batch of authenticated parent-owned activity sessions and events
+         * @description LMP-51 contract only until backend implementation is enabled. Validate all
+         *     items against canonical ActivitySessionV1 / ActivityEventV1 schemas, derive
+         *     parent ownership from bearer, check authoritative server consent, and use
+         *     transactionally global event_id idempotency across actor scopes.
+         *     Parent-only events MUST omit play_session_id; no fabricated session.
+         */
+        post: operations["ingestActivityEventBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/web/session": {
         parameters: {
             query?: never;
@@ -1131,6 +1155,70 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    ingestActivityEventBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sessions: components["schemas"]["ActivitySessionV1"][];
+                    events: components["schemas"]["ActivityEventV1"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Per-event status after durable commits; retry unchanged event_id if no ACK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        results: {
+                            /** Format: uuid */
+                            event_id: string;
+                            /** @enum {string} */
+                            status: "accepted" | "duplicate_noop" | "rejected" | "retryable";
+                            /** @description Stable machine-readable code without echoed payload */
+                            reason_code?: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Malformed batch envelope */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request body exceeds configured byte limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited; honor Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     createParentWebSession: {
         parameters: {
             query?: never;

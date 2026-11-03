@@ -1,3 +1,4 @@
+import { ActivityIngestionModule } from './modules/activity-ingestion/activity-ingestion.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.validation';
@@ -18,6 +19,7 @@ import { PrismaModule } from './modules/prisma/prisma.module';
     PrismaModule,
     HealthModule,
     ChildProfileModule,
+    ActivityIngestionModule,
     IdentityModule,
   ],
 })
