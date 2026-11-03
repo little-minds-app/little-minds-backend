@@ -45,8 +45,8 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
     await db.learningDomain.create({ data: { id: domainId, code: 'lmp51-test-' + domainId, labelKey: 'test' } });
     await db.learningGoal.create({ data: { id: goalId, domainId, objectiveKey: 'test' } });
     await db.gameMechanic.create({ data: { id: mechanicId, code: 'lmp51-test-' + mechanicId, engineVersion: '1.0.0' } });
-    await db.activityDefinition.create({ data: { id: definitionId, mechanicId, learningGoalId: goalId, minAgeMonths: 24, maxAgeMonths: 71, safetyClass: 'low' } });
-    await db.activityVariant.create({ data: { id: variantId, activityId: definitionId, version: 1 } });
+    await db.activityDefinition.create({ data: { id: definitionId, mechanicId, learningGoalId: goalId, minAgeMonths: 24, maxAgeMonths: 71, safetyClass: 'low', status: 'published' } });
+    await db.activityVariant.create({ data: { id: variantId, activityId: definitionId, version: 1, reviewStatus: 'published' } });
     await db.consentRecord.create({ data: { parentId, childId, purpose: 'essential_play_events', policyVersion: consentPolicy, status: 'granted', source: 'server_consent_store', recordedAt: new Date('2026-01-01T00:00:00Z') } });
     await db.consentRecord.create({ data: { parentId, purpose: 'essential_play_events', policyVersion: consentPolicy, status: 'granted', source: 'server_consent_store', recordedAt: new Date('2026-01-01T00:00:00Z') } });
   });
