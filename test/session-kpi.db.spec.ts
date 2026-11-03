@@ -146,6 +146,57 @@ describeDb('LMP-52 session KPI aggregation / real PostgreSQL', () => {
     expect(result.sample.excluded_consent).toBe(0);
   });
 
+  it('scopes freshness to eligible sessions only', async () => {
+    const eligibleSid = randomUUID();
+    const excludedSid = randomUUID();
+    const eligibleEid = randomUUID();
+    await ingestion.ingest(parentA, {
+      sessions: [session(eligibleSid, { started_at: '2026-02-10T10:00:00.000Z', ended_at: '2026-02-10T10:02:00.000Z' })],
+      events: [event(eligibleEid, eligibleSid, { occurred_at: '2026-02-10T10:02:00.000Z' })],
+    });
+    await db.activitySession.create({
+      data: {
+        id: excludedSid,
+        childId: childA,
+        contentVersionId: variantId,
+        deviceId: deviceA,
+        startedAt: new Date('2026-02-10T11:00:00.000Z'),
+        endedAt: new Date('2026-02-10T11:02:00.000Z'),
+        schemaVersion: '9.9.9',
+        consentScope: 'essential_play_events',
+        consentPolicyVersion: consentPolicy,
+      },
+    });
+    await db.activityEvent.create({
+      data: {
+        eventId: randomUUID(),
+        playSessionId: excludedSid,
+        childId: childA,
+        deviceId: deviceA,
+        contentVersionId: variantId,
+        eventType: 'activity_completed',
+        occurredAt: new Date('2026-02-10T11:02:00.000Z'),
+        receivedAt: new Date('2026-02-10T11:59:00.000Z'),
+        schemaVersion: '9.9.9',
+        consentScope: 'essential_play_events',
+        consentPolicyVersion: consentPolicy,
+      },
+    });
+    const result = await kpis.aggregate(
+      parentA,
+      {
+        from: '2026-02-10T00:00:00.000Z',
+        to: '2026-02-11T00:00:00.000Z',
+        timezone: 'UTC',
+        childId: childA,
+      },
+      new Date('2026-02-10T12:00:00.000Z'),
+    );
+    expect(result.sample.excluded_unsupported_schema).toBeGreaterThanOrEqual(1);
+    expect(result.metrics.eligible_session_count).toBe(1);
+    expect(result.freshness.status).toBe('fresh');
+  });
+
   it('uses window-scoped freshness for an empty KPI window', async () => {
     const result = await kpis.aggregate(parentA, {
       from: '2026-03-01T00:00:00.000Z',

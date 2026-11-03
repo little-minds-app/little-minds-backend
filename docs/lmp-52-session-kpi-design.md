@@ -23,9 +23,9 @@ Status: implementation (F-013 / E08). Source of truth: accepted `activity_sessio
 
 ## Freshness
 
-- Window-scoped only: child play sessions with `started_at` in `[from, to)`.
-- `latest_ingested_at`: max `received_at` on child `activity_events` tied to those windowed sessions (parent-only events excluded).
-- `latest_activity_at`: max `occurred_at` / session `started_at` within the same window scope.
+- Eligible cohort only: sessions passing schema + consent re-check in the requested window.
+- `latest_ingested_at`: max `received_at` on child `activity_events` for those eligible session IDs (parent-only events excluded).
+- `latest_activity_at`: max `occurred_at` / `started_at` among the same eligible session IDs.
 - `fresh` / `stale` only when `eligible_session_count > 0` and window-scoped ingest exists; empty windows with out-of-window ingest stay `no_data` / `unknown`, not `fresh`.
 - `partial` when any eligible in-progress session exists in window.
 

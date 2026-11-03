@@ -138,6 +138,53 @@ describe('SessionKpiService', () => {
     expect(result.sample.terminal_sessions).toBe(1);
   });
 
+  it('ignores invalid accuracy payload counters', async () => {
+    db.activitySession.findMany.mockResolvedValue([
+      {
+        id: 's1',
+        childId: 'child',
+        contentVersionId: 'v1',
+        startedAt: new Date('2026-01-01T12:00:00.000Z'),
+        endedAt: new Date('2026-01-01T12:05:00.000Z'),
+        monotonicDurationSeconds: 300,
+        completionStatus: 'completed',
+        schemaVersion: '1.0.0',
+        consentScope: 'essential_play_events',
+        consentPolicyVersion: 'p1',
+      },
+    ]);
+    db.consentRecord.findMany.mockResolvedValue([parentConsentRow]);
+    db.activityEvent.findMany.mockResolvedValue([
+      {
+        eventId: 'e1',
+        playSessionId: 's1',
+        childId: 'child',
+        occurredAt: new Date('2026-01-01T12:05:00.000Z'),
+        schemaVersion: '1.0.0',
+        consentScope: 'essential_play_events',
+        consentPolicyVersion: 'p1',
+        payloadJson: { eligible_first_attempts: 4, correct_first_attempts: 10 },
+      },
+    ]);
+    db.activityEvent.findFirst.mockResolvedValue(null);
+    db.activitySession.findFirst.mockResolvedValue({ startedAt: new Date('2026-01-01T12:00:00.000Z') });
+
+    const result = await service.aggregate(
+      'parent',
+      {
+        from: '2026-01-01T00:00:00.000Z',
+        to: '2026-01-02T00:00:00.000Z',
+        timezone: 'UTC',
+      },
+      new Date('2026-01-02T00:00:00.000Z'),
+    );
+
+    expect(result.metrics.first_attempt_accuracy).toMatchObject({
+      availability_status: 'unavailable',
+      reason_code: 'insufficient_denominator',
+    });
+  });
+
   it('does not resurrect older eligible accuracy when latest event is ineligible', async () => {
     db.activitySession.findMany.mockResolvedValue([
       {

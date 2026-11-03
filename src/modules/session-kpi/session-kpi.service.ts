@@ -12,6 +12,7 @@ import {
   consentRecordsFromRows,
   isSessionConsentEligibleAtRead,
 } from './session-kpi.consent';
+import { parseFirstAttemptCounters } from './session-kpi-accuracy-payload';
 import { resolveSessionDurationSeconds } from './session-kpi-duration';
 import { isValidIanaTimeZone, localDateKey, parseInstant } from './session-kpi-time';
 
@@ -167,7 +168,7 @@ export class SessionKpiService {
       consentByChild,
     );
 
-    const ingestBounds = await this.loadIngestFreshness(childFilter, window.from, window.to);
+    const ingestBounds = await this.loadIngestFreshness(eligible.map((session) => session.id));
     const staleThreshold = this.staleThresholdSeconds();
     const freshness = this.buildFreshness(
       now,
@@ -370,12 +371,10 @@ export class SessionKpiService {
       }
       const payload = event.payloadJson;
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) continue;
-      const eligible = (payload as Record<string, unknown>).eligible_first_attempts;
-      const correct = (payload as Record<string, unknown>).correct_first_attempts;
-      if (typeof eligible !== 'number' || typeof correct !== 'number') continue;
-      if (!Number.isFinite(eligible) || !Number.isFinite(correct) || eligible <= 0) continue;
-      denominator += Math.floor(eligible);
-      numerator += Math.min(Math.floor(correct), Math.floor(eligible));
+      const counters = parseFirstAttemptCounters(payload as Record<string, unknown>);
+      if (!counters) continue;
+      denominator += counters.eligible;
+      numerator += counters.correct;
     }
 
     if (denominator <= 0) {
@@ -395,19 +394,20 @@ export class SessionKpiService {
   }
 
   private async loadIngestFreshness(
-    childFilter: Prisma.ChildProfileWhereInput,
-    from: Date,
-    to: Date,
+    eligibleSessionIds: readonly string[],
   ): Promise<{ latestIngestedAt: Date | null; latestActivityAt: Date | null }> {
-    const windowedSession = { child: childFilter, startedAt: { gte: from, lt: to } };
+    if (eligibleSessionIds.length === 0) {
+      return { latestIngestedAt: null, latestActivityAt: null };
+    }
+    const sessionScope = { id: { in: [...eligibleSessionIds] } };
     const [childEvent, sessionStart] = await Promise.all([
       this.prisma.db.activityEvent.findFirst({
-        where: { playSession: windowedSession },
+        where: { playSessionId: { in: [...eligibleSessionIds] } },
         orderBy: { receivedAt: 'desc' },
         select: { receivedAt: true, occurredAt: true },
       }),
       this.prisma.db.activitySession.findFirst({
-        where: windowedSession,
+        where: sessionScope,
         orderBy: { startedAt: 'desc' },
         select: { startedAt: true },
       }),
