@@ -6,8 +6,8 @@ import {
   DEFAULT_SESSION_KPI_STALE_THRESHOLD_SECONDS,
   SESSION_KPI_DEFINITION_VERSION,
   SESSION_KPI_SUPPORTED_SCHEMA_VERSION,
-  TERMINAL_COMPLETION_STATUSES,
 } from './session-kpi.constants';
+import { classifySessionLifecycle } from './session-kpi-lifecycle';
 import {
   consentRecordsFromRows,
   isSessionConsentEligibleAtRead,
@@ -162,14 +162,12 @@ export class SessionKpiService {
       query.timezone,
     );
     const accuracy = await this.computeFirstAttemptAccuracy(
-      childFilter,
-      window.from,
-      window.to,
+      eligible,
       parentConsent,
       consentByChild,
     );
 
-    const ingestBounds = await this.loadIngestFreshness(parentId, childFilter);
+    const ingestBounds = await this.loadIngestFreshness(childFilter, window.from, window.to);
     const staleThreshold = this.staleThresholdSeconds();
     const freshness = this.buildFreshness(
       now,
@@ -252,13 +250,10 @@ export class SessionKpiService {
 
     for (const session of sessions) {
       playDays.add(localDateKey(session.startedAt, timezone));
-      const status = session.completionStatus ?? 'started';
-      const isTerminal =
-        (TERMINAL_COMPLETION_STATUSES as readonly string[]).includes(status) ||
-        session.endedAt !== null;
-      if (status === 'completed') completed += 1;
-      else if (status === 'interrupted') interrupted += 1;
-      else if (status === 'abandoned') abandoned += 1;
+      const { bucket, terminal: isTerminal } = classifySessionLifecycle(session);
+      if (bucket === 'completed') completed += 1;
+      else if (bucket === 'interrupted') interrupted += 1;
+      else if (bucket === 'abandoned') abandoned += 1;
       else inProgress += 1;
       if (isTerminal) terminal += 1;
 
@@ -280,7 +275,7 @@ export class SessionKpiService {
           play_duration_seconds: 0,
         };
       row.session_starts += 1;
-      if (status === 'completed') row.completed_sessions += 1;
+      if (bucket === 'completed') row.completed_sessions += 1;
       if (duration !== null) row.play_duration_seconds += duration;
       byActivity.set(session.contentVersionId, row);
     }
@@ -317,33 +312,51 @@ export class SessionKpiService {
   }
 
   private async computeFirstAttemptAccuracy(
-    childFilter: Prisma.ChildProfileWhereInput,
-    from: Date,
-    to: Date,
+    eligibleSessions: readonly { id: string; childId: string }[],
     parentConsent: ReturnType<typeof consentRecordsFromRows>,
     consentByChild: Map<string, ReturnType<typeof consentRecordsFromRows>>,
   ): Promise<SessionKpiResponse['metrics']['first_attempt_accuracy']> {
+    const sessionIds = eligibleSessions.map((session) => session.id);
+    if (sessionIds.length === 0) {
+      return {
+        availability_status: 'unavailable',
+        reason_code: 'insufficient_denominator',
+        numerator: 0,
+        denominator: 0,
+      };
+    }
+
     const events = await this.prisma.db.activityEvent.findMany({
       where: {
         eventType: 'activity_completed',
-        schemaVersion: SESSION_KPI_SUPPORTED_SCHEMA_VERSION,
-        occurredAt: { gte: from, lt: to },
-        playSession: { child: childFilter },
+        playSessionId: { in: sessionIds },
       },
       select: {
+        eventId: true,
         playSessionId: true,
         childId: true,
         occurredAt: true,
+        schemaVersion: true,
         consentScope: true,
         consentPolicyVersion: true,
         payloadJson: true,
       },
-      orderBy: [{ occurredAt: 'desc' }, { playSessionId: 'asc' }],
+      orderBy: [{ occurredAt: 'desc' }, { eventId: 'asc' }],
     });
 
     const latestBySession = new Map<string, (typeof events)[number]>();
     for (const event of events) {
-      if (latestBySession.has(event.playSessionId)) continue;
+      if (!latestBySession.has(event.playSessionId)) {
+        latestBySession.set(event.playSessionId, event);
+      }
+    }
+
+    let numerator = 0;
+    let denominator = 0;
+    for (const event of latestBySession.values()) {
+      if (event.schemaVersion !== SESSION_KPI_SUPPORTED_SCHEMA_VERSION) {
+        continue;
+      }
       const childConsent = consentByChild.get(event.childId) ?? [];
       if (
         !isSessionConsentEligibleAtRead(
@@ -355,12 +368,6 @@ export class SessionKpiService {
       ) {
         continue;
       }
-      latestBySession.set(event.playSessionId, event);
-    }
-
-    let numerator = 0;
-    let denominator = 0;
-    for (const event of latestBySession.values()) {
       const payload = event.payloadJson;
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) continue;
       const eligible = (payload as Record<string, unknown>).eligible_first_attempts;
@@ -388,35 +395,30 @@ export class SessionKpiService {
   }
 
   private async loadIngestFreshness(
-    parentId: string,
     childFilter: Prisma.ChildProfileWhereInput,
+    from: Date,
+    to: Date,
   ): Promise<{ latestIngestedAt: Date | null; latestActivityAt: Date | null }> {
-    const [childEvent, parentEvent, sessionStart] = await Promise.all([
+    const windowedSession = { child: childFilter, startedAt: { gte: from, lt: to } };
+    const [childEvent, sessionStart] = await Promise.all([
       this.prisma.db.activityEvent.findFirst({
-        where: { playSession: { child: childFilter } },
-        orderBy: { receivedAt: 'desc' },
-        select: { receivedAt: true, occurredAt: true },
-      }),
-      this.prisma.db.parentActivityEvent.findFirst({
-        where: { parentId },
+        where: { playSession: windowedSession },
         orderBy: { receivedAt: 'desc' },
         select: { receivedAt: true, occurredAt: true },
       }),
       this.prisma.db.activitySession.findFirst({
-        where: { child: childFilter },
+        where: windowedSession,
         orderBy: { startedAt: 'desc' },
         select: { startedAt: true },
       }),
     ]);
 
-    const ingestCandidates = [childEvent?.receivedAt, parentEvent?.receivedAt].filter(
+    const ingestCandidates = [childEvent?.receivedAt].filter(
       (value): value is Date => value instanceof Date,
     );
-    const activityCandidates = [
-      childEvent?.occurredAt,
-      parentEvent?.occurredAt,
-      sessionStart?.startedAt,
-    ].filter((value): value is Date => value instanceof Date);
+    const activityCandidates = [childEvent?.occurredAt, sessionStart?.startedAt].filter(
+      (value): value is Date => value instanceof Date,
+    );
 
     return {
       latestIngestedAt: ingestCandidates.length
@@ -439,13 +441,23 @@ export class SessionKpiService {
     let status: SessionKpiResponse['freshness']['status'] = 'unknown';
     if (eligibleCount === 0 && !latestIngestedAt && !latestActivityAt) {
       status = 'no_data';
-    } else if (latestIngestedAt) {
+    } else if (eligibleCount === 0 && latestIngestedAt) {
+      status = 'unknown';
+    } else if (eligibleCount > 0 && latestIngestedAt) {
       const ageSeconds = (now.getTime() - latestIngestedAt.getTime()) / 1000;
       status = ageSeconds <= staleThresholdSeconds ? 'fresh' : 'stale';
+    } else if (eligibleCount > 0) {
+      status = 'unknown';
     }
 
     const dataCompleteness =
-      inProgressCount > 0 ? 'partial' : eligibleCount > 0 || latestIngestedAt ? 'complete' : 'unknown';
+      inProgressCount > 0
+        ? 'partial'
+        : eligibleCount > 0
+          ? 'complete'
+          : latestIngestedAt
+            ? 'partial'
+            : 'unknown';
 
     return {
       status,

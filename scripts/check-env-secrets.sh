@@ -166,7 +166,7 @@ else
         [[ -z "$p" ]] && continue
         # Approved health, auth, and LMP-39 parent-owned child profile paths only.
         case "$p" in
-          /health|/health/ready|/v1/auth/token/refresh|/v1/auth/logout|/v1/auth/logout-all|/v1/auth/sessions|/v1/auth/sessions/{sessionId}|/v1/parent/me|/v1/parent/profile|/v1/parent/gate/status|/v1/parent/gate/proof|/v1/parent/gate/setup|/v1/parent/gate/reset|/v1/parent/gate/verify|/v1/parent/gate/grant|/v1/auth/web/profile|/v1/auth/dev/session|/v1/auth/phone/start|/v1/auth/phone/verify|/v1/auth/oidc/nonce|/v1/auth/google/pkce/start|/v1/auth/apple|/v1/auth/google|/v1/auth/email/start|/v1/auth/email/verify|/v1/auth/identities/step-up|/v1/auth/identities/link|/v1/auth/web/session|/v1/auth/web/me|/v1/auth/web/activity|/v1/auth/web/logout|/v1/children|/v1/children/{childId}|/v1/web/children|/v1/web/children/{childId}|/v1/events/batch)
+          /health|/health/ready|/v1/auth/token/refresh|/v1/auth/logout|/v1/auth/logout-all|/v1/auth/sessions|/v1/auth/sessions/{sessionId}|/v1/parent/me|/v1/parent/profile|/v1/parent/gate/status|/v1/parent/gate/proof|/v1/parent/gate/setup|/v1/parent/gate/reset|/v1/parent/gate/verify|/v1/parent/gate/grant|/v1/auth/web/profile|/v1/auth/dev/session|/v1/auth/phone/start|/v1/auth/phone/verify|/v1/auth/oidc/nonce|/v1/auth/google/pkce/start|/v1/auth/apple|/v1/auth/google|/v1/auth/email/start|/v1/auth/email/verify|/v1/auth/identities/step-up|/v1/auth/identities/link|/v1/auth/web/session|/v1/auth/web/me|/v1/auth/web/activity|/v1/auth/web/logout|/v1/children|/v1/children/{childId}|/v1/web/children|/v1/web/children/{childId}|/v1/events/batch|/v1/insights/session-kpis)
             ;;
           *)
             EXTRA_PATHS="${EXTRA_PATHS}${p} "

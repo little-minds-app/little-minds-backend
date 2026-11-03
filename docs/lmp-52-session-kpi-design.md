@@ -14,18 +14,19 @@ Status: implementation (F-013 / E08). Source of truth: accepted `activity_sessio
 | Metric | Numerator | Denominator | Notes |
 |--------|-----------|-------------|-------|
 | eligible_session_count | eligible rows | — | One row per `play_session_id` |
-| completed / interrupted / abandoned / in_progress | status buckets | — | Terminal = completed/abandoned/interrupted or `ended_at` set |
+| completed / interrupted / abandoned / in_progress | status buckets | — | `in_progress` only when status is non-terminal **and** `ended_at` is null; `ended_at` without terminal status counts as interrupted (terminal) |
 | total_play_duration_seconds | sum trusted duration | — | Monotonic duration preferred; else bounded terminal wall delta |
 | completed_session_rate | completed | terminal | Unavailable when terminal = 0 |
 | distinct_play_days | unique local dates of `started_at` | — | Uses request `timezone` |
 | by_activity | grouped by `content_version_id` | — | Starts, completed, duration |
-| first_attempt_accuracy | Σ correct_first_attempts | Σ eligible_first_attempts | Latest `activity_completed` per session; unavailable if denominator 0 |
+| first_attempt_accuracy | Σ correct_first_attempts | Σ eligible_first_attempts | Same eligible session cohort as session KPIs; latest `activity_completed` per session by `occurred_at`, then eligibility check (no older fallback) |
 
 ## Freshness
 
-- `latest_ingested_at`: max `received_at` over child events (parent scope) and parent-only events.
-- `latest_activity_at`: max observed activity timestamps (events + session starts).
-- `fresh` when age(`latest_ingested_at`) ≤ `SESSION_KPI_STALE_THRESHOLD_SECONDS` (default 86400).
+- Window-scoped only: child play sessions with `started_at` in `[from, to)`.
+- `latest_ingested_at`: max `received_at` on child `activity_events` tied to those windowed sessions (parent-only events excluded).
+- `latest_activity_at`: max `occurred_at` / session `started_at` within the same window scope.
+- `fresh` / `stale` only when `eligible_session_count > 0` and window-scoped ingest exists; empty windows with out-of-window ingest stay `no_data` / `unknown`, not `fresh`.
 - `partial` when any eligible in-progress session exists in window.
 
 No PII or raw payloads in KPI responses.

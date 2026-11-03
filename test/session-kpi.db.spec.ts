@@ -146,6 +146,17 @@ describeDb('LMP-52 session KPI aggregation / real PostgreSQL', () => {
     expect(result.sample.excluded_consent).toBe(0);
   });
 
+  it('uses window-scoped freshness for an empty KPI window', async () => {
+    const result = await kpis.aggregate(parentA, {
+      from: '2026-03-01T00:00:00.000Z',
+      to: '2026-03-02T00:00:00.000Z',
+      timezone: 'UTC',
+      childId: childA,
+    });
+    expect(result.metrics.eligible_session_count).toBe(0);
+    expect(result.freshness.status).not.toBe('fresh');
+  });
+
   it('excludes sessions after consent revocation', async () => {
     const sid = randomUUID();
     await ingestion.ingest(parentA, {

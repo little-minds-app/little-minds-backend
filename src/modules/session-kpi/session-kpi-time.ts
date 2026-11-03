@@ -19,9 +19,12 @@ export function isValidIanaTimeZone(timeZone: string): boolean {
   }
 }
 
-/** Parse RFC3339 instant (must include offset or Z). */
+const RFC3339_INSTANT =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** Parse RFC3339 instant (must include Z or ±HH:MM offset). */
 export function parseInstant(value: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(value)) {
+  if (!RFC3339_INSTANT.test(value)) {
     return null;
   }
   const parsed = Date.parse(value);
