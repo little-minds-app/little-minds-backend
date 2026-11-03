@@ -105,6 +105,110 @@ describeDb('LMP-130 mission status / real PostgreSQL', () => {
     expect(await db.parentMissionStatusIdempotencyKey.count({ where: { parentId: parentA } })).toBe(2);
   });
 
+  it('two-connection race: pre-lock reads, one accepted correction and one 409 conflict', async () => {
+    const dbA = new PrismaClient();
+    const dbB = new PrismaClient();
+    const serviceA = new MissionStatusService({ get db() { return dbA; } } as PrismaService);
+    const serviceB = new MissionStatusService({ get db() { return dbB; } } as PrismaService);
+    const occurrenceId = randomUUID();
+    const keyCompleted = randomUUID();
+    const keySkipped = randomUUID();
+
+    try {
+      await service.submitFeedback(parentA, childA, missionId, {
+        schema_version: MISSION_STATUS_SCHEMA_VERSION,
+        idempotency_key: randomUUID(),
+        occurrence_id: occurrenceId,
+        status: 'not_now',
+      });
+
+      const row = await db.parentMissionStatusReport.findFirstOrThrow({
+        where: { parentId: parentA, childId: childA, occurrenceId },
+      });
+
+      let releaseRowLock: () => void = () => undefined;
+      let rowLockReady: () => void = () => undefined;
+      const rowLockReadyPromise = new Promise<void>((resolve) => {
+        rowLockReady = resolve;
+      });
+
+      const holdRowLock = dbA.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`
+            SELECT id FROM parent_mission_status_reports
+            WHERE id = ${row.id}::uuid
+            FOR UPDATE
+          `;
+          rowLockReady();
+          await new Promise<void>((resolve) => {
+            releaseRowLock = resolve;
+          });
+        },
+        { maxWait: 15_000, timeout: 60_000 },
+      );
+
+      await rowLockReadyPromise;
+
+      const racing = Promise.allSettled([
+        serviceA.submitFeedback(parentA, childA, missionId, {
+          schema_version: MISSION_STATUS_SCHEMA_VERSION,
+          idempotency_key: keyCompleted,
+          occurrence_id: occurrenceId,
+          status: 'completed',
+        }),
+        serviceB.submitFeedback(parentA, childA, missionId, {
+          schema_version: MISSION_STATUS_SCHEMA_VERSION,
+          idempotency_key: keySkipped,
+          occurrence_id: occurrenceId,
+          status: 'skipped',
+        }),
+      ]);
+
+      releaseRowLock();
+      await holdRowLock;
+      const results = await racing;
+
+      const accepted = results.filter(
+        (result): result is PromiseFulfilledResult<Awaited<ReturnType<MissionStatusService['submitFeedback']>>> =>
+          result.status === 'fulfilled' && result.value.status === 'accepted',
+      );
+      const conflicts = results.filter(
+        (result) => result.status === 'rejected' && (result.reason as { status?: number }).status === 409,
+      );
+      expect(accepted).toHaveLength(1);
+      expect(conflicts).toHaveLength(1);
+      expect(accepted[0]?.value.revision).toBe(2);
+      expect(['completed', 'skipped']).toContain(accepted[0]?.value.report_status);
+
+      const finalRow = await db.parentMissionStatusReport.findFirstOrThrow({ where: { id: row.id } });
+      expect(finalRow.revision).toBe(2);
+      expect(finalRow.reportStatus).toBe(accepted[0]?.value.report_status);
+
+      const ledger = await db.parentMissionStatusIdempotencyKey.findMany({
+        where: { parentId: parentA, childId: childA, occurrenceId },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(ledger).toHaveLength(2);
+      expect(ledger.some((entry) => entry.idempotencyKey === keyCompleted || entry.idempotencyKey === keySkipped)).toBe(
+        true,
+      );
+      expect(ledger.some((entry) => entry.reportStatus === 'not_now')).toBe(true);
+      expect(await db.parentMissionStatusIdempotencyKey.count({ where: { idempotencyKey: keyCompleted } })).toBeLessThanOrEqual(1);
+      expect(await db.parentMissionStatusIdempotencyKey.count({ where: { idempotencyKey: keySkipped } })).toBeLessThanOrEqual(1);
+      expect(
+        await db.parentMissionStatusIdempotencyKey.count({
+          where: { idempotencyKey: keyCompleted, parentId: parentA },
+        }) +
+          (await db.parentMissionStatusIdempotencyKey.count({
+            where: { idempotencyKey: keySkipped, parentId: parentA },
+          })),
+      ).toBe(1);
+    } finally {
+      await dbA.$disconnect();
+      await dbB.$disconnect();
+    }
+  });
+
   it('serializes valid competing corrections with one revision increment each', async () => {
     const occurrenceId = randomUUID();
     await service.submitFeedback(parentA, childA, missionId, {
