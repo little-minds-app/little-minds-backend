@@ -12,9 +12,11 @@ info:
     event contracts. LMP-51 adds authenticated, server-consent-gated
     POST /v1/events/batch with per-event durable acknowledgements. LMP-52 adds authenticated
     GET /v1/insights/session-kpis for canonical session KPI aggregation and freshness metadata.
+    LMP-130 adds parent-scoped mission status reads and caregiver-reported feedback writes
+    (`GET /v1/children/{childId}/missions` requires bounded `from`/`to`, `POST …/feedback`).
     Authoritative Ajv JSON Schemas live under `contracts/schemas/activity/` (`schema_version` 1.0.0,
     independent of this info.version).
-  version: 0.13.0
+  version: 0.14.1
 
   contact:
     name: Little Minds
@@ -32,6 +34,8 @@ tags:
     description: Authenticated parent identity probe
   - name: Insights
     description: Canonical server-side KPI reads (F-013)
+  - name: Missions
+    description: Parent-scoped real-world mission status (LMP-130 foundation)
 paths:
   /v1/events/batch:
     post:
@@ -598,6 +602,107 @@ paths:
           description: Unauthorized
         '404':
           description: Missing, soft-deleted, or not-owned child profile (uniform)
+  /v1/children/{childId}/missions:
+    get:
+      operationId: listChildMissionStatus
+      tags: [Missions]
+      summary: List mission interaction and parent-reported status for an owned child
+      description: |
+        LMP-130 read contract. Requires bounded half-open UTC window (`from`, `to`, max
+        90-day span). Loads all eligible rows inside the window (no silent scan cap);
+        `limit` paginates merged results only. Does not infer physical-world completion.
+      security:
+        - parentAccessToken: []
+      parameters:
+        - in: path
+          name: childId
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: from
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Inclusive UTC lower bound for report/interaction timestamps
+        - in: query
+          name: to
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Exclusive UTC upper bound for report/interaction timestamps
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Mission status rows with explicit absence semantics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionStatusListResponse'
+        '400':
+          description: Invalid window or limit
+        '401':
+          description: Unauthorized
+        '404':
+          description: Child not found or not owned
+  /v1/children/{childId}/missions/{missionId}/feedback:
+    post:
+      operationId: submitChildMissionFeedback
+      tags: [Missions]
+      summary: Record caregiver-reported mission status for an owned child occurrence
+      description: |
+        LMP-130 write contract. Parent Gate required. Server sets recorded_at and
+        ignores client-supplied parent identity. Idempotent on idempotency_key.
+      security:
+        - parentAccessToken: []
+      parameters:
+        - in: path
+          name: childId
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: missionId
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: '^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MissionFeedbackWriteRequest'
+      responses:
+        '200':
+          description: Accepted or duplicate_noop acknowledgement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionFeedbackWriteResponse'
+        '400':
+          description: Malformed body or unsupported schema_version
+        '401':
+          description: Unauthorized
+        '403':
+          description: Parent Gate grant or consent missing
+        '404':
+          description: Child or mission not found
+        '409':
+          description: Idempotency conflict or invalid transition
   /v1/web/children:
     get:
       operationId: listWebChildProfiles
@@ -2457,3 +2562,202 @@ components:
                 $ref: '#/components/schemas/SessionKpiActivityBreakdown'
             first_attempt_accuracy:
               $ref: '#/components/schemas/SessionKpiRateMetric'
+    MissionFeedbackWriteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - idempotency_key
+        - occurrence_id
+        - status
+      properties:
+        schema_version:
+          type: string
+          enum: [mission-status-v1]
+        idempotency_key:
+          type: string
+          format: uuid
+        occurrence_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [completed, skipped, not_now, partial]
+    MissionFeedbackWriteResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - status
+        - assertion_id
+        - child_id
+        - mission_id
+        - occurrence_id
+        - report_status
+        - authoritative
+        - recorded_at
+        - revision
+        - actor
+        - source
+      properties:
+        schema_version:
+          type: string
+          enum: [mission-status-v1]
+        status:
+          type: string
+          enum: [accepted, duplicate_noop]
+        assertion_id:
+          type: string
+          format: uuid
+        child_id:
+          type: string
+          format: uuid
+        mission_id:
+          type: string
+        occurrence_id:
+          type: string
+          format: uuid
+        report_status:
+          type: string
+          enum: [completed, skipped, not_now, partial]
+        authoritative:
+          type: boolean
+        recorded_at:
+          type: string
+          format: date-time
+        revision:
+          type: integer
+          minimum: 1
+        actor:
+          type: string
+          enum: [parent]
+        source:
+          type: string
+          enum: [caregiver_report]
+    MissionStatusListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - definition_version
+        - generated_at
+        - child_id
+        - window
+        - items
+        - pagination
+      properties:
+        schema_version:
+          type: string
+          enum: [mission-status-v1]
+        definition_version:
+          type: string
+          enum: [mission-status-v1]
+        generated_at:
+          type: string
+          format: date-time
+        child_id:
+          type: string
+          format: uuid
+        window:
+          type: object
+          additionalProperties: false
+          required: [from, to, bounds]
+          properties:
+            from:
+              type: string
+              format: date-time
+              nullable: true
+            to:
+              type: string
+              format: date-time
+              nullable: true
+            bounds:
+              type: string
+              enum: [half_open_recorded_at]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MissionStatusOccurrenceRow'
+        pagination:
+          type: object
+          additionalProperties: false
+          required: [limit, truncated]
+          properties:
+            limit:
+              type: integer
+              minimum: 1
+            truncated:
+              type: boolean
+    MissionStatusOccurrenceRow:
+      type: object
+      additionalProperties: false
+      required:
+        - occurrence_id
+        - mission_id
+        - interaction
+        - parent_report
+      properties:
+        occurrence_id:
+          type: string
+          format: uuid
+        mission_id:
+          type: string
+        interaction:
+          $ref: '#/components/schemas/MissionInteractionFacts'
+        parent_report:
+          $ref: '#/components/schemas/MissionParentReportFacts'
+    MissionInteractionFacts:
+      type: object
+      additionalProperties: false
+      required: [offered_at, opened_at, source]
+      properties:
+        offered_at:
+          type: string
+          format: date-time
+          nullable: true
+        opened_at:
+          type: string
+          format: date-time
+          nullable: true
+        source:
+          type: string
+          enum: [child_play_events]
+    MissionParentReportFacts:
+      type: object
+      additionalProperties: false
+      required:
+        - availability
+        - status
+        - authoritative
+        - recorded_at
+        - assertion_id
+        - revision
+        - actor
+        - source
+      properties:
+        availability:
+          type: string
+          enum: [reported, no_report]
+        status:
+          type: string
+          enum: [completed, skipped, not_now, partial]
+          nullable: true
+        authoritative:
+          type: boolean
+        recorded_at:
+          type: string
+          format: date-time
+          nullable: true
+        assertion_id:
+          type: string
+          format: uuid
+          nullable: true
+        revision:
+          type: integer
+          nullable: true
+        actor:
+          type: string
+          enum: [parent]
+        source:
+          type: string
+          enum: [caregiver_report]

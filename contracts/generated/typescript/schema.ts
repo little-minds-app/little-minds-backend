@@ -298,6 +298,49 @@ export interface paths {
         patch: operations["updateChildProfile"];
         trace?: never;
     };
+    "/v1/children/{childId}/missions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List mission interaction and parent-reported status for an owned child
+         * @description LMP-130 read contract. Requires bounded half-open UTC window (`from`, `to`, max
+         *     90-day span). Loads all eligible rows inside the window (no silent scan cap);
+         *     `limit` paginates merged results only. Does not infer physical-world completion.
+         */
+        get: operations["listChildMissionStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/children/{childId}/missions/{missionId}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record caregiver-reported mission status for an owned child occurrence
+         * @description LMP-130 write contract. Parent Gate required. Server sets recorded_at and
+         *     ignores client-supplied parent identity. Idempotent on idempotency_key.
+         */
+        post: operations["submitChildMissionFeedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/web/children": {
         parameters: {
             query?: never;
@@ -1229,6 +1272,93 @@ export interface components {
                 first_attempt_accuracy: components["schemas"]["SessionKpiRateMetric"];
             };
         };
+        MissionFeedbackWriteRequest: {
+            /** @enum {string} */
+            schema_version: "mission-status-v1";
+            /** Format: uuid */
+            idempotency_key: string;
+            /** Format: uuid */
+            occurrence_id: string;
+            /** @enum {string} */
+            status: "completed" | "skipped" | "not_now" | "partial";
+        };
+        MissionFeedbackWriteResponse: {
+            /** @enum {string} */
+            schema_version: "mission-status-v1";
+            /** @enum {string} */
+            status: "accepted" | "duplicate_noop";
+            /** Format: uuid */
+            assertion_id: string;
+            /** Format: uuid */
+            child_id: string;
+            mission_id: string;
+            /** Format: uuid */
+            occurrence_id: string;
+            /** @enum {string} */
+            report_status: "completed" | "skipped" | "not_now" | "partial";
+            authoritative: boolean;
+            /** Format: date-time */
+            recorded_at: string;
+            revision: number;
+            /** @enum {string} */
+            actor: "parent";
+            /** @enum {string} */
+            source: "caregiver_report";
+        };
+        MissionStatusListResponse: {
+            /** @enum {string} */
+            schema_version: "mission-status-v1";
+            /** @enum {string} */
+            definition_version: "mission-status-v1";
+            /** Format: date-time */
+            generated_at: string;
+            /** Format: uuid */
+            child_id: string;
+            window: {
+                /** Format: date-time */
+                from: string | null;
+                /** Format: date-time */
+                to: string | null;
+                /** @enum {string} */
+                bounds: "half_open_recorded_at";
+            };
+            items: components["schemas"]["MissionStatusOccurrenceRow"][];
+            pagination: {
+                limit: number;
+                truncated: boolean;
+            };
+        };
+        MissionStatusOccurrenceRow: {
+            /** Format: uuid */
+            occurrence_id: string;
+            mission_id: string;
+            interaction: components["schemas"]["MissionInteractionFacts"];
+            parent_report: components["schemas"]["MissionParentReportFacts"];
+        };
+        MissionInteractionFacts: {
+            /** Format: date-time */
+            offered_at: string | null;
+            /** Format: date-time */
+            opened_at: string | null;
+            /** @enum {string} */
+            source: "child_play_events";
+        };
+        MissionParentReportFacts: {
+            /** @enum {string} */
+            availability: "reported" | "no_report";
+            /** @enum {string|null} */
+            status: "completed" | "skipped" | "not_now" | "partial" | null;
+            authoritative: boolean;
+            /** Format: date-time */
+            recorded_at: string | null;
+            /** Format: uuid */
+            assertion_id: string | null;
+            revision: number | null;
+            /** @enum {string} */
+            actor: "parent";
+            /** @enum {string} */
+            source: "caregiver_report";
+        };
     };
     responses: never;
     parameters: never;
@@ -1900,6 +2030,117 @@ export interface operations {
             };
             /** @description Not found or not owned */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listChildMissionStatus: {
+        parameters: {
+            query: {
+                /** @description Inclusive UTC lower bound for report/interaction timestamps */
+                from: string;
+                /** @description Exclusive UTC upper bound for report/interaction timestamps */
+                to: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                childId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mission status rows with explicit absence semantics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MissionStatusListResponse"];
+                };
+            };
+            /** @description Invalid window or limit */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child not found or not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    submitChildMissionFeedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                childId: string;
+                missionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MissionFeedbackWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted or duplicate_noop acknowledgement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MissionFeedbackWriteResponse"];
+                };
+            };
+            /** @description Malformed body or unsupported schema_version */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Parent Gate grant or consent missing */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child or mission not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Idempotency conflict or invalid transition */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

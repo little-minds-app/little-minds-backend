@@ -39,7 +39,9 @@
     "/v1/parent/gate/verify",
     "/v1/parent/gate/grant",
     "/v1/events/batch",
-    "/v1/insights/session-kpis"
+    "/v1/insights/session-kpis",
+    "/v1/children/{childId}/missions",
+    "/v1/children/{childId}/missions/{missionId}/feedback"
   ],
   "requiredOperations": [
     {

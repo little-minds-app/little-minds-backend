@@ -249,6 +249,22 @@ class ApiClient {
           return LogoutAllResponse.fromJson(value);
         case 'LogoutRequest':
           return LogoutRequest.fromJson(value);
+        case 'MissionFeedbackWriteRequest':
+          return MissionFeedbackWriteRequest.fromJson(value);
+        case 'MissionFeedbackWriteResponse':
+          return MissionFeedbackWriteResponse.fromJson(value);
+        case 'MissionInteractionFacts':
+          return MissionInteractionFacts.fromJson(value);
+        case 'MissionParentReportFacts':
+          return MissionParentReportFacts.fromJson(value);
+        case 'MissionStatusListResponse':
+          return MissionStatusListResponse.fromJson(value);
+        case 'MissionStatusListResponsePagination':
+          return MissionStatusListResponsePagination.fromJson(value);
+        case 'MissionStatusListResponseWindow':
+          return MissionStatusListResponseWindow.fromJson(value);
+        case 'MissionStatusOccurrenceRow':
+          return MissionStatusOccurrenceRow.fromJson(value);
         case 'OidcNonceRequest':
           return OidcNonceRequest.fromJson(value);
         case 'OidcNonceResponse':

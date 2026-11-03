@@ -1,4 +1,5 @@
 import { ActivityIngestionModule } from './modules/activity-ingestion/activity-ingestion.module';
+import { RealWorldMissionModule } from './modules/real-world-mission/real-world-mission.module';
 import { SessionKpiModule } from './modules/session-kpi/session-kpi.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -22,6 +23,7 @@ import { PrismaModule } from './modules/prisma/prisma.module';
     ChildProfileModule,
     ActivityIngestionModule,
     SessionKpiModule,
+    RealWorldMissionModule,
     IdentityModule,
   ],
 })
