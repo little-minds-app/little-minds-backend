@@ -376,6 +376,49 @@ export interface paths {
         patch: operations["updateWebChildProfile"];
         trace?: never;
     };
+    "/v1/web/insights/session-kpis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server-side BFF session KPI read using opaque parent web session
+         * @description LMP-54 passive dashboard read. Same aggregation as GET /v1/insights/session-kpis
+         *     but authorized via BFF headers (x-lm-bff-secret, x-lm-web-session). Does not
+         *     extend web session idle timeout on success.
+         */
+        get: operations["getWebSessionKpis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/web/children/{childId}/missions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server-side BFF mission status list using opaque parent web session
+         * @description LMP-54 passive dashboard read. Same contract as GET /v1/children/{childId}/missions
+         *     but authorized via BFF headers. GET only on web; feedback POST remains mobile/bearer.
+         */
+        get: operations["listWebChildMissionStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/web/profile": {
         parameters: {
             query?: never;
@@ -2271,6 +2314,105 @@ export interface operations {
                 content?: never;
             };
             /** @description Not found or not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getWebSessionKpis: {
+        parameters: {
+            query: {
+                /** @description Inclusive UTC window start (session started_at) */
+                from: string;
+                /** @description Exclusive UTC window end (session started_at) */
+                to: string;
+                /** @description IANA timezone for distinct play-day boundaries */
+                timezone: string;
+                /** @description Optional child filter; omit for all active children owned by the parent */
+                child_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Versioned KPI dictionary with freshness metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionKpiResponse"];
+                };
+            };
+            /** @description Invalid window or timezone */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid web session or untrusted BFF */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child filter not found for authenticated parent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listWebChildMissionStatus: {
+        parameters: {
+            query: {
+                /** @description Inclusive UTC lower bound for report/interaction timestamps */
+                from: string;
+                /** @description Exclusive UTC upper bound for report/interaction timestamps */
+                to: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                childId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mission status rows with explicit absence semantics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MissionStatusListResponse"];
+                };
+            };
+            /** @description Invalid window or limit */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid web session or untrusted BFF */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child not found or not owned */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -1,9 +1,9 @@
-import { UnauthorizedException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
 import type { AppEnv } from '../../config/env.validation';
 import { WebParentSessionService } from '../identity/session/web-parent-session.service';
+import { readTrustedWebSessionHandle, resolvePassiveWebParentId } from '../identity/web/web-bff-auth';
 import { ChildProfileService } from './child-profile.service';
 
 /** Opaque-session backend facade. Never accepts a browser JWT or client parentId. */
@@ -15,41 +15,18 @@ export class WebChildProfileController {
     private readonly config: ConfigService<AppEnv, true>,
   ) {}
 
-  private async parent(request: Request): Promise<string> {
-    const secret = this.config.get('LM_WEB_BFF_SECRET', { infer: true });
-    const provided = request.headers['x-lm-bff-secret'];
-    if (!secret || secret.length < 32 || typeof provided !== 'string' ||
-      !timingSafeEqual(createHash('sha256').update(secret).digest(), createHash('sha256').update(provided).digest())) {
-      throw new UnauthorizedException('Untrusted web request');
-    }
-    const handle = request.headers['x-lm-web-session'];
-    if (typeof handle !== 'string') throw new UnauthorizedException('Missing web session');
-    const active = await this.web.requireActive(handle, false);
-    return active.parent_id;
+  private parent(request: Request): Promise<string> {
+    return resolvePassiveWebParentId(this.config, this.web, request);
   }
 
   private trustedHandle(req: Request): string {
-    const secret = this.config.get('LM_WEB_BFF_SECRET', { infer: true });
-    const provided = req.headers['x-lm-bff-secret'];
-    if (!secret || secret.length < 32 || typeof provided !== 'string' ||
-        !timingSafeEqual(createHash('sha256').update(secret).digest(), createHash('sha256').update(provided).digest())) {
-      throw new UnauthorizedException('Untrusted web request');
-    }
-    const handle = req.headers['x-lm-web-session'];
-    if (typeof handle !== 'string') throw new UnauthorizedException('Missing web session');
-    return handle;
+    return readTrustedWebSessionHandle(this.config, req);
   }
 
-  private async successfulActivity(req: Request): Promise<void> {
-    const handle = req.headers['x-lm-web-session'];
-    if (typeof handle === 'string') await this.web.requireActive(handle, true);
-  }
-
+  /** Passive child-list read; explicit activity endpoint handles real user interaction. */
   @Get()
   async list(@Req() req: Request) {
-    const result = await this.profiles.list(await this.parent(req));
-    await this.successfulActivity(req);
-    return result;
+    return this.profiles.list(await this.parent(req));
   }
 
   @Post()

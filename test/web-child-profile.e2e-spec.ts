@@ -46,6 +46,16 @@ describe('LMP-40 HTTP web-session child profile boundary', () => {
     expect(sessions.requireActive).not.toHaveBeenCalled();
   });
 
+  it('rejects wrong BFF secret without touching the session', async () => {
+    await request(app.getHttpServer())
+      .get('/v1/web/children')
+      .set('x-lm-web-session', handle)
+      .set('x-lm-bff-secret', 'wrong-bff-secret-that-is-long-enough-32b')
+      .expect(401);
+    expect(sessions.requireActive).not.toHaveBeenCalled();
+    expect(children.list).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid opaque session without reaching profile storage', async () => {
     sessions.requireActive.mockRejectedValue(new UnauthorizedException('Invalid session'));
     await headers(request(app.getHttpServer()).get('/v1/web/children')).expect(401);
@@ -62,7 +72,15 @@ describe('LMP-40 HTTP web-session child profile boundary', () => {
     expect(children.create).toHaveBeenCalledWith('parent-A', { age_months: 32, reference_date: '2026-01-01' }, expect.any(Object));
     expect(children.update).toHaveBeenCalledWith('parent-A', childId, { nickname: 'Updated' }, expect.any(Object));
     expect(sessions.requireActive).toHaveBeenCalledWith(handle, false);
+    expect(sessions.requireActive).not.toHaveBeenCalledWith(handle, true);
     expect(sessions.authorizedMutation).toHaveBeenCalledWith(handle, expect.any(Function));
+  });
+
+  it('does not extend idle timeout on passive child list (dashboard load)', async () => {
+    await headers(request(app.getHttpServer()).get('/v1/web/children')).expect(200);
+    expect(sessions.requireActive).toHaveBeenCalledTimes(1);
+    expect(sessions.requireActive).toHaveBeenCalledWith(handle, false);
+    expect(sessions.requireActive).not.toHaveBeenCalledWith(handle, true);
   });
 
   it('rejects malformed UUID before service invocation', async () => {

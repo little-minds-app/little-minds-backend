@@ -14,9 +14,11 @@ info:
     GET /v1/insights/session-kpis for canonical session KPI aggregation and freshness metadata.
     LMP-130 adds parent-scoped mission status reads and caregiver-reported feedback writes
     (`GET /v1/children/{childId}/missions` requires bounded `from`/`to`, `POST …/feedback`).
+    LMP-54 adds passive BFF dashboard reads (`GET /v1/web/insights/session-kpis`,
+    `GET /v1/web/children/{childId}/missions`) using opaque web session headers.
     Authoritative Ajv JSON Schemas live under `contracts/schemas/activity/` (`schema_version` 1.0.0,
     independent of this info.version).
-  version: 0.14.1
+  version: 0.14.2
 
   contact:
     name: Little Minds
@@ -811,6 +813,106 @@ paths:
           description: Invalid web session
         '404':
           description: Not found or not owned
+  /v1/web/insights/session-kpis:
+    get:
+      operationId: getWebSessionKpis
+      tags: [Parent]
+      summary: Server-side BFF session KPI read using opaque parent web session
+      description: |
+        LMP-54 passive dashboard read. Same aggregation as GET /v1/insights/session-kpis
+        but authorized via BFF headers (x-lm-bff-secret, x-lm-web-session). Does not
+        extend web session idle timeout on success.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Inclusive UTC window start (session started_at)
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Exclusive UTC window end (session started_at)
+        - name: timezone
+          in: query
+          required: true
+          schema:
+            type: string
+          description: IANA timezone for distinct play-day boundaries
+        - name: child_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Optional child filter; omit for all active children owned by the parent
+      responses:
+        '200':
+          description: Versioned KPI dictionary with freshness metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionKpiResponse'
+        '400':
+          description: Invalid window or timezone
+        '401':
+          description: Invalid web session or untrusted BFF
+        '404':
+          description: Child filter not found for authenticated parent
+  /v1/web/children/{childId}/missions:
+    get:
+      operationId: listWebChildMissionStatus
+      tags: [Parent]
+      summary: Server-side BFF mission status list using opaque parent web session
+      description: |
+        LMP-54 passive dashboard read. Same contract as GET /v1/children/{childId}/missions
+        but authorized via BFF headers. GET only on web; feedback POST remains mobile/bearer.
+      parameters:
+        - in: path
+          name: childId
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: from
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Inclusive UTC lower bound for report/interaction timestamps
+        - in: query
+          name: to
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Exclusive UTC upper bound for report/interaction timestamps
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Mission status rows with explicit absence semantics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionStatusListResponse'
+        '400':
+          description: Invalid window or limit
+        '401':
+          description: Invalid web session or untrusted BFF
+        '404':
+          description: Child not found or not owned
   /v1/auth/web/profile:
     get:
       operationId: getWebParentProfile
