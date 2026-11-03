@@ -1,8 +1,18 @@
 # LMP-132 — Delivered-feature regression coverage matrix
 
 **Purpose:** Trace merged Little Minds deliverables to automated tests or documented exceptions (Blueprint §28.9 QA-UI-001).  
-**Updated:** 2026-11-03 (client worker — LM-87)  
-**Evidence runner (client):** `bash scripts/run-client-regression.sh` — PR https://github.com/little-minds-app/little-minds-client/pull/35 @ `df20f95`.
+**Updated:** 2026-11-03 (LMP-132 closure)  
+**Evidence runner (backend):** `npm run verify:local` — PR https://github.com/little-minds-app/little-minds-backend/pull/35 (fast path + opt-in `--with-db` / `LM_VERIFY_WITH_DB=1` on disposable `little_minds_{test|ci|local|dev}` only; CI `prisma-checks` owns Postgres on PR).  
+**Evidence runner (client):** `bash scripts/run-client-regression.sh` — PR https://github.com/little-minds-app/little-minds-client/pull/35 @ `714dca0`.
+
+### Test modality (avoid false confidence)
+
+| Layer | Backend | Client |
+| --- | --- | --- |
+| Unit / pure logic | Jest `*.spec.ts` under `src/` | Flutter unit/widget tests |
+| Mock HTTP e2e | Supertest with mocked services/guards (e.g. LMP-54 `web-dashboard-read`, LMP-40 web child profile, mobile KPI/mission controller e2e) | BFF route modules + component tests (not Postgres) |
+| Real Postgres | `npm run test:db` + CI **Prisma migrate, seed, integrity** job | Opt-in HTTP integration only where documented (e.g. activity outbox with token); not default PR path |
+| Live full stack | Gated `lmp38-fullstack-e2e.yml`; **→ LMP-113** for release vertical E2E | **→ LMP-113**; manual device UAT remains for visuals/permissions |
 
 ## Legend
 
