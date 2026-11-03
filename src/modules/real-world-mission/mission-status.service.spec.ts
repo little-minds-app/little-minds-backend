@@ -136,6 +136,29 @@ describe('MissionStatusService (LMP-130 unit)', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('returns 409 when revision guard rejects stale correction', async () => {
+    parentMissionStatusIdempotencyKey.findUnique.mockResolvedValueOnce(null);
+    parentMissionStatusReport.findUnique.mockResolvedValueOnce({
+      id: '00000000-0000-4000-8000-000000000099',
+      parentId,
+      childId,
+      missionId,
+      occurrenceId,
+      reportStatus: 'not_now',
+      revision: 1,
+      recordedAt: new Date(),
+    });
+    parentMissionStatusReport.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(
+      service.submitFeedback(parentId, childId, missionId, {
+        schema_version: MISSION_STATUS_SCHEMA_VERSION,
+        idempotency_key: '00000000-0000-4000-8000-000000000012',
+        occurrence_id: occurrenceId,
+        status: 'completed',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it('requires bounded from/to window for list reads', async () => {
     await expect(service.listForChild(parentId, childId, {})).rejects.toBeInstanceOf(BadRequestException);
     parentMissionStatusReport.findMany.mockResolvedValue([]);

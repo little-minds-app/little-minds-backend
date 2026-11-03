@@ -10,7 +10,7 @@ const describeDb = process.env.DATABASE_URL ? describe : describe.skip;
 
 const LIST_WINDOW = {
   from: '2026-01-01T00:00:00.000Z',
-  to: '2027-01-01T00:00:00.000Z',
+  to: '2026-03-31T00:00:00.000Z',
 };
 
 describeDb('LMP-130 mission status / real PostgreSQL', () => {
@@ -105,48 +105,54 @@ describeDb('LMP-130 mission status / real PostgreSQL', () => {
   });
 
   it('allows exactly one concurrent correction from not_now with revision 2', async () => {
+    const dbB = new PrismaClient();
+    const serviceB = new MissionStatusService({ get db() { return dbB; } } as PrismaService);
     const occurrenceId = randomUUID();
-    await service.submitFeedback(parentA, childA, missionId, {
-      schema_version: MISSION_STATUS_SCHEMA_VERSION,
-      idempotency_key: randomUUID(),
-      occurrence_id: occurrenceId,
-      status: 'not_now',
-    });
-
-    const results = await Promise.allSettled([
-      service.submitFeedback(parentA, childA, missionId, {
+    try {
+      await service.submitFeedback(parentA, childA, missionId, {
         schema_version: MISSION_STATUS_SCHEMA_VERSION,
         idempotency_key: randomUUID(),
         occurrence_id: occurrenceId,
-        status: 'completed',
-      }),
-      service.submitFeedback(parentA, childA, missionId, {
-        schema_version: MISSION_STATUS_SCHEMA_VERSION,
-        idempotency_key: randomUUID(),
-        occurrence_id: occurrenceId,
-        status: 'skipped',
-      }),
-    ]);
+        status: 'not_now',
+      });
 
-    const accepted = results.filter(
-      (result) => result.status === 'fulfilled' && result.value.status === 'accepted',
-    );
-    const conflicts = results.filter(
-      (result) => result.status === 'rejected' && (result.reason as { status?: number }).status === 409,
-    );
-    expect(accepted).toHaveLength(1);
-    expect(conflicts).toHaveLength(1);
+      const results = await Promise.allSettled([
+        service.submitFeedback(parentA, childA, missionId, {
+          schema_version: MISSION_STATUS_SCHEMA_VERSION,
+          idempotency_key: randomUUID(),
+          occurrence_id: occurrenceId,
+          status: 'completed',
+        }),
+        serviceB.submitFeedback(parentA, childA, missionId, {
+          schema_version: MISSION_STATUS_SCHEMA_VERSION,
+          idempotency_key: randomUUID(),
+          occurrence_id: occurrenceId,
+          status: 'skipped',
+        }),
+      ]);
 
-    const row = await db.parentMissionStatusReport.findFirstOrThrow({
-      where: { parentId: parentA, childId: childA, occurrenceId },
-    });
-    expect(row.revision).toBe(2);
-    expect(['completed', 'skipped']).toContain(row.reportStatus);
-    expect(
-      await db.parentMissionStatusIdempotencyKey.count({
+      const accepted = results.filter(
+        (result) => result.status === 'fulfilled' && result.value.status === 'accepted',
+      );
+      const conflicts = results.filter(
+        (result) => result.status === 'rejected' && (result.reason as { status?: number }).status === 409,
+      );
+      expect(accepted).toHaveLength(1);
+      expect(conflicts).toHaveLength(1);
+
+      const row = await db.parentMissionStatusReport.findFirstOrThrow({
         where: { parentId: parentA, childId: childA, occurrenceId },
-      }),
-    ).toBe(2);
+      });
+      expect(row.revision).toBe(2);
+      expect(['completed', 'skipped']).toContain(row.reportStatus);
+      expect(
+        await db.parentMissionStatusIdempotencyKey.count({
+          where: { parentId: parentA, childId: childA, occurrenceId },
+        }),
+      ).toBe(2);
+    } finally {
+      await dbB.$disconnect();
+    }
   });
 
   it('returns all consent-eligible rows inside the required window without scan-cap loss', async () => {
