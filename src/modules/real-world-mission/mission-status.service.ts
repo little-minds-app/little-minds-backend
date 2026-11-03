@@ -275,6 +275,11 @@ export class MissionStatusService {
         });
 
         if (existingOccurrence) {
+          await tx.$executeRaw`
+            SELECT id FROM parent_mission_status_reports
+            WHERE id = ${existingOccurrence.id}::uuid
+            FOR UPDATE
+          `;
           const fromStatus = existingOccurrence.reportStatus as MissionReportStatus;
           if (!canTransitionMissionReport(fromStatus, body.status)) {
             throw new ConflictException('Invalid mission status transition');

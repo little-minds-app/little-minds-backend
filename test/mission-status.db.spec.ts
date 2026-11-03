@@ -8,10 +8,11 @@ import { MISSION_STATUS_SCHEMA_VERSION } from '../src/modules/real-world-mission
 
 const describeDb = process.env.DATABASE_URL ? describe : describe.skip;
 
-const LIST_WINDOW = {
-  from: '2026-01-01T00:00:00.000Z',
-  to: '2026-03-31T00:00:00.000Z',
-};
+function listWindowAroundNow(): { from: string; to: string } {
+  const to = new Date(Date.now() + 60_000);
+  const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
 
 describeDb('LMP-130 mission status / real PostgreSQL', () => {
   const db = new PrismaClient();
@@ -201,11 +202,11 @@ describeDb('LMP-130 mission status / real PostgreSQL', () => {
       });
     }
 
-    const limited = await service.listForChild(parentId, childId, { ...LIST_WINDOW, limit: '2' });
+    const limited = await service.listForChild(parentId, childId, { ...listWindowAroundNow(), limit: '2' });
     expect(limited.items).toHaveLength(2);
     expect(limited.pagination.truncated).toBe(true);
 
-    const full = await service.listForChild(parentId, childId, { ...LIST_WINDOW, limit: '100' });
+    const full = await service.listForChild(parentId, childId, { ...listWindowAroundNow(), limit: '100' });
     expect(full.items).toHaveLength(5);
     expect(full.pagination.truncated).toBe(false);
 
@@ -258,9 +259,10 @@ describeDb('LMP-130 mission status / real PostgreSQL', () => {
       occurrence_id: olderOccurrence,
       status: 'completed',
     });
+    const window = listWindowAroundNow();
     await db.parentMissionStatusReport.updateMany({
       where: { parentId, childId, occurrenceId: olderOccurrence },
-      data: { recordedAt: new Date('2026-06-01T00:00:00.000Z') },
+      data: { recordedAt: new Date(new Date(window.from).getTime() + 86_400_000) },
     });
 
     await service.submitFeedback(parentId, childId, missionId, {
@@ -272,12 +274,12 @@ describeDb('LMP-130 mission status / real PostgreSQL', () => {
     await db.parentMissionStatusReport.updateMany({
       where: { parentId, childId, occurrenceId: newerOccurrence },
       data: {
-        recordedAt: new Date('2026-10-01T00:00:00.000Z'),
+        recordedAt: new Date(new Date(window.to).getTime() - 86_400_000),
         consentPolicyVersion: 'legacy-ungranted-policy',
       },
     });
 
-    const list = await service.listForChild(parentId, childId, LIST_WINDOW);
+    const list = await service.listForChild(parentId, childId, window);
     expect(list.items).toHaveLength(1);
     expect(list.items[0]?.occurrence_id).toBe(olderOccurrence);
 
@@ -340,7 +342,7 @@ describeDb('LMP-130 mission status / real PostgreSQL', () => {
         revokedAt: new Date('2026-02-01T00:00:00Z'),
       },
     });
-    const list = await service.listForChild(parentId, childId, LIST_WINDOW);
+    const list = await service.listForChild(parentId, childId, listWindowAroundNow());
     expect(list.items).toHaveLength(0);
     await db.parentMissionStatusIdempotencyKey.deleteMany({ where: { parentId } });
     await db.parentMissionStatusReport.deleteMany({ where: { parentId } });
