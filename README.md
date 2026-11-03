@@ -158,6 +158,7 @@ Rollback / recovery strategy, mapping table, and open questions: [`prisma/README
 | `npm test` | Jest unit tests (includes Prisma schema/seed contract) |
 | `npm run test:e2e` | HTTP e2e (supertest) |
 | `npm run test:db` | Live Postgres migrate/seed integrity (needs `DATABASE_URL`) |
+| `npm run verify:local` | LMP-132 one-shot lint/typecheck/tests/contracts + PASS/FAIL summary (DB steps when `DATABASE_URL` set) |
 | `npm run db:migrate` | Apply versioned Prisma migrations |
 | `npm run db:seed` | Deterministic synthetic seed |
 | `npm run db:reset` | Drop, remigrate, seed |
