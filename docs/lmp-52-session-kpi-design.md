@@ -21,6 +21,12 @@ Status: implementation (F-013 / E08). Source of truth: accepted `activity_sessio
 | by_activity | grouped by `content_version_id` | — | Starts, completed, duration |
 | first_attempt_accuracy | Σ correct_first_attempts | Σ eligible_first_attempts | Same eligible session cohort as session KPIs; latest `activity_completed` per session by `occurred_at`, then eligibility check (no older fallback) |
 
+## First-attempt accuracy validity
+
+- `eligible_first_attempts` and `correct_first_attempts` must both be safe integers; require `eligible_first_attempts > 0` and `0 <= correct_first_attempts <= eligible_first_attempts`. Invalid event payloads are excluded.
+- Aggregated numerator and denominator must also remain within JavaScript's safe integer range. If adding an otherwise valid event would overflow either total, `first_attempt_accuracy` is returned with `availability_status: unavailable`, `reason_code: counter_overflow`, `numerator: 0`, and `denominator: 0`; no rounded/partial accuracy is exposed.
+- When no valid contributing attempts exist, the metric is unavailable with `reason_code: insufficient_denominator`.
+
 ## Freshness
 
 - Eligible cohort only: sessions passing schema + consent re-check in the requested window.
