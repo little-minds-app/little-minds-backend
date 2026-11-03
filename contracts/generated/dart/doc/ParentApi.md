@@ -20,8 +20,10 @@ Method | HTTP request | Description
 [**getParentMe**](ParentApi.md#getparentme) | **GET** /v1/parent/me | Authenticated parent identity probe
 [**getParentProfile**](ParentApi.md#getparentprofile) | **GET** /v1/parent/profile | Read optional parent profile fields without inferring missing values
 [**getWebParentProfile**](ParentApi.md#getwebparentprofile) | **GET** /v1/auth/web/profile | Parent profile through server-authorized opaque web session
+[**getWebSessionKpis**](ParentApi.md#getwebsessionkpis) | **GET** /v1/web/insights/session-kpis | Server-side BFF session KPI read using opaque parent web session
 [**issueParentGateProof**](ParentApi.md#issueparentgateproof) | **POST** /v1/parent/gate/proof | Verify a freshly authenticated linked identity for PIN setup or reset
 [**listChildProfiles**](ParentApi.md#listchildprofiles) | **GET** /v1/children | List only the authenticated parent's non-deleted child profiles
+[**listWebChildMissionStatus**](ParentApi.md#listwebchildmissionstatus) | **GET** /v1/web/children/{childId}/missions | Server-side BFF mission status list using opaque parent web session
 [**listWebChildProfiles**](ParentApi.md#listwebchildprofiles) | **GET** /v1/web/children | Server-side BFF child list using an opaque parent web session
 [**lockParentGate**](ParentApi.md#lockparentgate) | **DELETE** /v1/parent/gate/grant | Revoke all outstanding adult grants for the current parent session
 [**resetParentGatePin**](ParentApi.md#resetparentgatepin) | **POST** /v1/parent/gate/reset | Replace PIN with fresh verified identity proof and revoke all grants
@@ -509,6 +511,55 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+# **getWebSessionKpis**
+> SessionKpiResponse getWebSessionKpis(from, to, timezone, childId)
+
+Server-side BFF session KPI read using opaque parent web session
+
+LMP-54 passive dashboard read. Same aggregation as GET /v1/insights/session-kpis but authorized via BFF headers (x-lm-bff-secret, x-lm-web-session). Does not extend web session idle timeout on success. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = ParentApi();
+final from = 2013-10-20T19:20:30+01:00; // DateTime | Inclusive UTC window start (session started_at)
+final to = 2013-10-20T19:20:30+01:00; // DateTime | Exclusive UTC window end (session started_at)
+final timezone = timezone_example; // String | IANA timezone for distinct play-day boundaries
+final childId = 38400000-8cf0-11bd-b23e-10b96e4ef00d; // String | Optional child filter; omit for all active children owned by the parent
+
+try {
+    final result = api_instance.getWebSessionKpis(from, to, timezone, childId);
+    print(result);
+} catch (e) {
+    print('Exception when calling ParentApi->getWebSessionKpis: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **from** | **DateTime**| Inclusive UTC window start (session started_at) | 
+ **to** | **DateTime**| Exclusive UTC window end (session started_at) | 
+ **timezone** | **String**| IANA timezone for distinct play-day boundaries | 
+ **childId** | **String**| Optional child filter; omit for all active children owned by the parent | [optional] 
+
+### Return type
+
+[**SessionKpiResponse**](SessionKpiResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
 # **issueParentGateProof**
 > ParentGateProofResponse issueParentGateProof(parentGateProofRequest)
 
@@ -591,6 +642,55 @@ This endpoint does not need any parameter.
 ### Authorization
 
 [parentAccessToken](../README.md#parentAccessToken)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **listWebChildMissionStatus**
+> MissionStatusListResponse listWebChildMissionStatus(childId, from, to, limit)
+
+Server-side BFF mission status list using opaque parent web session
+
+LMP-54 passive dashboard read. Same contract as GET /v1/children/{childId}/missions but authorized via BFF headers. GET only on web; feedback POST remains mobile/bearer. 
+
+### Example
+```dart
+import 'package:little_minds_api/api.dart';
+
+final api_instance = ParentApi();
+final childId = 38400000-8cf0-11bd-b23e-10b96e4ef00d; // String | 
+final from = 2013-10-20T19:20:30+01:00; // DateTime | Inclusive UTC lower bound for report/interaction timestamps
+final to = 2013-10-20T19:20:30+01:00; // DateTime | Exclusive UTC upper bound for report/interaction timestamps
+final limit = 56; // int | 
+
+try {
+    final result = api_instance.listWebChildMissionStatus(childId, from, to, limit);
+    print(result);
+} catch (e) {
+    print('Exception when calling ParentApi->listWebChildMissionStatus: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **childId** | **String**|  | 
+ **from** | **DateTime**| Inclusive UTC lower bound for report/interaction timestamps | 
+ **to** | **DateTime**| Exclusive UTC upper bound for report/interaction timestamps | 
+ **limit** | **int**|  | [optional] [default to 50]
+
+### Return type
+
+[**MissionStatusListResponse**](MissionStatusListResponse.md)
+
+### Authorization
+
+No authorization required
 
 ### HTTP request headers
 

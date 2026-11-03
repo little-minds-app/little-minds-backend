@@ -96,6 +96,15 @@ void main() {
       // TODO
     });
 
+    // Server-side BFF session KPI read using opaque parent web session
+    //
+    // LMP-54 passive dashboard read. Same aggregation as GET /v1/insights/session-kpis but authorized via BFF headers (x-lm-bff-secret, x-lm-web-session). Does not extend web session idle timeout on success. 
+    //
+    //Future<SessionKpiResponse> getWebSessionKpis(DateTime from, DateTime to, String timezone, { String childId }) async
+    test('test getWebSessionKpis', () async {
+      // TODO
+    });
+
     // Verify a freshly authenticated linked identity for PIN setup or reset
     //
     //Future<ParentGateProofResponse> issueParentGateProof(ParentGateProofRequest parentGateProofRequest) async
@@ -107,6 +116,15 @@ void main() {
     //
     //Future<ListChildProfiles200Response> listChildProfiles() async
     test('test listChildProfiles', () async {
+      // TODO
+    });
+
+    // Server-side BFF mission status list using opaque parent web session
+    //
+    // LMP-54 passive dashboard read. Same contract as GET /v1/children/{childId}/missions but authorized via BFF headers. GET only on web; feedback POST remains mobile/bearer. 
+    //
+    //Future<MissionStatusListResponse> listWebChildMissionStatus(String childId, DateTime from, DateTime to, { int limit }) async
+    test('test listWebChildMissionStatus', () async {
       // TODO
     });
 

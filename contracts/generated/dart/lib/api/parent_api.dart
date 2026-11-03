@@ -558,6 +558,90 @@ class ParentApi {
     return null;
   }
 
+  /// Server-side BFF session KPI read using opaque parent web session
+  ///
+  /// LMP-54 passive dashboard read. Same aggregation as GET /v1/insights/session-kpis but authorized via BFF headers (x-lm-bff-secret, x-lm-web-session). Does not extend web session idle timeout on success. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [DateTime] from (required):
+  ///   Inclusive UTC window start (session started_at)
+  ///
+  /// * [DateTime] to (required):
+  ///   Exclusive UTC window end (session started_at)
+  ///
+  /// * [String] timezone (required):
+  ///   IANA timezone for distinct play-day boundaries
+  ///
+  /// * [String] childId:
+  ///   Optional child filter; omit for all active children owned by the parent
+  Future<Response> getWebSessionKpisWithHttpInfo(DateTime from, DateTime to, String timezone, { String? childId, Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/web/insights/session-kpis';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+      queryParams.addAll(_queryParams('', 'from', from));
+      queryParams.addAll(_queryParams('', 'to', to));
+      queryParams.addAll(_queryParams('', 'timezone', timezone));
+    if (childId != null) {
+      queryParams.addAll(_queryParams('', 'child_id', childId));
+    }
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Server-side BFF session KPI read using opaque parent web session
+  ///
+  /// LMP-54 passive dashboard read. Same aggregation as GET /v1/insights/session-kpis but authorized via BFF headers (x-lm-bff-secret, x-lm-web-session). Does not extend web session idle timeout on success. 
+  ///
+  /// Parameters:
+  ///
+  /// * [DateTime] from (required):
+  ///   Inclusive UTC window start (session started_at)
+  ///
+  /// * [DateTime] to (required):
+  ///   Exclusive UTC window end (session started_at)
+  ///
+  /// * [String] timezone (required):
+  ///   IANA timezone for distinct play-day boundaries
+  ///
+  /// * [String] childId:
+  ///   Optional child filter; omit for all active children owned by the parent
+  Future<SessionKpiResponse?> getWebSessionKpis(DateTime from, DateTime to, String timezone, { String? childId, Future<void>? abortTrigger, }) async {
+    final response = await getWebSessionKpisWithHttpInfo(from, to, timezone, childId: childId, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'SessionKpiResponse',) as SessionKpiResponse;
+    
+    }
+    return null;
+  }
+
   /// Verify a freshly authenticated linked identity for PIN setup or reset
   ///
   /// Note: This method returns the HTTP [Response].
@@ -651,6 +735,86 @@ class ParentApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ListChildProfiles200Response',) as ListChildProfiles200Response;
+    
+    }
+    return null;
+  }
+
+  /// Server-side BFF mission status list using opaque parent web session
+  ///
+  /// LMP-54 passive dashboard read. Same contract as GET /v1/children/{childId}/missions but authorized via BFF headers. GET only on web; feedback POST remains mobile/bearer. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] childId (required):
+  ///
+  /// * [DateTime] from (required):
+  ///   Inclusive UTC lower bound for report/interaction timestamps
+  ///
+  /// * [DateTime] to (required):
+  ///   Exclusive UTC upper bound for report/interaction timestamps
+  ///
+  /// * [int] limit:
+  Future<Response> listWebChildMissionStatusWithHttpInfo(String childId, DateTime from, DateTime to, { int? limit, Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/v1/web/children/{childId}/missions'
+      .replaceAll('{childId}', childId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+      queryParams.addAll(_queryParams('', 'from', from));
+      queryParams.addAll(_queryParams('', 'to', to));
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Server-side BFF mission status list using opaque parent web session
+  ///
+  /// LMP-54 passive dashboard read. Same contract as GET /v1/children/{childId}/missions but authorized via BFF headers. GET only on web; feedback POST remains mobile/bearer. 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] childId (required):
+  ///
+  /// * [DateTime] from (required):
+  ///   Inclusive UTC lower bound for report/interaction timestamps
+  ///
+  /// * [DateTime] to (required):
+  ///   Exclusive UTC upper bound for report/interaction timestamps
+  ///
+  /// * [int] limit:
+  Future<MissionStatusListResponse?> listWebChildMissionStatus(String childId, DateTime from, DateTime to, { int? limit, Future<void>? abortTrigger, }) async {
+    final response = await listWebChildMissionStatusWithHttpInfo(childId, from, to, limit: limit, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'MissionStatusListResponse',) as MissionStatusListResponse;
     
     }
     return null;

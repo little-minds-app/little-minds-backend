@@ -32,6 +32,8 @@
     "/v1/children/{childId}",
     "/v1/web/children",
     "/v1/web/children/{childId}",
+    "/v1/web/children/{childId}/missions",
+    "/v1/web/insights/session-kpis",
     "/v1/parent/gate/status",
     "/v1/parent/gate/proof",
     "/v1/parent/gate/setup",
