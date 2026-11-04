@@ -22,6 +22,12 @@ void main() {
       // TODO
     });
 
+    // Compare-and-set token from the latest binding read; rejects stale binds with 409
+    // int expectedBindingRevision
+    test('to test the property `expectedBindingRevision`', () async {
+      // TODO
+    });
+
 
   });
 

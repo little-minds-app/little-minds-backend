@@ -42,7 +42,12 @@ export class DeviceActiveChildController {
     installationId: string,
     @Body() body: unknown,
   ) {
-    const childId = this.devices.parseChildId(body);
-    return this.devices.set(getParentAuth(req).parentId, installationId, childId);
+    const payload = this.devices.parseSetRequest(body);
+    return this.devices.set(
+      getParentAuth(req).parentId,
+      installationId,
+      payload.child_id,
+      payload.expected_binding_revision,
+    );
   }
 }

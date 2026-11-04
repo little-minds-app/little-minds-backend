@@ -16,6 +16,7 @@ class DeviceActiveChildBinding {
     required this.deviceId,
     required this.installationId,
     required this.childId,
+    required this.bindingRevision,
     required this.updatedAt,
   });
 
@@ -28,6 +29,11 @@ class DeviceActiveChildBinding {
   /// Active child authorized for ingest on this device; null when unassigned
   String? childId;
 
+  /// Server-authoritative monotonic revision; send as expected_binding_revision on PUT
+  ///
+  /// Minimum value: 0
+  int bindingRevision;
+
   /// UTC timestamp of the last binding mutation
   DateTime updatedAt;
 
@@ -36,6 +42,7 @@ class DeviceActiveChildBinding {
     other.deviceId == deviceId &&
     other.installationId == installationId &&
     other.childId == childId &&
+    other.bindingRevision == bindingRevision &&
     other.updatedAt == updatedAt;
 
   @override
@@ -44,10 +51,11 @@ class DeviceActiveChildBinding {
     (deviceId.hashCode) +
     (installationId.hashCode) +
     (childId == null ? 0 : childId!.hashCode) +
+    (bindingRevision.hashCode) +
     (updatedAt.hashCode);
 
   @override
-  String toString() => 'DeviceActiveChildBinding[deviceId=$deviceId, installationId=$installationId, childId=$childId, updatedAt=$updatedAt]';
+  String toString() => 'DeviceActiveChildBinding[deviceId=$deviceId, installationId=$installationId, childId=$childId, bindingRevision=$bindingRevision, updatedAt=$updatedAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -58,6 +66,7 @@ class DeviceActiveChildBinding {
     } else {
       json[r'child_id'] = null;
     }
+      json[r'binding_revision'] = this.bindingRevision;
       json[r'updated_at'] = this.updatedAt.toUtc().toIso8601String();
     return json;
   }
@@ -78,6 +87,8 @@ class DeviceActiveChildBinding {
         assert(json.containsKey(r'installation_id'), 'Required key "DeviceActiveChildBinding[installation_id]" is missing from JSON.');
         assert(json[r'installation_id'] != null, 'Required key "DeviceActiveChildBinding[installation_id]" has a null value in JSON.');
         assert(json.containsKey(r'child_id'), 'Required key "DeviceActiveChildBinding[child_id]" is missing from JSON.');
+        assert(json.containsKey(r'binding_revision'), 'Required key "DeviceActiveChildBinding[binding_revision]" is missing from JSON.');
+        assert(json[r'binding_revision'] != null, 'Required key "DeviceActiveChildBinding[binding_revision]" has a null value in JSON.');
         assert(json.containsKey(r'updated_at'), 'Required key "DeviceActiveChildBinding[updated_at]" is missing from JSON.');
         assert(json[r'updated_at'] != null, 'Required key "DeviceActiveChildBinding[updated_at]" has a null value in JSON.');
         return true;
@@ -87,6 +98,7 @@ class DeviceActiveChildBinding {
         deviceId: mapValueOfType<String>(json, r'device_id')!,
         installationId: mapValueOfType<String>(json, r'installation_id')!,
         childId: mapValueOfType<String>(json, r'child_id'),
+        bindingRevision: mapValueOfType<int>(json, r'binding_revision')!,
         updatedAt: mapDateTime(json, r'updated_at', r'')!,
       );
     }
@@ -138,6 +150,7 @@ class DeviceActiveChildBinding {
     'device_id',
     'installation_id',
     'child_id',
+    'binding_revision',
     'updated_at',
   };
 }

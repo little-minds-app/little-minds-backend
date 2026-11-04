@@ -1,4 +1,9 @@
-import { INestApplication, CanActivate, ExecutionContext } from '@nestjs/common';
+import {
+  INestApplication,
+  CanActivate,
+  ConflictException,
+  ExecutionContext,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -70,6 +75,7 @@ describe('LMP-134 device active-child HTTP boundary', () => {
       device_id: '33333333-3333-4333-8333-333333333333',
       installation_id: installationId,
       child_id: null,
+      binding_revision: 0,
       updated_at: '2026-11-04T00:00:00.000Z',
     });
     await request(app.getHttpServer())
@@ -85,13 +91,27 @@ describe('LMP-134 device active-child HTTP boundary', () => {
       device_id: '33333333-3333-4333-8333-333333333333',
       installation_id: installationId,
       child_id: childId,
+      binding_revision: 1,
       updated_at: '2026-11-04T00:00:01.000Z',
     });
     await request(app.getHttpServer())
       .put(`/v1/devices/${installationId}/active-child`)
       .set('Authorization', `Bearer ${parentA}`)
-      .send({ child_id: childId })
+      .send({ child_id: childId, expected_binding_revision: 0 })
       .expect(200);
-    expect(service.set).toHaveBeenCalledWith(parentA, installationId, childId);
+    expect(service.set).toHaveBeenCalledWith(parentA, installationId, childId, 0);
+  });
+
+  it('maps stale revision conflicts to HTTP 409', async () => {
+    jest
+      .spyOn(service, 'set')
+      .mockRejectedValue(
+        new ConflictException('Stale device active-child binding revision'),
+      );
+    await request(app.getHttpServer())
+      .put(`/v1/devices/${installationId}/active-child`)
+      .set('Authorization', `Bearer ${parentA}`)
+      .send({ child_id: null, expected_binding_revision: 0 })
+      .expect(409);
   });
 });

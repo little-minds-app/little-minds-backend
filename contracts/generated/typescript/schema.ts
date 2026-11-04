@@ -318,7 +318,9 @@ export interface paths {
          * Bind or clear the active child for a parent-owned device installation
          * @description LMP-134. Atomically updates `devices.child_id` after verifying parent ownership
          *     of both the resolved device row and the target child profile. Use `child_id: null`
-         *     to clear the binding. Concurrent updates serialize on the device row (`FOR UPDATE`).
+         *     to clear the binding. Clients MUST send `expected_binding_revision` from the latest
+         *     `GET …/active-child` (or `0` before any bind). Stale revisions return `409`. Concurrent
+         *     updates serialize on the device row (`FOR UPDATE`) and increment `binding_revision`.
          */
         put: operations["setDeviceActiveChild"];
         post?: never;
@@ -949,6 +951,11 @@ export interface components {
              * @description Active child authorized for ingest on this device; null when unassigned
              */
             child_id: string | null;
+            /**
+             * Format: int32
+             * @description Server-authoritative monotonic revision; send as expected_binding_revision on PUT
+             */
+            binding_revision: number;
             /**
              * Format: date-time
              * @description UTC timestamp of the last binding mutation
@@ -2193,6 +2200,11 @@ export interface operations {
                      * @description Owned child profile to authorize on this device, or null to clear
                      */
                     child_id: string | null;
+                    /**
+                     * Format: int32
+                     * @description Compare-and-set token from the latest binding read; rejects stale binds with 409
+                     */
+                    expected_binding_revision: number;
                 };
             };
         };
@@ -2222,6 +2234,13 @@ export interface operations {
             };
             /** @description Device not registered or child not owned by parent */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale expected_binding_revision (concurrent bind won) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

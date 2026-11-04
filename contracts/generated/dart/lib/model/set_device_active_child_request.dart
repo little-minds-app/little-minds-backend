@@ -14,22 +14,30 @@ class SetDeviceActiveChildRequest {
   /// Returns a new [SetDeviceActiveChildRequest] instance.
   SetDeviceActiveChildRequest({
     required this.childId,
+    required this.expectedBindingRevision,
   });
 
   /// Owned child profile to authorize on this device, or null to clear
   String? childId;
 
+  /// Compare-and-set token from the latest binding read; rejects stale binds with 409
+  ///
+  /// Minimum value: 0
+  int expectedBindingRevision;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is SetDeviceActiveChildRequest &&
-    other.childId == childId;
+    other.childId == childId &&
+    other.expectedBindingRevision == expectedBindingRevision;
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
-    (childId == null ? 0 : childId!.hashCode);
+    (childId == null ? 0 : childId!.hashCode) +
+    (expectedBindingRevision.hashCode);
 
   @override
-  String toString() => 'SetDeviceActiveChildRequest[childId=$childId]';
+  String toString() => 'SetDeviceActiveChildRequest[childId=$childId, expectedBindingRevision=$expectedBindingRevision]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -38,6 +46,7 @@ class SetDeviceActiveChildRequest {
     } else {
       json[r'child_id'] = null;
     }
+      json[r'expected_binding_revision'] = this.expectedBindingRevision;
     return json;
   }
 
@@ -53,11 +62,14 @@ class SetDeviceActiveChildRequest {
       // Note 2: this code is stripped in release mode!
       assert(() {
         assert(json.containsKey(r'child_id'), 'Required key "SetDeviceActiveChildRequest[child_id]" is missing from JSON.');
+        assert(json.containsKey(r'expected_binding_revision'), 'Required key "SetDeviceActiveChildRequest[expected_binding_revision]" is missing from JSON.');
+        assert(json[r'expected_binding_revision'] != null, 'Required key "SetDeviceActiveChildRequest[expected_binding_revision]" has a null value in JSON.');
         return true;
       }());
 
       return SetDeviceActiveChildRequest(
         childId: mapValueOfType<String>(json, r'child_id'),
+        expectedBindingRevision: mapValueOfType<int>(json, r'expected_binding_revision')!,
       );
     }
     return null;
@@ -106,6 +118,7 @@ class SetDeviceActiveChildRequest {
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
     'child_id',
+    'expected_binding_revision',
   };
 }
 

@@ -19,7 +19,7 @@ Use Nest liveness/readiness — **not** MinIO `health/live`:
 - `GET /health` — process liveness
 - `GET /health/ready` — dependency readiness (503 when PostgreSQL unavailable)
 
-Backend helper: `scripts/uat-lmp-134-shape-matching-production.sh` (exit `0` PASS, `1` FAIL, `2` NOT_RUN).
+Backend helper: `scripts/uat-lmp-134-shape-matching-production.sh` (exit `0` PASS, `1` FAIL, `3` NOT_RUN). Optional `LM_UAT_WITH_DB=1` runs `verify-db-guard.ts` before migrate/seed and `test:db` for TC-05.
 
 ## Database tests
 

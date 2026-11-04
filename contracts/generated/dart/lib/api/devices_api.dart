@@ -78,7 +78,7 @@ class DevicesApi {
 
   /// Bind or clear the active child for a parent-owned device installation
   ///
-  /// LMP-134. Atomically updates `devices.child_id` after verifying parent ownership of both the resolved device row and the target child profile. Use `child_id: null` to clear the binding. Concurrent updates serialize on the device row (`FOR UPDATE`). 
+  /// LMP-134. Atomically updates `devices.child_id` after verifying parent ownership of both the resolved device row and the target child profile. Use `child_id: null` to clear the binding. Clients MUST send `expected_binding_revision` from the latest `GET …/active-child` (or `0` before any bind). Stale revisions return `409`. Concurrent updates serialize on the device row (`FOR UPDATE`) and increment `binding_revision`. 
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -116,7 +116,7 @@ class DevicesApi {
 
   /// Bind or clear the active child for a parent-owned device installation
   ///
-  /// LMP-134. Atomically updates `devices.child_id` after verifying parent ownership of both the resolved device row and the target child profile. Use `child_id: null` to clear the binding. Concurrent updates serialize on the device row (`FOR UPDATE`). 
+  /// LMP-134. Atomically updates `devices.child_id` after verifying parent ownership of both the resolved device row and the target child profile. Use `child_id: null` to clear the binding. Clients MUST send `expected_binding_revision` from the latest `GET …/active-child` (or `0` before any bind). Stale revisions return `409`. Concurrent updates serialize on the device row (`FOR UPDATE`) and increment `binding_revision`. 
   ///
   /// Parameters:
   ///

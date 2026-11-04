@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,7 +12,13 @@ export type DeviceActiveChildBinding = {
   device_id: string;
   installation_id: string;
   child_id: string | null;
+  binding_revision: number;
   updated_at: string;
+};
+
+export type DeviceActiveChildSetRequest = {
+  child_id: string | null;
+  expected_binding_revision: number;
 };
 
 @Injectable()
@@ -45,7 +52,12 @@ export class DeviceActiveChildService {
     );
     const device = await this.prisma.db.device.findFirst({
       where: { id: deviceId, parentId, revokedAt: null },
-      select: { id: true, childId: true, updatedAt: true },
+      select: {
+        id: true,
+        childId: true,
+        bindingRevision: true,
+        updatedAt: true,
+      },
     });
     if (!device) {
       throw new NotFoundException('Device not registered');
@@ -57,6 +69,7 @@ export class DeviceActiveChildService {
     parentId: string,
     installationId: string,
     childId: string | null,
+    expectedBindingRevision: number,
   ): Promise<DeviceActiveChildBinding> {
     return this.prisma.db.$transaction(async (tx) => {
       const deviceId = await this.scopedDeviceIdFor(
@@ -64,8 +77,10 @@ export class DeviceActiveChildService {
         parentId,
         tx,
       );
-      const locked = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM devices
+      const locked = await tx.$queryRaw<
+        Array<{ id: string; binding_revision: number }>
+      >`
+        SELECT id, binding_revision FROM devices
         WHERE id = ${deviceId}::uuid
           AND parent_id = ${parentId}::uuid
           AND revoked_at IS NULL
@@ -73,6 +88,10 @@ export class DeviceActiveChildService {
       `;
       if (locked.length === 0) {
         throw new NotFoundException('Device not registered');
+      }
+      const currentRevision = Number(locked[0]?.binding_revision ?? 0);
+      if (currentRevision !== expectedBindingRevision) {
+        throw new ConflictException('Stale device active-child binding revision');
       }
       if (childId !== null) {
         const child = await tx.childProfile.findFirst({
@@ -89,39 +108,71 @@ export class DeviceActiveChildService {
         }
       }
       const updated = await tx.device.update({
-        where: { id: deviceId },
-        data: { childId, lastSeenAt: new Date() },
-        select: { id: true, childId: true, updatedAt: true },
+        where: { id: deviceId, bindingRevision: expectedBindingRevision },
+        data: {
+          childId,
+          lastSeenAt: new Date(),
+          bindingRevision: expectedBindingRevision + 1,
+        },
+        select: {
+          id: true,
+          childId: true,
+          bindingRevision: true,
+          updatedAt: true,
+        },
       });
       return this.toBinding(installationId, updated);
     });
   }
 
-  parseChildId(body: unknown): string | null {
+  parseSetRequest(body: unknown): DeviceActiveChildSetRequest {
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       throw new BadRequestException('Invalid request body');
     }
-    if (!Object.prototype.hasOwnProperty.call(body, 'child_id')) {
+    const record = body as Record<string, unknown>;
+    if (!Object.prototype.hasOwnProperty.call(record, 'child_id')) {
       throw new BadRequestException('child_id is required');
     }
-    const childId = (body as { child_id: unknown }).child_id;
-    if (childId === null) {
-      return null;
+    if (!Object.prototype.hasOwnProperty.call(record, 'expected_binding_revision')) {
+      throw new BadRequestException('expected_binding_revision is required');
     }
-    if (typeof childId !== 'string') {
+    const childId = record.child_id;
+    if (childId !== null && typeof childId !== 'string') {
       throw new BadRequestException('Invalid child_id');
     }
-    return childId;
+    const revision = record.expected_binding_revision;
+    if (
+      typeof revision !== 'number' ||
+      !Number.isInteger(revision) ||
+      revision < 0
+    ) {
+      throw new BadRequestException('Invalid expected_binding_revision');
+    }
+    return {
+      child_id: childId as string | null,
+      expected_binding_revision: revision,
+    };
+  }
+
+  /** @deprecated use parseSetRequest */
+  parseChildId(body: unknown): string | null {
+    return this.parseSetRequest(body).child_id;
   }
 
   private toBinding(
     installationId: string,
-    device: { id: string; childId: string | null; updatedAt: Date },
+    device: {
+      id: string;
+      childId: string | null;
+      bindingRevision: number;
+      updatedAt: Date;
+    },
   ): DeviceActiveChildBinding {
     return {
       device_id: device.id,
       installation_id: installationId,
       child_id: device.childId,
+      binding_revision: device.bindingRevision,
       updated_at: device.updatedAt.toISOString(),
     };
   }

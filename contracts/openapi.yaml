@@ -20,7 +20,7 @@ info:
     (`GET|PUT /v1/devices/{installationId}/active-child`) for production play telemetry gates.
     Authoritative Ajv JSON Schemas live under `contracts/schemas/activity/` (`schema_version` 1.0.0,
     independent of this info.version).
-  version: 0.14.3
+  version: 0.14.4
 
   contact:
     name: Little Minds
@@ -649,7 +649,9 @@ paths:
       description: |
         LMP-134. Atomically updates `devices.child_id` after verifying parent ownership
         of both the resolved device row and the target child profile. Use `child_id: null`
-        to clear the binding. Concurrent updates serialize on the device row (`FOR UPDATE`).
+        to clear the binding. Clients MUST send `expected_binding_revision` from the latest
+        `GET …/active-child` (or `0` before any bind). Stale revisions return `409`. Concurrent
+        updates serialize on the device row (`FOR UPDATE`) and increment `binding_revision`.
       security:
         - parentAccessToken: []
       parameters:
@@ -666,13 +668,18 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [child_id]
+              required: [child_id, expected_binding_revision]
               properties:
                 child_id:
                   type: string
                   format: uuid
                   nullable: true
                   description: Owned child profile to authorize on this device, or null to clear
+                expected_binding_revision:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                  description: Compare-and-set token from the latest binding read; rejects stale binds with 409
       responses:
         '200':
           description: Updated binding
@@ -686,6 +693,8 @@ paths:
           description: Unauthorized
         '404':
           description: Device not registered or child not owned by parent
+        '409':
+          description: Stale expected_binding_revision (concurrent bind won)
   /v1/children/{childId}/missions:
     get:
       operationId: listChildMissionStatus
@@ -1823,7 +1832,7 @@ components:
     DeviceActiveChildBinding:
       type: object
       additionalProperties: false
-      required: [device_id, installation_id, child_id, updated_at]
+      required: [device_id, installation_id, child_id, binding_revision, updated_at]
       properties:
         device_id:
           type: string
@@ -1838,6 +1847,11 @@ components:
           format: uuid
           nullable: true
           description: Active child authorized for ingest on this device; null when unassigned
+        binding_revision:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Server-authoritative monotonic revision; send as expected_binding_revision on PUT
         updated_at:
           type: string
           format: date-time

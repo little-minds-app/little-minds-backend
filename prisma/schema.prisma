@@ -522,6 +522,8 @@ model Device {
   lastPolicyVersion String?   @map("last_policy_version")
   lastSyncedAt      DateTime? @map("last_synced_at") @db.Timestamptz(6)
   revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(6)
+  /// Monotonic CAS token for active-child bind (`PUT …/active-child`).
+  bindingRevision   Int       @default(0) @map("binding_revision")
   /// Installation / key reference (opaque); no hardware fingerprint.
   installKeyRef     String?   @map("install_key_ref")
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

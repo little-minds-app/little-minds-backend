@@ -34,6 +34,12 @@ void main() {
       // TODO
     });
 
+    // Server-authoritative monotonic revision; send as expected_binding_revision on PUT
+    // int bindingRevision
+    test('to test the property `bindingRevision`', () async {
+      // TODO
+    });
+
     // UTC timestamp of the last binding mutation
     // DateTime updatedAt
     test('to test the property `updatedAt`', () async {
