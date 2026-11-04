@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ChildProfileService } from '../src/modules/child-profile/child-profile.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
@@ -80,6 +80,42 @@ describeDb('LMP-39 child profile ownership against PostgreSQL', () => {
     });
     await expect(profiles.update(parentA, created.child_id, { nickname: 'Revive' }))
       .rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('persists approximate age decrease 32→17 (LMP-131 UAT) without PostgreSQL check failure', async () => {
+    const created = await profiles.create(parentA, {
+      age_months: 32,
+      reference_date: '2026-01-31',
+      timezone: 'Europe/Istanbul',
+    });
+    const updated = await profiles.update(parentA, created.child_id, {
+      age_months: 17,
+      reference_date: '2026-11-04',
+      timezone: 'Europe/Istanbul',
+    });
+    expect(updated.age_months).toBe(17);
+    expect((await profiles.get(parentA, created.child_id, new Date('2026-11-04T12:00:00Z'))).age_months).toBe(17);
+    const listed = await profiles.list(parentA, new Date('2026-11-04T12:00:00Z'));
+    expect(listed.children.find((c) => c.child_id === created.child_id)?.age_months).toBe(17);
+    const row = await db.childProfile.findUniqueOrThrow({ where: { id: created.child_id } });
+    expect(row.ageMonthsAtReference).toBe(17);
+    expect(row.ageReferenceDate.toISOString().slice(0, 10)).toBe('2026-11-04');
+  });
+
+  it('rejects out-of-band age months with 400 before PostgreSQL (LMP-131)', async () => {
+    const created = await profiles.create(parentA, {
+      age_months: 32,
+      reference_date: '2026-01-31',
+      timezone: 'Europe/Istanbul',
+    });
+    await expect(profiles.update(parentA, created.child_id, { age_months: 72 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    await expect(profiles.create(parentA, { age_months: 17, reference_date: '2026-01-01' }))
+      .resolves.toBeDefined();
+    await expect(profiles.create(parentA, { age_months: -1, reference_date: '2026-01-01' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    const row = await db.childProfile.findUniqueOrThrow({ where: { id: created.child_id } });
+    expect(row.ageMonthsAtReference).toBe(32);
   });
 
   it('denies creation for inactive parents', async () => {

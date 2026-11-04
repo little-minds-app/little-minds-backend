@@ -1,4 +1,4 @@
-import { ageMonthsOnDate } from './age-months';
+import { ageMonthsOnDate, isChildProfileAgeMonthsAtReference } from './age-months';
 
 describe('LMP-39 approximate calendar age', () => {
   it('holds age until the reference day and increments at rollover', () => {
@@ -17,6 +17,14 @@ describe('LMP-39 approximate calendar age', () => {
     expect(ageMonthsOnDate(47, '2024-02-29', '2025-02-27')).toBe(58);
     expect(ageMonthsOnDate(47, '2024-02-29', '2025-02-28')).toBe(59);
     expect(ageMonthsOnDate(59, '2025-12-01', '2026-01-01')).toBe(60);
+  });
+
+  it('accepts stored ages 0–71 inclusive (LMP-131 / OpenAPI)', () => {
+    expect(isChildProfileAgeMonthsAtReference(0)).toBe(true);
+    expect(isChildProfileAgeMonthsAtReference(17)).toBe(true);
+    expect(isChildProfileAgeMonthsAtReference(71)).toBe(true);
+    expect(isChildProfileAgeMonthsAtReference(72)).toBe(false);
+    expect(isChildProfileAgeMonthsAtReference(-1)).toBe(false);
   });
 
   it('rejects future or invalid dates and negative/partial ages', () => {

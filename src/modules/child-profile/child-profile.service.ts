@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { ageMonthsOnDate } from './age-months';
+import { ageMonthsOnDate, isChildProfileAgeMonthsAtReference } from './age-months';
 
 function localToday(now: Date, timezone: string): string {
   try {
@@ -63,7 +63,7 @@ export class ChildProfileService {
     }
     if (input.age_months !== undefined &&
       (typeof input.age_months !== 'number' || !Number.isSafeInteger(input.age_months) ||
-       input.age_months < 0 || input.age_months > 2147483647)) {
+       !isChildProfileAgeMonthsAtReference(input.age_months))) {
       throw new BadRequestException('Invalid approximate age');
     }
     if (input.reference_date !== undefined && typeof input.reference_date !== 'string') {
@@ -111,7 +111,7 @@ export class ChildProfileService {
       throw new BadRequestException('Invalid profile fields');
     }
     const age = input.age_months;
-    if (typeof age !== 'number' || !Number.isSafeInteger(age) || age < 0 || age > 2147483647) {
+    if (typeof age !== 'number' || !Number.isSafeInteger(age) || !isChildProfileAgeMonthsAtReference(age)) {
       throw new BadRequestException('Invalid approximate age');
     }
     if (typeof input.reference_date !== 'string') throw new BadRequestException('Invalid reference date');

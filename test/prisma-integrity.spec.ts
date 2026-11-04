@@ -12,6 +12,12 @@ const describeDb = databaseUrl ? describe : describe.skip;
 describeDb('Prisma migrate + seed integrity (LMP-22)', () => {
   const prisma = new PrismaClient();
 
+  beforeAll(async () => {
+    await prisma.childProfile.deleteMany({
+      where: { parentId: SEED_IDS.parent, nicknameOptional: 'invalid-age' },
+    });
+  });
+
   afterAll(async () => {
     await prisma.$disconnect();
   });
@@ -55,7 +61,7 @@ describeDb('Prisma migrate + seed integrity (LMP-22)', () => {
         data: {
           parentId: SEED_IDS.parent,
           nicknameOptional: 'invalid-age',
-          ageMonthsAtReference: 12,
+          ageMonthsAtReference: 72,
           ageReferenceDate: new Date('2026-01-15T00:00:00.000Z'),
           preferredLocale: 'tr-TR',
         },
