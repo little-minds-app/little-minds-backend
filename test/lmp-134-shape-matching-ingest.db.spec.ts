@@ -132,15 +132,48 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
     const eid = randomUUID();
     createdPlaySessionIds.push(sid);
     createdEventIds.push(eid);
-    const rogue = session(sid);
-    rogue.content_version_id = randomUUID();
+    const unknownVersionId = randomUUID();
+    const rogueSession = session(sid);
+    rogueSession.content_version_id = unknownVersionId;
+    const rogueEvent = completed(eid, sid);
+    rogueEvent.content_version_id = unknownVersionId;
     const result = await ingestion.ingest(SEED_IDS.parent, {
-      sessions: [rogue],
-      events: [completed(eid, sid)],
+      sessions: [rogueSession],
+      events: [rogueEvent],
     });
     expect(result.results[0]).toMatchObject({
       status: 'rejected',
       reason_code: 'content.unknown_version',
+    });
+  });
+
+  it('returns session.pending when event uses published version but session metadata is absent', async () => {
+    const sid = randomUUID();
+    const eid = randomUUID();
+    createdEventIds.push(eid);
+    const result = await ingestion.ingest(SEED_IDS.parent, {
+      sessions: [],
+      events: [completed(eid, sid)],
+    });
+    expect(result.results[0]).toMatchObject({
+      status: 'retryable',
+      reason_code: 'session.pending',
+    });
+  });
+
+  it('returns session.pending when session has unknown version but event references published catalog id', async () => {
+    const sid = randomUUID();
+    const eid = randomUUID();
+    createdEventIds.push(eid);
+    const rogueSession = session(sid);
+    rogueSession.content_version_id = randomUUID();
+    const result = await ingestion.ingest(SEED_IDS.parent, {
+      sessions: [rogueSession],
+      events: [completed(eid, sid)],
+    });
+    expect(result.results[0]).toMatchObject({
+      status: 'retryable',
+      reason_code: 'session.pending',
     });
   });
 
