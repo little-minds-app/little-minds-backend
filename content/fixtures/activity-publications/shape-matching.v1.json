@@ -8,6 +8,9 @@
   "locale": "tr-TR",
   "review_status": "published",
   "consent_policy_version": "synthetic-policy-v1",
+  "session_consent_purpose": "essential_play_events",
+  "session_consent_scope": "essential_play_events",
   "publication_source": "prisma_seed_lmp134",
-  "notes": "Authoritative RFC-4122 content_version_id for Shape Matching telemetry. Maps to activity_variants.id (Day-1 content_version_id). Runtime LMP-69 environment manifests are not implemented yet; clients pin this fixture + backend commit SHA."
+  "lmp_69_dependency": "Runtime environment release manifests (LMP-69) are not implemented; this fixture + prisma seed are the Day-1 publication pin until LMP-69 ships.",
+  "notes": "Authoritative RFC-4122 content_version_id for Shape Matching telemetry. Maps to activity_variants.id (Day-1 content_version_id). Session ingest authorization uses consent_scope essential_play_events (OpenAPI ActivitySessionConsent); purpose must match for play-event batches. Synthetic seed is fail-closed in APP_ENV staging/production unless LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH=true."
 }

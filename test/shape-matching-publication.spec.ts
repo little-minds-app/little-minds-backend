@@ -32,6 +32,8 @@ describe('Shape Matching publication manifest (LMP-134)', () => {
     expect(manifest.consent_policy_version).toBe(
       SHAPE_MATCHING_PUBLICATION.policyVersion,
     );
+    expect(manifest.session_consent_purpose).toBe('essential_play_events');
+    expect(manifest.session_consent_scope).toBe('essential_play_events');
   });
 
   it('uses RFC-4122 UUID for content_version_id', () => {

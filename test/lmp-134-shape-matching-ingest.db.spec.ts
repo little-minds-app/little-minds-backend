@@ -14,6 +14,11 @@ import { ActivityIngestionService } from '../src/modules/activity-ingestion/acti
 import type { PrismaService } from '../src/modules/prisma/prisma.service';
 import { SessionKpiService } from '../src/modules/session-kpi/session-kpi.service';
 
+/**
+ * Isolation: uses seeded synthetic parent but only deletes rows created by this suite
+ * (tracked session/event UUIDs + ephemeral device). Never parent-wide ingest-key wipes
+ * on shared UAT databases.
+ */
 const describeDb = process.env.DATABASE_URL ? describe : describe.skip;
 const fixture = (name: string): Record<string, unknown> =>
   JSON.parse(
@@ -29,6 +34,8 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
   const deviceId = randomUUID();
   const contentVersionId = SEED_IDS.shapeMatching.contentVersionId;
   const policyVersion = SHAPE_MATCHING_PUBLICATION.policyVersion;
+  const createdPlaySessionIds: string[] = [];
+  const createdEventIds: string[] = [];
   const ingestion = new ActivityIngestionService(
     {
       get db() {
@@ -86,9 +93,19 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
   });
 
   afterAll(async () => {
-    await db.activityIngestKey.deleteMany({ where: { parentId: SEED_IDS.parent } });
-    await db.activityEvent.deleteMany({ where: { deviceId } });
-    await db.activitySession.deleteMany({ where: { deviceId } });
+    if (createdEventIds.length > 0) {
+      await db.activityIngestKey.deleteMany({
+        where: { eventId: { in: createdEventIds } },
+      });
+      await db.activityEvent.deleteMany({
+        where: { eventId: { in: createdEventIds } },
+      });
+    }
+    if (createdPlaySessionIds.length > 0) {
+      await db.activitySession.deleteMany({
+        where: { id: { in: createdPlaySessionIds } },
+      });
+    }
     await db.device.deleteMany({ where: { id: deviceId } });
     await db.$disconnect();
   });
@@ -96,6 +113,8 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
   it('accepts ingest for seeded published Shape Matching content_version_id', async () => {
     const sid = randomUUID();
     const eid = randomUUID();
+    createdPlaySessionIds.push(sid);
+    createdEventIds.push(eid);
     const body = {
       sessions: [
         session(sid),
@@ -111,6 +130,8 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
   it('rejects fabricated content_version_id not present in catalog', async () => {
     const sid = randomUUID();
     const eid = randomUUID();
+    createdPlaySessionIds.push(sid);
+    createdEventIds.push(eid);
     const rogue = session(sid);
     rogue.content_version_id = randomUUID();
     const result = await ingestion.ingest(SEED_IDS.parent, {
@@ -126,6 +147,8 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
   it('surfaces ingested Shape Matching play in session KPI breakdown', async () => {
     const sid = randomUUID();
     const eid = randomUUID();
+    createdPlaySessionIds.push(sid);
+    createdEventIds.push(eid);
     const startedAt = '2026-03-10T09:00:00.000Z';
     const endedAt = '2026-03-10T09:01:30.000Z';
     await ingestion.ingest(SEED_IDS.parent, {
