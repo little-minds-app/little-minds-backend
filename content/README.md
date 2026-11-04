@@ -33,3 +33,11 @@ npm test -- src/modules/mentor/
 - Out of scope here: LMP-48 UI, LMP-120 audio, OpenAPI `/v1/mentor/*` routes
 
 See also: [`docs/mentor-card-content-contract.md`](../docs/mentor-card-content-contract.md).
+
+## Activity publications (LMP-134 / Shape Matching)
+
+| Path | Role |
+|---|---|
+| `fixtures/activity-publications/shape-matching.v1.json` | Authoritative `content_version_id` for hub id `shape_matching` (maps to `activity_variants.id`) |
+
+Seeded on `npm run db:seed` via `prisma/seed-shape-matching-content.ts`. Clients pin **backend commit SHA** + this fixture; do not hardcode production UUIDs in app source. LMP-69 environment release manifests remain future work.

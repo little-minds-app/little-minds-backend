@@ -6,13 +6,16 @@ import { PrismaClient, ConsentStatus, ParentAccountLifecycle } from '@prisma/cli
 import {
   SEED_AGE_REFERENCE_DATE,
   SEED_IDS,
+  SHAPE_MATCHING_PUBLICATION,
   SYNTHETIC_AGE_MONTHS,
   syntheticNickname,
 } from './seed-data';
+import { seedShapeMatchingPublishedContent } from './seed-shape-matching-content';
 
 export {
   SEED_AGE_REFERENCE_DATE,
   SEED_IDS,
+  SHAPE_MATCHING_PUBLICATION,
   SYNTHETIC_AGE_MONTHS,
   syntheticNickname,
 } from './seed-data';
@@ -149,6 +152,27 @@ export async function seedSyntheticFixtures(
     },
   });
 
+  await client.consentRecord.upsert({
+    where: { id: SEED_IDS.consentPlayEventsParent },
+    update: {
+      parentId: parent.id,
+      purpose: 'essential_play_events',
+      policyVersion: SHAPE_MATCHING_PUBLICATION.policyVersion,
+      status: ConsentStatus.granted,
+      source: 'server_consent_store',
+      revokedAt: null,
+    },
+    create: {
+      id: SEED_IDS.consentPlayEventsParent,
+      parentId: parent.id,
+      purpose: 'essential_play_events',
+      policyVersion: SHAPE_MATCHING_PUBLICATION.policyVersion,
+      status: ConsentStatus.granted,
+      recordedAt: new Date('2026-01-01T12:03:00.000Z'),
+      source: 'server_consent_store',
+    },
+  });
+
   const childIds: string[] = [];
   for (const age of SYNTHETIC_AGE_MONTHS) {
     const id = SEED_IDS.children[age];
@@ -199,6 +223,8 @@ export async function seedSyntheticFixtures(
       },
     });
   }
+
+  await seedShapeMatchingPublishedContent(client);
 
   return {
     parentId: parent.id,

@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "hub_activity_id": "shape_matching",
+  "mechanic_code": "shape_matching",
+  "content_version_id": "018f1340-0000-4000-8000-000000000001",
+  "activity_definition_id": "77777777-7777-4777-8777-777777777704",
+  "variant_version": 1,
+  "locale": "tr-TR",
+  "review_status": "published",
+  "consent_policy_version": "synthetic-policy-v1",
+  "publication_source": "prisma_seed_lmp134",
+  "notes": "Authoritative RFC-4122 content_version_id for Shape Matching telemetry. Maps to activity_variants.id (Day-1 content_version_id). Runtime LMP-69 environment manifests are not implemented yet; clients pin this fixture + backend commit SHA."
+}

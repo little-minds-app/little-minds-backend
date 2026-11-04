@@ -77,6 +77,16 @@ describeDb('Prisma migrate + seed integrity (LMP-22)', () => {
     expect(String(thrown)).toMatch(/age_months|check constraint|P2010/i);
   });
 
+  it('seeds published Shape Matching content_version_id (LMP-134)', async () => {
+    const variant = await prisma.activityVariant.findUnique({
+      where: { id: SEED_IDS.shapeMatching.contentVersionId },
+      include: { activity: { include: { mechanic: true } } },
+    });
+    expect(variant?.reviewStatus).toBe('published');
+    expect(variant?.activity.status).toBe('published');
+    expect(variant?.activity.mechanic.code).toBe('shape_matching');
+  });
+
   it('keeps parent ownership FK for seeded children', async () => {
     const orphans = await prisma.$queryRaw<{ count: bigint }[]>`
       SELECT COUNT(*)::bigint AS count
