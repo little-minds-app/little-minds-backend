@@ -1,3 +1,13 @@
+/** Stored approximate age band (OpenAPI + `child_profiles_age_months_range_check`). Content navigation remains 24–71. */
+export const CHILD_PROFILE_AGE_MONTHS_MIN = 0;
+export const CHILD_PROFILE_AGE_MONTHS_MAX = 71;
+
+export function isChildProfileAgeMonthsAtReference(age: number): boolean {
+  return Number.isSafeInteger(age) &&
+    age >= CHILD_PROFILE_AGE_MONTHS_MIN &&
+    age <= CHILD_PROFILE_AGE_MONTHS_MAX;
+}
+
 /**
  * LMP-39: age is estimated, not derived from an exact date of birth.
  * Both dates are explicit YYYY-MM-DD calendar dates; the caller selects
