@@ -20,7 +20,8 @@
     "<rootDir>/test/activity-ingestion.db.spec.ts",
     "<rootDir>/test/session-kpi.db.spec.ts",
     "<rootDir>/test/mission-status.db.spec.ts",
-    "<rootDir>/test/lmp-134-shape-matching-ingest.db.spec.ts"
+    "<rootDir>/test/lmp-134-shape-matching-ingest.db.spec.ts",
+    "<rootDir>/test/device-active-child.db.spec.ts"
   ],
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"

@@ -16,9 +16,11 @@ info:
     (`GET /v1/children/{childId}/missions` requires bounded `from`/`to`, `POST …/feedback`).
     LMP-54 adds passive BFF dashboard reads (`GET /v1/web/insights/session-kpis`,
     `GET /v1/web/children/{childId}/missions`) using opaque web session headers.
+    LMP-134 adds parent-scoped device active-child bind/read
+    (`GET|PUT /v1/devices/{installationId}/active-child`) for production play telemetry gates.
     Authoritative Ajv JSON Schemas live under `contracts/schemas/activity/` (`schema_version` 1.0.0,
     independent of this info.version).
-  version: 0.14.2
+  version: 0.14.3
 
   contact:
     name: Little Minds
@@ -38,6 +40,8 @@ tags:
     description: Canonical server-side KPI reads (F-013)
   - name: Missions
     description: Parent-scoped real-world mission status (LMP-130 foundation)
+  - name: Devices
+    description: Parent-scoped installation device registration and active-child binding (LMP-134)
 paths:
   /v1/events/batch:
     post:
@@ -604,6 +608,84 @@ paths:
           description: Unauthorized
         '404':
           description: Missing, soft-deleted, or not-owned child profile (uniform)
+  /v1/devices/{installationId}/active-child:
+    get:
+      operationId: getDeviceActiveChild
+      tags: [Devices]
+      summary: Read the active child bound to a parent-owned device installation
+      description: |
+        LMP-134. The path `installationId` is an untrusted client installation UUID.
+        The server resolves the parent-scoped database `devices.id`, verifies ownership
+        against the bearer session parent, and returns the authoritative `child_id` used
+        for play-event ingest (`devices.child_id`). Returns 404 when the device row is
+        not registered for this parent (sign-in mint registers the row).
+      security:
+        - parentAccessToken: []
+      parameters:
+        - in: path
+          name: installationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Client installation UUID hint (not an authorization credential)
+      responses:
+        '200':
+          description: Current active-child binding for the resolved device row
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceActiveChildBinding'
+        '400':
+          description: Malformed installation identifier
+        '401':
+          description: Unauthorized
+        '404':
+          description: Device not registered for authenticated parent
+    put:
+      operationId: setDeviceActiveChild
+      tags: [Devices]
+      summary: Bind or clear the active child for a parent-owned device installation
+      description: |
+        LMP-134. Atomically updates `devices.child_id` after verifying parent ownership
+        of both the resolved device row and the target child profile. Use `child_id: null`
+        to clear the binding. Concurrent updates serialize on the device row (`FOR UPDATE`).
+      security:
+        - parentAccessToken: []
+      parameters:
+        - in: path
+          name: installationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [child_id]
+              properties:
+                child_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: Owned child profile to authorize on this device, or null to clear
+      responses:
+        '200':
+          description: Updated binding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceActiveChildBinding'
+        '400':
+          description: Invalid body or installation identifier
+        '401':
+          description: Unauthorized
+        '404':
+          description: Device not registered or child not owned by parent
   /v1/children/{childId}/missions:
     get:
       operationId: listChildMissionStatus
@@ -1738,6 +1820,28 @@ components:
           format: int32
         preferred_locale:
           type: string
+    DeviceActiveChildBinding:
+      type: object
+      additionalProperties: false
+      required: [device_id, installation_id, child_id, updated_at]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+          description: Parent-scoped database devices.id (server-derived)
+        installation_id:
+          type: string
+          format: uuid
+          description: Client installation UUID echoed for correlation
+        child_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Active child authorized for ingest on this device; null when unassigned
+        updated_at:
+          type: string
+          format: date-time
+          description: UTC timestamp of the last binding mutation
     HealthStatus:
       type: object
       additionalProperties: false

@@ -30,6 +30,7 @@
     "/v1/auth/web/logout",
     "/v1/children",
     "/v1/children/{childId}",
+    "/v1/devices/{installationId}/active-child",
     "/v1/web/children",
     "/v1/web/children/{childId}",
     "/v1/web/children/{childId}/missions",

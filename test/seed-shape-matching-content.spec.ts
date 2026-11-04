@@ -31,8 +31,8 @@ describe('seedShapeMatchingPublishedContent policy (LMP-134 P1-01)', () => {
         LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH: 'true',
       }),
     ).toEqual({
-      allowSyntheticPublication: true,
-      gate: 'explicit_override',
+      allowSyntheticPublication: false,
+      gate: 'staging_production_blocked',
     });
   });
 

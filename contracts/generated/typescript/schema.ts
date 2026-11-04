@@ -298,6 +298,36 @@ export interface paths {
         patch: operations["updateChildProfile"];
         trace?: never;
     };
+    "/v1/devices/{installationId}/active-child": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the active child bound to a parent-owned device installation
+         * @description LMP-134. The path `installationId` is an untrusted client installation UUID.
+         *     The server resolves the parent-scoped database `devices.id`, verifies ownership
+         *     against the bearer session parent, and returns the authoritative `child_id` used
+         *     for play-event ingest (`devices.child_id`). Returns 404 when the device row is
+         *     not registered for this parent (sign-in mint registers the row).
+         */
+        get: operations["getDeviceActiveChild"];
+        /**
+         * Bind or clear the active child for a parent-owned device installation
+         * @description LMP-134. Atomically updates `devices.child_id` after verifying parent ownership
+         *     of both the resolved device row and the target child profile. Use `child_id: null`
+         *     to clear the binding. Concurrent updates serialize on the device row (`FOR UPDATE`).
+         */
+        put: operations["setDeviceActiveChild"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/children/{childId}/missions": {
         parameters: {
             query?: never;
@@ -902,6 +932,28 @@ export interface components {
             /** Format: int32 */
             age_months: number;
             preferred_locale: string;
+        };
+        DeviceActiveChildBinding: {
+            /**
+             * Format: uuid
+             * @description Parent-scoped database devices.id (server-derived)
+             */
+            device_id: string;
+            /**
+             * Format: uuid
+             * @description Client installation UUID echoed for correlation
+             */
+            installation_id: string;
+            /**
+             * Format: uuid
+             * @description Active child authorized for ingest on this device; null when unassigned
+             */
+            child_id: string | null;
+            /**
+             * Format: date-time
+             * @description UTC timestamp of the last binding mutation
+             */
+            updated_at: string;
         };
         HealthStatus: {
             /**
@@ -2072,6 +2124,103 @@ export interface operations {
                 content?: never;
             };
             /** @description Not found or not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getDeviceActiveChild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Client installation UUID hint (not an authorization credential) */
+                installationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current active-child binding for the resolved device row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceActiveChildBinding"];
+                };
+            };
+            /** @description Malformed installation identifier */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Device not registered for authenticated parent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setDeviceActiveChild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uuid
+                     * @description Owned child profile to authorize on this device, or null to clear
+                     */
+                    child_id: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated binding */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceActiveChildBinding"];
+                };
+            };
+            /** @description Invalid body or installation identifier */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Device not registered or child not owned by parent */
             404: {
                 headers: {
                     [name: string]: unknown;

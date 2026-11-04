@@ -436,6 +436,20 @@ describe('validateEnv', () => {
     ).toThrow(/REFRESH_TOKEN_PEPPER/);
   });
 
+  it('rejects LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH in production (LMP-134)', () => {
+    expect(() =>
+      validateEnv({
+        ...stagingAuthEnv,
+        APP_ENV: 'production',
+        NODE_ENV: 'production',
+        PUBLIC_API_BASE_URL: 'https://api.example.invalid',
+        DATABASE_URL:
+          'postgresql://app_user:s3curePass@db.example.invalid:5432/little_minds',
+        LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH: 'true',
+      }),
+    ).toThrow(/LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH is forbidden when APP_ENV=production/);
+  });
+
   it('defaults LISTEN_HOST to 0.0.0.0 when bootstrap is disabled', () => {
     const env = validateEnv({ APP_ENV: 'development' });
     expect(env.LISTEN_HOST).toBe('0.0.0.0');

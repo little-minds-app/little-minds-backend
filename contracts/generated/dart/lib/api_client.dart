@@ -215,6 +215,8 @@ class ApiClient {
           return CreateWebChildProfileRequest.fromJson(value);
         case 'DevSessionRequest':
           return DevSessionRequest.fromJson(value);
+        case 'DeviceActiveChildBinding':
+          return DeviceActiveChildBinding.fromJson(value);
         case 'EmailOtpStartRequest':
           return EmailOtpStartRequest.fromJson(value);
         case 'EmailOtpStartResponse':
@@ -319,6 +321,8 @@ class ApiClient {
           return SessionKpiResponseSample.fromJson(value);
         case 'SessionKpiResponseWindow':
           return SessionKpiResponseWindow.fromJson(value);
+        case 'SetDeviceActiveChildRequest':
+          return SetDeviceActiveChildRequest.fromJson(value);
         case 'StepUpRequest':
           return StepUpRequest.fromJson(value);
         case 'StepUpResponse':

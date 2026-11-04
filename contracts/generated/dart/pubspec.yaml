@@ -3,7 +3,7 @@
 #
 
 name: 'little_minds_api'
-version: '0.14.2'
+version: '0.14.3'
 description: 'OpenAPI API client'
 homepage: 'homepage'
 environment:

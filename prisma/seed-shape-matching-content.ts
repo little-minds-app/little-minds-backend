@@ -48,7 +48,13 @@ export function resolveShapeMatchingSeedPolicy(
 ): ShapeMatchingSeedPolicy {
   const resolved = readSeedEnv(env);
   const appEnv = resolved.APP_ENV ?? 'development';
-  if (appEnv === 'staging' || appEnv === 'production') {
+  if (appEnv === 'production') {
+    return {
+      allowSyntheticPublication: false,
+      gate: 'staging_production_blocked',
+    };
+  }
+  if (appEnv === 'staging') {
     if (resolved.LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH === 'true') {
       return { allowSyntheticPublication: true, gate: 'explicit_override' };
     }
