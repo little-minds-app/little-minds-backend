@@ -82,5 +82,9 @@ describe('Environment & secrets contract (LMP-28)', () => {
     // LMP-51 adds a versioned, authenticated batch ingest path.
     expect(read('contracts/openapi.yaml')).toContain('/v1/events/batch:');
     expect(read('contracts/openapi.yaml')).toContain('/v1/insights/session-kpis:');
+    // LMP-134 parent privacy consent (explicit opt-in for play telemetry).
+    expect(read('contracts/openapi.yaml')).toContain('/v1/privacy/consent/effective:');
+    expect(read('contracts/openapi.yaml')).toContain('/v1/privacy/consent/grant:');
+    expect(read('contracts/openapi.yaml')).toContain('/v1/privacy/consent/withdraw:');
   });
 });

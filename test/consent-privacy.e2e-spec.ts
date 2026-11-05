@@ -5,6 +5,7 @@ import type { App } from 'supertest/types';
 import { ParentConsentController } from '../src/modules/consent-privacy/parent-consent.controller';
 import { ParentConsentService } from '../src/modules/consent-privacy/parent-consent.service';
 import { ParentAuthGuard } from '../src/modules/identity/auth/parent-auth.guard';
+import { PrismaService } from '../src/modules/prisma/prisma.service';
 
 describe('LMP-134 privacy consent HTTP boundary', () => {
   let app: INestApplication<App>;
@@ -23,7 +24,12 @@ describe('LMP-134 privacy consent HTTP boundary', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [ParentConsentController],
-      providers: [ParentConsentService, { provide: ParentAuthGuard, useValue: guard }],
+      providers: [
+        ParentConsentService,
+        // HTTP-boundary suite spies on the service; Prisma is required for DI only.
+        { provide: PrismaService, useValue: { db: {} } },
+        { provide: ParentAuthGuard, useValue: guard },
+      ],
     })
       .overrideGuard(ParentAuthGuard)
       .useValue(guard)

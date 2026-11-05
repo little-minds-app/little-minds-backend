@@ -54,7 +54,7 @@ Clients do **not** read backend `.env` files. Each Flutter flavor sets the dart-
 | `staging` | `LM_API_BASE_URL` | Same value as staging `PUBLIC_API_BASE_URL` (hostname is a **TECHNICAL ASSUMPTION** until staging is provisioned; backend requires `https:` and rejects local/dev hosts) |
 | `production` | `LM_API_BASE_URL` | Same value as production `PUBLIC_API_BASE_URL` (hostname **TECHNICAL ASSUMPTION** until production is provisioned; backend requires `https:` and rejects local/dev hosts) |
 
-OpenAPI path surface: health (`GET /health`, `GET /health/ready`) plus LMP-33 parent session routes under `/v1/auth/*` and `GET /v1/parent/me` (see `contracts/VERSION`; **0.4.0**). Do not invent unrelated `/v1/...` routes. Local OpenAPI `servers` URL stays `http://localhost:3000`. Clients pin a backend **commit SHA**, not a hardcoded VERSION string.
+OpenAPI path surface: health (`GET /health`, `GET /health/ready`), LMP-33+ parent session/auth routes under `/v1/auth/*` and `/v1/parent/*`, LMP-39 child profiles, LMP-51/52 ingest + session KPIs, and LMP-134 privacy consent (`GET /v1/privacy/consent/effective`, `POST /v1/privacy/consent/grant`, `POST /v1/privacy/consent/withdraw`) — see `contracts/VERSION` and the allowlist in `scripts/check-env-secrets.sh` / `contracts/compatibility/required-contract.json`. Do not invent unrelated `/v1/...` routes. Local OpenAPI `servers` URL stays `http://localhost:3000`. Clients pin a backend **commit SHA**, not a hardcoded VERSION string.
 
 ## Secret leakage guards
 

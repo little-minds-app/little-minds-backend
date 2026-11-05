@@ -364,15 +364,13 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
       status: 'rejected',
       reason_code: 'consent.not_authorized',
     });
-    await db.consentRecord.create({
-      data: {
-        parentId: SEED_IDS.parent,
-        purpose: 'essential_play_events',
-        policyVersion: policyVersion,
-        status: 'granted',
-        recordedAt: new Date('2026-03-11T00:00:00.000Z'),
-        source: 'server_consent_store',
-      },
+    // Latest-effective ordering: a grant older than the withdrawal does not
+    // re-authorize. Restore suite isolation with an append-only grant that is
+    // newer than the withdrawal (same ParentConsentService path as product).
+    await parentConsent.grant(SEED_IDS.parent, {
+      consent_scope: 'essential_play_events',
+      policy_version: policyVersion,
+      child_id: null,
     });
   });
 
