@@ -1,0 +1,135 @@
+{
+  "sessions": [
+    {
+      "schema_version": "1.0.0",
+      "play_session_id": "55555555-5555-4555-8555-555555555555",
+      "device_id": "3d15ad77-4bd6-50b8-9422-3db5738c39f1",
+      "content_version_id": "018f1340-0000-4000-8000-000000000001",
+      "started_at": "2026-11-04T12:00:00.000Z",
+      "ended_at": "2026-11-04T12:01:00.000Z",
+      "monotonic_duration_seconds": 60,
+      "completion_status": "completed",
+      "consent": {
+        "purpose": "essential_play_events",
+        "consent_scope": "essential_play_events",
+        "policy_version": "synthetic-policy-v1",
+        "decision": "granted"
+      },
+      "provenance": {
+        "emitter": "kids_mode_client",
+        "capture_channel": "offline_queue",
+        "clock_trust": "wall_clock_only"
+      }
+    }
+  ],
+  "events": [
+    {
+      "schema_version": "1.0.0",
+      "play_session_id": "55555555-5555-4555-8555-555555555555",
+      "device_id": "3d15ad77-4bd6-50b8-9422-3db5738c39f1",
+      "content_version_id": "018f1340-0000-4000-8000-000000000001",
+      "consent_scope": "essential_play_events",
+      "consent_policy_version": "synthetic-policy-v1",
+      "provenance": {
+        "emitter": "kids_mode_client",
+        "actor_scope": "child_play",
+        "source": "instrumented",
+        "clock_trust": "monotonic_within_boot"
+      },
+      "event_id": "44444444-4444-4444-8444-444444444441",
+      "event_type": "activity_started",
+      "occurred_at": "2026-11-04T12:00:00.000Z",
+      "payload": {
+        "age_months": 36
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "play_session_id": "55555555-5555-4555-8555-555555555555",
+      "device_id": "3d15ad77-4bd6-50b8-9422-3db5738c39f1",
+      "content_version_id": "018f1340-0000-4000-8000-000000000001",
+      "consent_scope": "essential_play_events",
+      "consent_policy_version": "synthetic-policy-v1",
+      "provenance": {
+        "emitter": "kids_mode_client",
+        "actor_scope": "child_play",
+        "source": "instrumented",
+        "clock_trust": "monotonic_within_boot"
+      },
+      "event_id": "44444444-4444-4444-8444-444444444442",
+      "event_type": "activity_attempted",
+      "occurred_at": "2026-11-04T12:00:05.000Z",
+      "payload": {
+        "attempt_index": 0,
+        "prompt": "other"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "play_session_id": "55555555-5555-4555-8555-555555555555",
+      "device_id": "3d15ad77-4bd6-50b8-9422-3db5738c39f1",
+      "content_version_id": "018f1340-0000-4000-8000-000000000001",
+      "consent_scope": "essential_play_events",
+      "consent_policy_version": "synthetic-policy-v1",
+      "provenance": {
+        "emitter": "kids_mode_client",
+        "actor_scope": "child_play",
+        "source": "instrumented",
+        "clock_trust": "monotonic_within_boot"
+      },
+      "event_id": "44444444-4444-4444-8444-444444444443",
+      "event_type": "activity_hint_used",
+      "occurred_at": "2026-11-04T12:00:10.000Z",
+      "payload": {
+        "hint_level": 1
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "play_session_id": "55555555-5555-4555-8555-555555555555",
+      "device_id": "3d15ad77-4bd6-50b8-9422-3db5738c39f1",
+      "content_version_id": "018f1340-0000-4000-8000-000000000001",
+      "consent_scope": "essential_play_events",
+      "consent_policy_version": "synthetic-policy-v1",
+      "provenance": {
+        "emitter": "kids_mode_client",
+        "actor_scope": "child_play",
+        "source": "instrumented",
+        "clock_trust": "monotonic_within_boot"
+      },
+      "event_id": "44444444-4444-4444-8444-444444444444",
+      "event_type": "activity_completed",
+      "occurred_at": "2026-11-04T12:01:00.000Z",
+      "monotonic_duration_seconds": 60,
+      "payload": {
+        "completion_status": "completed",
+        "scoring": "neutral",
+        "hints_used": 1,
+        "eligible_first_attempts": 6,
+        "correct_first_attempts": 5
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "play_session_id": "55555555-5555-4555-8555-555555555555",
+      "device_id": "3d15ad77-4bd6-50b8-9422-3db5738c39f1",
+      "content_version_id": "018f1340-0000-4000-8000-000000000001",
+      "consent_scope": "essential_play_events",
+      "consent_policy_version": "synthetic-policy-v1",
+      "provenance": {
+        "emitter": "kids_mode_client",
+        "actor_scope": "child_play",
+        "source": "instrumented",
+        "clock_trust": "monotonic_within_boot"
+      },
+      "event_id": "44444444-4444-4444-8444-444444444445",
+      "event_type": "activity_abandoned",
+      "occurred_at": "2026-11-04T12:02:00.000Z",
+      "monotonic_duration_seconds": 30,
+      "payload": {
+        "completion_status": "abandoned",
+        "hints_used": 0
+      }
+    }
+  ]
+}

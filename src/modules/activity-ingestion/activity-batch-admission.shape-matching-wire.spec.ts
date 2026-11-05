@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -5,9 +6,14 @@ import {
 } from './activity-batch-admission.service';
 import { scopedDeviceId } from '../identity/session/session-issuer.service';
 import { noopStructuredLogger } from '../../../test/helpers/noop-structured-logger';
+import {
+  loadShapeMatchingWireJson,
+  SHAPE_MATCHING_PRODUCTION_EVENT_TYPES,
+  type ShapeMatchingWireBatchFile,
+} from './shape-matching-production-wire.fixture';
 
 /**
- * Mirrors mobile `activity_batch_wire_codec` + Shape Matching production buffer:
+ * Mirrors mobile `ShapeMatchingProductionBatchFixture` + `activity_batch_wire_codec`:
  * parent-scoped UUIDv5 device_id, pinned publication ids, session + gameplay events.
  */
 describe('LMP-134 Shape Matching batch wire admission', () => {
@@ -116,5 +122,33 @@ describe('LMP-134 Shape Matching batch wire admission', () => {
     expect(admitted.sessions).toHaveLength(1);
     expect(admitted.events).toHaveLength(2);
     expect(admitted.sessions[0].device_id).toBe(deviceId);
+  });
+
+  it('rejects client production wire batch (payload mismatch → batch.invalid_event)', () => {
+    const clientBatch = loadShapeMatchingWireJson<ShapeMatchingWireBatchFile>(
+      'lmp-134-client-production-wire.batch.json',
+    );
+    expect(() => admission.validate(clientBatch)).toThrow(BadRequestException);
+    try {
+      admission.validate(clientBatch);
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect((error as BadRequestException).message).toBe('batch.invalid_event');
+    }
+  });
+
+  it('accepts schema-aligned production wire batch (all Shape Matching event types)', () => {
+    const aligned = loadShapeMatchingWireJson<ShapeMatchingWireBatchFile>(
+      'lmp-134-schema-aligned-production-wire.batch.json',
+    );
+    const admitted = admission.validate(aligned);
+    expect(admitted.sessions).toHaveLength(1);
+    expect(admitted.events.length).toBeGreaterThanOrEqual(3);
+    for (const eventType of SHAPE_MATCHING_PRODUCTION_EVENT_TYPES) {
+      if (eventType === 'activity_abandoned') continue;
+      expect(
+        admitted.events.some((event) => event.event_type === eventType),
+      ).toBe(true);
+    }
   });
 });
