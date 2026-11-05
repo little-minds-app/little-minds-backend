@@ -6,8 +6,8 @@
   "definitions": {
     "UuidV4OrV7": {
       "type": "string",
-      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[47][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      "description": "RFC 4122 UUID with version nibble 4 or 7 (UUIDv4 or UUIDv7)."
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[457][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+      "description": "RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 encodes parent-scoped device rows (LMP-134 scopedDeviceId); v4/v7 remain valid for sessions and editorial content_version_id."
     },
     "UtcInstantZ": {
       "type": "string",

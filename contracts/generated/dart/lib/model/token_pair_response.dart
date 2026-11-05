@@ -29,10 +29,10 @@ class TokenPairResponse {
 
   TokenPairResponseExpiresInEnum expiresIn;
 
-  /// RFC 4122 UUID with version nibble 4 or 7
+  /// RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134). 
   String sessionId;
 
-  /// RFC 4122 UUID with version nibble 4 or 7
+  /// RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134). 
   String parentId;
 
   @override

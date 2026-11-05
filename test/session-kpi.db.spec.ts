@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
 import { ActivityBatchAdmissionService } from '../src/modules/activity-ingestion/activity-batch-admission.service';
+import { noopStructuredLogger } from './helpers/noop-structured-logger';
 import { ActivityIngestionService } from '../src/modules/activity-ingestion/activity-ingestion.service';
 import type { PrismaService } from '../src/modules/prisma/prisma.service';
 import { SessionKpiService } from '../src/modules/session-kpi/session-kpi.service';
@@ -27,7 +28,7 @@ describeDb('LMP-52 session KPI aggregation / real PostgreSQL', () => {
   const definitionId = randomUUID();
   const variantId = randomUUID();
   const consentPolicy = 'privacy-notice-draft-0';
-  const ingestion = new ActivityIngestionService({ get db() { return db; } } as PrismaService, new ActivityBatchAdmissionService());
+  const ingestion = new ActivityIngestionService({ get db() { return db; } } as PrismaService, new ActivityBatchAdmissionService(noopStructuredLogger()));
   const kpis = new SessionKpiService({ get db() { return db; } } as PrismaService, new ConfigService({}));
 
   const session = (id: string, overrides: Record<string, unknown> = {}): Record<string, unknown> => ({

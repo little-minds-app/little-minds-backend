@@ -37,7 +37,7 @@ class AppleAuthRequest {
   ///
   String? clientSurface;
 
-  /// RFC 4122 UUID with version nibble 4 or 7
+  /// RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134). 
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

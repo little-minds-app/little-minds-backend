@@ -13,6 +13,7 @@ import { ActivityBatchAdmissionService } from '../src/modules/activity-ingestion
 import { ActivityIngestionService } from '../src/modules/activity-ingestion/activity-ingestion.service';
 import type { PrismaService } from '../src/modules/prisma/prisma.service';
 import { SessionKpiService } from '../src/modules/session-kpi/session-kpi.service';
+import { noopStructuredLogger } from './helpers/noop-structured-logger';
 
 /**
  * Isolation: uses seeded synthetic parent but only deletes rows created by this suite
@@ -42,7 +43,7 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
         return db;
       },
     } as PrismaService,
-    new ActivityBatchAdmissionService(),
+    new ActivityBatchAdmissionService(noopStructuredLogger()),
   );
   const kpis = new SessionKpiService(
     {

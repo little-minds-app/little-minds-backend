@@ -8,7 +8,7 @@ import 'package:little_minds_api/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**parentId** | **String** | RFC 4122 UUID with version nibble 4 or 7 | 
+**parentId** | **String** | RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134).  | 
 **locale** | **String** |  | 
 **timezone** | **String** |  | 
 **lifecycle** | **String** |  | 

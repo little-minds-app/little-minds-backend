@@ -1228,7 +1228,10 @@ export interface components {
          * @enum {string}
          */
         ActivitySchemaVersion: "1.0.0";
-        /** @description RFC 4122 UUID with version nibble 4 or 7 */
+        /**
+         * @description RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for
+         *     parent-scoped `devices.id` digests on activity ingest (LMP-134).
+         */
         UuidV4OrV7: string;
         /** @description UTC ISO-8601 instant ending in Z */
         UtcInstantZ: string;

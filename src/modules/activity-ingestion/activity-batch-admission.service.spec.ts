@@ -5,9 +5,10 @@ import {
   eventFingerprint,
 } from './activity-batch-admission.service';
 import type { ActivityEventV1 } from './activity-contract.types';
+import { noopStructuredLogger } from '../../../test/helpers/noop-structured-logger';
 
 describe('LMP-51 batch admission safety boundary', () => {
-  const admission = new ActivityBatchAdmissionService();
+  const admission = new ActivityBatchAdmissionService(noopStructuredLogger());
   it('rejects malformed, empty and oversized batch envelopes', () => {
     for (const input of [
       null,
