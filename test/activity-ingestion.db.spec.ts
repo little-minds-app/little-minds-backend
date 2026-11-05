@@ -23,7 +23,7 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
   const definitionId = randomUUID();
   const variantId = randomUUID();
   const consentPolicy = 'privacy-notice-draft-0';
-  const ingestion = new ActivityIngestionService({ get db() { return db; } } as PrismaService, new ActivityBatchAdmissionService(noopStructuredLogger()));
+  const ingestion = new ActivityIngestionService({ get db() { return db; } } as PrismaService, new ActivityBatchAdmissionService(noopStructuredLogger()), noopStructuredLogger());
 
   const session = (id: string): Record<string, unknown> => ({
     ...fixture('valid-activity-session.json'),

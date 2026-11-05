@@ -11,6 +11,7 @@ import {
 } from '../prisma/seed';
 import { ActivityBatchAdmissionService } from '../src/modules/activity-ingestion/activity-batch-admission.service';
 import { ActivityIngestionService } from '../src/modules/activity-ingestion/activity-ingestion.service';
+import { scopedDeviceId } from '../src/modules/identity/session/session-issuer.service';
 import type { PrismaService } from '../src/modules/prisma/prisma.service';
 import { SessionKpiService } from '../src/modules/session-kpi/session-kpi.service';
 import { noopStructuredLogger } from './helpers/noop-structured-logger';
@@ -44,6 +45,7 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
       },
     } as PrismaService,
     new ActivityBatchAdmissionService(noopStructuredLogger()),
+    noopStructuredLogger(),
   );
   const kpis = new SessionKpiService(
     {
@@ -160,6 +162,68 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
       status: 'retryable',
       reason_code: 'session.pending',
     });
+  });
+
+  it('returns session.pending when session device_id is not parent-scoped but events use scoped device row', async () => {
+    const installationId = randomUUID();
+    const scopedId = scopedDeviceId(installationId, SEED_IDS.parent);
+    await db.device.deleteMany({ where: { id: deviceId } });
+    await db.device.create({
+      data: {
+        id: scopedId,
+        parentId: SEED_IDS.parent,
+        childId,
+        platform: 'ios',
+      },
+    });
+    const sid = randomUUID();
+    const eid = randomUUID();
+    createdEventIds.push(eid);
+    const rogueSession = session(sid);
+    rogueSession.device_id = installationId;
+    const result = await ingestion.ingest(SEED_IDS.parent, {
+      sessions: [rogueSession],
+      events: [
+        {
+          ...completed(eid, sid),
+          device_id: scopedId,
+        },
+      ],
+    });
+    expect(result.results[0]).toMatchObject({
+      status: 'retryable',
+      reason_code: 'session.pending',
+    });
+    expect(await db.activitySession.count({ where: { id: sid } })).toBe(0);
+    await db.device.deleteMany({ where: { id: scopedId } });
+    await db.device.create({
+      data: {
+        id: deviceId,
+        parentId: SEED_IDS.parent,
+        childId,
+        platform: 'ios',
+      },
+    });
+  });
+
+  it('returns session.pending when session consent policy_version fails but events carry granted policy', async () => {
+    const sid = randomUUID();
+    const eid = randomUUID();
+    createdEventIds.push(eid);
+    const rogueSession = session(sid);
+    rogueSession.consent = {
+      ...(rogueSession.consent as Record<string, unknown>),
+      policy_version: 'privacy-notice-draft-0',
+    };
+    const result = await ingestion.ingest(SEED_IDS.parent, {
+      sessions: [rogueSession],
+      events: [completed(eid, sid)],
+    });
+    expect(result.results[0]).toMatchObject({
+      status: 'retryable',
+      reason_code: 'session.pending',
+    });
+    expect(await db.activitySession.count({ where: { id: sid } })).toBe(0);
   });
 
   it('returns session.pending when session has unknown version but event references published catalog id', async () => {

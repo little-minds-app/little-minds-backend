@@ -136,4 +136,26 @@ describe('allowlistAndRedactContext', () => {
     });
     expect(JSON.stringify(out)).not.toMatch(/Bearer|leak|parent@/i);
   });
+
+  it('allows LMP-134 ingest batch summary counts without wire identifiers', () => {
+    const out = allowlistAndRedactContext({
+      ingest_sessions_wire: 1,
+      ingest_events_wire: 3,
+      ingest_sessions_admitted: 0,
+      ingest_session_skip_counts: { 'device.not_authorized': 1 },
+      ingest_ack_status_counts: { retryable: 3 },
+      ingest_retryable_reason_counts: { 'session.pending': 3 },
+      play_session_id: '55555555-5555-4555-8555-555555555555',
+      device_id: '3d15ad77-4bd6-50b8-9422-3db5738c39f1',
+    });
+
+    expect(out).toEqual({
+      ingest_sessions_wire: 1,
+      ingest_events_wire: 3,
+      ingest_sessions_admitted: 0,
+      ingest_session_skip_counts: { 'device.not_authorized': 1 },
+      ingest_ack_status_counts: { retryable: 3 },
+      ingest_retryable_reason_counts: { 'session.pending': 3 },
+    });
+  });
 });

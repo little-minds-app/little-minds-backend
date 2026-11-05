@@ -28,7 +28,7 @@ describeDb('LMP-52 session KPI aggregation / real PostgreSQL', () => {
   const definitionId = randomUUID();
   const variantId = randomUUID();
   const consentPolicy = 'privacy-notice-draft-0';
-  const ingestion = new ActivityIngestionService({ get db() { return db; } } as PrismaService, new ActivityBatchAdmissionService(noopStructuredLogger()));
+  const ingestion = new ActivityIngestionService({ get db() { return db; } } as PrismaService, new ActivityBatchAdmissionService(noopStructuredLogger()), noopStructuredLogger());
   const kpis = new SessionKpiService({ get db() { return db; } } as PrismaService, new ConfigService({}));
 
   const session = (id: string, overrides: Record<string, unknown> = {}): Record<string, unknown> => ({

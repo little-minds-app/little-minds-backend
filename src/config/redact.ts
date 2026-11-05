@@ -88,6 +88,13 @@ export const STRUCTURED_LOG_ALLOWLIST = new Set([
   'batch_reject_code',
   'validation_issues',
   'validation_issue_count',
+  // LMP-134 ingest batch summary (counts + gate/reason codes only)
+  'ingest_sessions_wire',
+  'ingest_events_wire',
+  'ingest_sessions_admitted',
+  'ingest_session_skip_counts',
+  'ingest_ack_status_counts',
+  'ingest_retryable_reason_counts',
 ]);
 
 /**

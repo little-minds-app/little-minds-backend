@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module';
+import { ObservabilityModule } from '../observability/observability.module';
 import { ActivityBatchAdmissionService } from './activity-batch-admission.service';
 import { ActivityIngestionController } from './activity-ingestion.controller';
 import { ActivityIngestionService } from './activity-ingestion.service';
 
 @Module({
-  imports: [IdentityModule],
+  imports: [IdentityModule, ObservabilityModule],
   controllers: [ActivityIngestionController],
   providers: [ActivityBatchAdmissionService, ActivityIngestionService],
 })
