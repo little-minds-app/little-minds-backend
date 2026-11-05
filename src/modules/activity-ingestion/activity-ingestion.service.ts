@@ -52,8 +52,16 @@ export class ActivityIngestionService {
     // Validate session ownership before any writes. Device may be assigned to a
     // single child; unassigned devices do not authorize inference of child IDs.
     const knownSessions = new Map<string, { childId: string; contentVersionId: string; deviceId: string }>();
+    /** Play sessions skipped for consent in this batch — events must not retry as session.pending. */
+    const consentDeniedPlaySessionIds = new Set<string>();
     for (const session of sessions) {
-      const admitted = await this.tryAdmitSession(db, parentId, session, sessionSkipCounts);
+      const admitted = await this.tryAdmitSession(
+        db,
+        parentId,
+        session,
+        sessionSkipCounts,
+        consentDeniedPlaySessionIds,
+      );
       if (admitted) {
         knownSessions.set(session.play_session_id, admitted);
         sessionsAdmitted += 1;
@@ -61,7 +69,9 @@ export class ActivityIngestionService {
     }
 
     for (const event of events) {
-      results.push(await this.storeEvent(db, parentId, event, knownSessions));
+      results.push(
+        await this.storeEvent(db, parentId, event, knownSessions, consentDeniedPlaySessionIds),
+      );
     }
 
     this.logIngestSummary({
@@ -121,6 +131,7 @@ export class ActivityIngestionService {
     parentId: string,
     session: ActivitySessionV1,
     sessionSkipCounts: Record<ActivityIngestSessionSkipGate, number>,
+    consentDeniedPlaySessionIds: Set<string>,
   ): Promise<{ childId: string; contentVersionId: string; deviceId: string } | undefined> {
     const device = await db.device.findFirst({
       where: {
@@ -153,6 +164,7 @@ export class ActivityIngestionService {
     );
     if (!consent) {
       this.bumpSkip(sessionSkipCounts, 'consent.not_authorized');
+      consentDeniedPlaySessionIds.add(session.play_session_id);
       return undefined;
     }
     try {
@@ -258,7 +270,13 @@ export class ActivityIngestionService {
     return effective.authorized && effective.effective?.policy_version === policyVersion;
   }
 
-  private async storeEvent(db: PrismaClient, parentId: string, event: ActivityEventV1, sessions: Map<string, { childId: string; contentVersionId: string; deviceId: string }>): Promise<Ack> {
+  private async storeEvent(
+    db: PrismaClient,
+    parentId: string,
+    event: ActivityEventV1,
+    sessions: Map<string, { childId: string; contentVersionId: string; deviceId: string }>,
+    consentDeniedPlaySessionIds: ReadonlySet<string>,
+  ): Promise<Ack> {
     const reject = (reason_code: string): Ack => ({ event_id: event.event_id, status: 'rejected', reason_code });
     const parentOnly = isParentEvent(event);
     const device = await db.device.findFirst({ where: { id: event.device_id, parentId, revokedAt: null }, select: { childId: true } });
@@ -276,6 +294,14 @@ export class ActivityIngestionService {
           select: { childId: true, deviceId: true, contentVersionId: true },
         });
         if (persisted?.deviceId) session = { childId: persisted.childId, deviceId: persisted.deviceId, contentVersionId: persisted.contentVersionId };
+      }
+      // Session metadata in this batch failed authoritative consent — permanent for
+      // this play_session_id until a new grant and resync (not a missing-row race).
+      if (
+        event.play_session_id &&
+        consentDeniedPlaySessionIds.has(event.play_session_id)
+      ) {
+        return reject('consent.not_authorized');
       }
       // An offline batch may arrive before its session metadata. Do not
       // permanently reject an otherwise valid event just for arrival order.

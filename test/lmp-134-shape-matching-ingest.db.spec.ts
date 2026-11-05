@@ -206,7 +206,7 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
     });
   });
 
-  it('returns session.pending when session consent policy_version fails but events carry granted policy', async () => {
+  it('rejects events with consent.not_authorized when session consent policy_version fails', async () => {
     const sid = randomUUID();
     const eid = randomUUID();
     createdEventIds.push(eid);
@@ -220,10 +220,51 @@ describeDb('LMP-134 Shape Matching production telemetry / PostgreSQL', () => {
       events: [completed(eid, sid)],
     });
     expect(result.results[0]).toMatchObject({
-      status: 'retryable',
-      reason_code: 'session.pending',
+      status: 'rejected',
+      reason_code: 'consent.not_authorized',
     });
     expect(await db.activitySession.count({ where: { id: sid } })).toBe(0);
+    expect(await db.activityEvent.count({ where: { eventId: eid } })).toBe(0);
+  });
+
+  it('rejects events when essential_play_events grant is absent for parent', async () => {
+    const sid = randomUUID();
+    const eid = randomUUID();
+    createdEventIds.push(eid);
+    await db.consentRecord.deleteMany({
+      where: { parentId: SEED_IDS.parent, purpose: 'essential_play_events' },
+    });
+    try {
+      const result = await ingestion.ingest(SEED_IDS.parent, {
+        sessions: [session(sid)],
+        events: [completed(eid, sid)],
+      });
+      expect(result.results[0]).toMatchObject({
+        status: 'rejected',
+        reason_code: 'consent.not_authorized',
+      });
+    } finally {
+      await db.consentRecord.upsert({
+        where: { id: SEED_IDS.consentPlayEventsParent },
+        update: {
+          parentId: SEED_IDS.parent,
+          purpose: 'essential_play_events',
+          policyVersion: policyVersion,
+          status: 'granted',
+          source: 'server_consent_store',
+          revokedAt: null,
+        },
+        create: {
+          id: SEED_IDS.consentPlayEventsParent,
+          parentId: SEED_IDS.parent,
+          purpose: 'essential_play_events',
+          policyVersion: policyVersion,
+          status: 'granted',
+          recordedAt: new Date('2026-01-01T12:03:00.000Z'),
+          source: 'server_consent_store',
+        },
+      });
+    }
   });
 
   it('returns session.pending when session has unknown version but event references published catalog id', async () => {
