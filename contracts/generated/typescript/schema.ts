@@ -330,6 +330,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/privacy/consent/effective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read latest-effective server consent for one or more scopes
+         * @description LMP-134 / F-033. Evaluates immutable `consent_records` with trusted
+         *     `source: server_consent_store` (and ingest-trusted `sync_scope_grant`) using the
+         *     same latest-effective semantics as activity ingest. Optional `child_id` merges
+         *     parent-level and child-scoped rows like ingest `checkConsent`. Does not treat
+         *     privacy-notice acknowledgment, Parent Gate, login, or client wire `decision` as grant.
+         */
+        get: operations["getEffectiveConsentScopes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy/consent/grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record an explicit parent opt-in for a consent scope
+         * @description LMP-134. Appends an immutable `consent_records` row with `status: granted` and
+         *     `source: server_consent_store`. Play telemetry (`essential_play_events`) must use
+         *     this explicit grant (unchecked client UX) — never auto-granted at login/OTP verify
+         *     or gameplay start. Align `policy_version` with the published activity policy
+         *     (Shape Matching UAT uses `synthetic-policy-v1`).
+         */
+        post: operations["grantConsentScope"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy/consent/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record withdrawal of a consent scope (prospective)
+         * @description LMP-134. Appends `status: withdrawn` with `source: server_consent_store`. Future
+         *     ingest for that scope/policy fails closed; does not rewrite historical events.
+         */
+        post: operations["withdrawConsentScope"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/children/{childId}/missions": {
         parameters: {
             query?: never;
@@ -1235,6 +1304,40 @@ export interface components {
         UuidV4OrV7: string;
         /** @description UTC ISO-8601 instant ending in Z */
         UtcInstantZ: string;
+        EffectiveConsentScope: {
+            consent_scope: components["schemas"]["ConsentScope"];
+            child_id: components["schemas"]["UuidV4OrV7"] | null;
+            /** @description True when latest-effective trusted records grant the scope */
+            authorized: boolean;
+            policy_version: string | null;
+            /** @enum {string} */
+            status: "granted" | "withdrawn" | "not_granted";
+            effective_at: components["schemas"]["UtcInstantZ"] | null;
+            /** @enum {string|null} */
+            source: "server_consent_store" | null;
+            record_id: components["schemas"]["UuidV4OrV7"] | null;
+        };
+        EffectiveConsentScopesResponse: {
+            scopes: components["schemas"]["EffectiveConsentScope"][];
+        };
+        ConsentScopeMutationRequest: {
+            consent_scope: components["schemas"]["ConsentScope"];
+            /** @description Published policy version for this scope (e.g. synthetic-policy-v1) */
+            policy_version: string;
+            /** @description Omit or null for parent-level scope; set for child-scoped consent row */
+            child_id?: components["schemas"]["UuidV4OrV7"] | null;
+        };
+        ConsentScopeMutationResponse: {
+            record_id: components["schemas"]["UuidV4OrV7"];
+            consent_scope: components["schemas"]["ConsentScope"];
+            child_id: components["schemas"]["UuidV4OrV7"] | null;
+            policy_version: string;
+            /** @enum {string} */
+            status: "granted" | "withdrawn";
+            recorded_at: components["schemas"]["UtcInstantZ"];
+            /** @enum {string} */
+            source: "server_consent_store";
+        };
         /**
          * @description Purpose-specific consent scope (draft placeholders until legal sign-off)
          * @enum {string}
@@ -2244,6 +2347,142 @@ export interface operations {
             };
             /** @description Stale expected_binding_revision (concurrent bind won) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEffectiveConsentScopes: {
+        parameters: {
+            query: {
+                /** @description One or more consent scopes to evaluate (repeat `scope` query keys) */
+                scope: components["schemas"]["ConsentScope"][];
+                /** @description When set, include child-scoped rows for this owned profile */
+                child_id?: components["schemas"]["UuidV4OrV7"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective authorization snapshot per requested scope */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveConsentScopesResponse"];
+                };
+            };
+            /** @description Missing or invalid scope query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child filter not found for authenticated parent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    grantConsentScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentScopeMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Grant recorded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentScopeMutationResponse"];
+                };
+            };
+            /** @description Invalid body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child filter not found for authenticated parent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    withdrawConsentScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentScopeMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Withdrawal recorded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentScopeMutationResponse"];
+                };
+            };
+            /** @description Invalid body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child filter not found for authenticated parent */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

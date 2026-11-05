@@ -16,6 +16,8 @@ doc/AuthApi.md
 doc/AuthError.md
 doc/ChildProfileResponse.md
 doc/ConsentScope.md
+doc/ConsentScopeMutationRequest.md
+doc/ConsentScopeMutationResponse.md
 doc/CreateChildProfile201Response.md
 doc/CreateChildProfileRequest.md
 doc/CreateParentWebSession201Response.md
@@ -23,6 +25,8 @@ doc/CreateWebChildProfileRequest.md
 doc/DevSessionRequest.md
 doc/DeviceActiveChildBinding.md
 doc/DevicesApi.md
+doc/EffectiveConsentScope.md
+doc/EffectiveConsentScopesResponse.md
 doc/EmailOtpStartRequest.md
 doc/EmailOtpStartResponse.md
 doc/EmailOtpVerifyRequest.md
@@ -69,6 +73,7 @@ doc/ParentSessionSummary.md
 doc/PhoneOtpStartRequest.md
 doc/PhoneOtpStartResponse.md
 doc/PhoneOtpVerifyRequest.md
+doc/PrivacyApi.md
 doc/ReadinessStatus.md
 doc/ReadinessStatusChecks.md
 doc/RefreshTokenRequest.md
@@ -95,6 +100,7 @@ lib/api/health_api.dart
 lib/api/insights_api.dart
 lib/api/missions_api.dart
 lib/api/parent_api.dart
+lib/api/privacy_api.dart
 lib/api_client.dart
 lib/api_exception.dart
 lib/api_helper.dart
@@ -114,12 +120,16 @@ lib/model/apple_auth_request.dart
 lib/model/auth_error.dart
 lib/model/child_profile_response.dart
 lib/model/consent_scope.dart
+lib/model/consent_scope_mutation_request.dart
+lib/model/consent_scope_mutation_response.dart
 lib/model/create_child_profile201_response.dart
 lib/model/create_child_profile_request.dart
 lib/model/create_parent_web_session201_response.dart
 lib/model/create_web_child_profile_request.dart
 lib/model/dev_session_request.dart
 lib/model/device_active_child_binding.dart
+lib/model/effective_consent_scope.dart
+lib/model/effective_consent_scopes_response.dart
 lib/model/email_otp_start_request.dart
 lib/model/email_otp_start_response.dart
 lib/model/email_otp_verify_request.dart
@@ -192,6 +202,8 @@ test/apple_auth_request_test.dart
 test/auth_api_test.dart
 test/auth_error_test.dart
 test/child_profile_response_test.dart
+test/consent_scope_mutation_request_test.dart
+test/consent_scope_mutation_response_test.dart
 test/consent_scope_test.dart
 test/create_child_profile201_response_test.dart
 test/create_child_profile_request_test.dart
@@ -200,6 +212,8 @@ test/create_web_child_profile_request_test.dart
 test/dev_session_request_test.dart
 test/device_active_child_binding_test.dart
 test/devices_api_test.dart
+test/effective_consent_scope_test.dart
+test/effective_consent_scopes_response_test.dart
 test/email_otp_start_request_test.dart
 test/email_otp_start_response_test.dart
 test/email_otp_verify_request_test.dart
@@ -246,6 +260,7 @@ test/parent_session_summary_test.dart
 test/phone_otp_start_request_test.dart
 test/phone_otp_start_response_test.dart
 test/phone_otp_verify_request_test.dart
+test/privacy_api_test.dart
 test/readiness_status_checks_test.dart
 test/readiness_status_test.dart
 test/refresh_token_request_test.dart

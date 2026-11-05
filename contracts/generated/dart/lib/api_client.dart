@@ -205,6 +205,10 @@ class ApiClient {
           return ChildProfileResponse.fromJson(value);
         case 'ConsentScope':
           return ConsentScopeTypeTransformer().decode(value);
+        case 'ConsentScopeMutationRequest':
+          return ConsentScopeMutationRequest.fromJson(value);
+        case 'ConsentScopeMutationResponse':
+          return ConsentScopeMutationResponse.fromJson(value);
         case 'CreateChildProfile201Response':
           return CreateChildProfile201Response.fromJson(value);
         case 'CreateChildProfileRequest':
@@ -217,6 +221,10 @@ class ApiClient {
           return DevSessionRequest.fromJson(value);
         case 'DeviceActiveChildBinding':
           return DeviceActiveChildBinding.fromJson(value);
+        case 'EffectiveConsentScope':
+          return EffectiveConsentScope.fromJson(value);
+        case 'EffectiveConsentScopesResponse':
+          return EffectiveConsentScopesResponse.fromJson(value);
         case 'EmailOtpStartRequest':
           return EmailOtpStartRequest.fromJson(value);
         case 'EmailOtpStartResponse':
