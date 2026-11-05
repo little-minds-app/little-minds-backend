@@ -21,6 +21,7 @@ import {
   TEST_OIDC_ISS_APPLE,
   TEST_OIDC_ISS_GOOGLE,
 } from './fixtures/oidc/test-keys';
+import { resetOtpPgE2eState } from './helpers/otp-pg-e2e-reset';
 
 /**
  * OIDC Apple/Google HTTP e2e. Relies on test/setup-e2e-env.ts installing
@@ -63,7 +64,7 @@ describeOidc('POST /v1/auth/apple|google (LMP-35 e2e)', () => {
   beforeEach(async () => {
     await prisma.db.authOauthTransaction.deleteMany({});
     await prisma.db.authOidcNonce.deleteMany({});
-    await prisma.db.otpAbuseCounter.deleteMany({});
+    await resetOtpPgE2eState(prisma);
   });
 
   it('rejects shared / missing provider on nonce issue', async () => {

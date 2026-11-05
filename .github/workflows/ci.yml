@@ -187,7 +187,7 @@ jobs:
           LM_PHONE_OTP_E2E: "1"
 
       - name: Phone / Email / OIDC auth HTTP e2e against Postgres
-        run: npm run test:e2e -- --ci --testPathPatterns='phone-otp|email-otp|multi-provider-oidc'
+        run: npm run test:e2e -- --ci --runInBand --testPathPatterns='phone-otp|email-otp|multi-provider-oidc'
         env:
           LM_PHONE_OTP_E2E: "1"
           SMS_SENDER: "fake"
