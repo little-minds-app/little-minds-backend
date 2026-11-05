@@ -64,6 +64,30 @@ describe('StructuredLogger', () => {
     });
   });
 
+  it('preserves batch admission rejection diagnostics after allowlist redaction', () => {
+    logger.log({
+      severity: 'debug',
+      message: 'batch_admission_rejected',
+      context: {
+        batch_reject_code: 'batch.invalid_session',
+        validation_issue_count: 1,
+        validation_issues: [{ code: 'schema.pattern', path: 'device_id' }],
+        authorization: 'Bearer secret-token',
+        childName: 'Ada',
+      },
+    });
+
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]) as Record<string, unknown>;
+    expect(parsed.message).toBe('batch_admission_rejected');
+    expect(parsed.context).toEqual({
+      batch_reject_code: 'batch.invalid_session',
+      validation_issue_count: 1,
+      validation_issues: [{ code: 'schema.pattern', path: 'device_id' }],
+    });
+    expect(JSON.stringify(parsed)).not.toMatch(/Bearer|secret-token|Ada/i);
+  });
+
   it('records alertable errors into the bounded recent-error store', () => {
     logger.error('boom', {
       alertable: true,

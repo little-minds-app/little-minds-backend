@@ -84,6 +84,10 @@ export const STRUCTURED_LOG_ALLOWLIST = new Set([
   'link_event',
   'link_outcome',
   'link_provider',
+  // LMP-134 / LMP-51 batch admission rejects (code + structural path only; no bodies)
+  'batch_reject_code',
+  'validation_issues',
+  'validation_issue_count',
 ]);
 
 /**

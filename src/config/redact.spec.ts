@@ -112,4 +112,28 @@ describe('allowlistAndRedactContext', () => {
     });
     expect(JSON.stringify(out)).not.toMatch(/Bearer|leak|password|should-drop/i);
   });
+
+  it('allows batch admission diagnostics and drops smuggled secrets', () => {
+    const out = allowlistAndRedactContext({
+      batch_reject_code: 'batch.invalid_event',
+      validation_issue_count: 2,
+      validation_issues: [
+        { code: 'schema.pattern', path: 'device_id' },
+        { code: 'schema.required', path: 'event_type' },
+      ],
+      authorization: 'Bearer leak',
+      parent_id: '11111111-1111-4111-8111-111111111111',
+      email: 'parent@example.invalid',
+    });
+
+    expect(out).toEqual({
+      batch_reject_code: 'batch.invalid_event',
+      validation_issue_count: 2,
+      validation_issues: [
+        { code: 'schema.pattern', path: 'device_id' },
+        { code: 'schema.required', path: 'event_type' },
+      ],
+    });
+    expect(JSON.stringify(out)).not.toMatch(/Bearer|leak|parent@/i);
+  });
 });
