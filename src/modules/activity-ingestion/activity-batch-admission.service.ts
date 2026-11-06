@@ -4,9 +4,13 @@ import {
   PARENT_ONLY_EVENT_TYPES,
   type ActivityEventV1,
   type ActivitySessionV1,
+  type ActivityValidationIssue,
 } from './activity-contract.types';
 import { validateActivityEvent } from './activity-event.validator';
 import { validateActivitySession } from './activity-session.validator';
+import { StructuredLogger } from '../observability/structured-logger';
+
+const MAX_LOGGED_ISSUES = 12;
 
 /**
  * LMP-51 Phase B: transport-independent, strict batch admission.
@@ -16,12 +20,14 @@ import { validateActivitySession } from './activity-session.validator';
  */
 @Injectable()
 export class ActivityBatchAdmissionService {
+  constructor(private readonly logger: StructuredLogger) {}
+
   validate(input: unknown): {
     sessions: ActivitySessionV1[];
     events: ActivityEventV1[];
   } {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
-      throw new BadRequestException('batch.invalid_envelope');
+      this.reject('batch.invalid_envelope');
     }
     const obj = input as Record<string, unknown>;
     if (
@@ -32,7 +38,7 @@ export class ActivityBatchAdmissionService {
       obj.events.length > 50 ||
       obj.sessions.length + obj.events.length === 0
     ) {
-      throw new BadRequestException('batch.invalid_envelope');
+      this.reject('batch.invalid_envelope');
     }
 
     const sessions: ActivitySessionV1[] = [];
@@ -41,29 +47,57 @@ export class ActivityBatchAdmissionService {
     const seenEvents = new Set<string>();
     for (const raw of obj.sessions) {
       const result = validateActivitySession(raw);
-      if (!result.ok) throw new BadRequestException('batch.invalid_session');
+      if (!result.ok) {
+        this.reject('batch.invalid_session', result.issues);
+      }
       if (seenSessions.has(result.session.play_session_id)) {
-        throw new BadRequestException('batch.duplicate_session_id');
+        this.reject('batch.duplicate_session_id');
       }
       seenSessions.add(result.session.play_session_id);
       sessions.push(result.session);
     }
     for (const raw of obj.events) {
       const result = validateActivityEvent(raw);
-      if (!result.ok) throw new BadRequestException('batch.invalid_event');
+      if (!result.ok) {
+        this.reject('batch.invalid_event', result.issues);
+      }
       if (seenEvents.has(result.event.event_id)) {
-        throw new BadRequestException('batch.duplicate_event_id');
+        this.reject('batch.duplicate_event_id');
       }
       seenEvents.add(result.event.event_id);
       if (
         (PARENT_ONLY_EVENT_TYPES as readonly string[]).includes(result.event.event_type)
         && result.event.play_session_id !== undefined
       ) {
-        throw new BadRequestException('batch.parent_event_has_session');
+        this.reject('batch.parent_event_has_session');
       }
       events.push(result.event);
     }
     return { sessions, events };
+  }
+
+  private reject(code: string, issues?: ActivityValidationIssue[]): never {
+    if (issues?.length) {
+      this.logger.log({
+        severity: 'debug',
+        message: 'batch_admission_rejected',
+        context: {
+          batch_reject_code: code,
+          validation_issues: issues.slice(0, MAX_LOGGED_ISSUES).map((issue) => ({
+            code: issue.code,
+            path: issue.path,
+          })),
+          validation_issue_count: issues.length,
+        },
+      });
+    } else {
+      this.logger.log({
+        severity: 'debug',
+        message: 'batch_admission_rejected',
+        context: { batch_reject_code: code },
+      });
+    }
+    throw new BadRequestException(code);
   }
 }
 

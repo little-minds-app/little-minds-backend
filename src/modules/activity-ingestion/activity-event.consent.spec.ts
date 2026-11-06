@@ -64,6 +64,27 @@ describe('Consent authorization hardening (LMP-50)', () => {
     );
   });
 
+  it('withdraw→stale grant backfill: older grant does not re-authorize (LMP-134 suite isolation)', () => {
+    // Mirrors the broken db-spec cleanup that wrote recordedAt=2026-03-11 after
+    // a live withdrawal: latest-effective remains withdrawn → KPI by_activity empty.
+    const rows: ServerConsentRecord[] = [
+      record({
+        status: 'withdrawn',
+        effective_at: '2026-11-05T17:00:00.000Z',
+        policy_version: 'synthetic-policy-v1',
+      }),
+      record({
+        status: 'granted',
+        effective_at: '2026-03-11T00:00:00.000Z',
+        policy_version: 'synthetic-policy-v1',
+      }),
+    ];
+    expect(isConsentScopeAuthorized(SCOPE, rows)).toBe(false);
+    expect(evaluateConsentScopeAuthorization(SCOPE, rows).reason).toBe(
+      'not_granted',
+    );
+  });
+
   it('withdraw→fresh grant: newer grant authorizes', () => {
     const rows: ServerConsentRecord[] = [
       record({

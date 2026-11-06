@@ -18,6 +18,7 @@ import {
   TEST_PHONE_SUBJECT_PEPPER,
   TEST_REFRESH_PEPPER,
 } from './fixtures/auth/keys';
+import { resetOtpPgE2eState } from './helpers/otp-pg-e2e-reset';
 
 const describeEmail =
   process.env.LM_PHONE_OTP_E2E === '1' && process.env.DATABASE_URL
@@ -58,9 +59,7 @@ describeEmail('POST /v1/auth/email/* (LMP-35 e2e)', () => {
 
   beforeEach(async () => {
     fakeMail.clearInboxForTests();
-    await prisma.db.otpDeliveryAttempt.deleteMany({});
-    await prisma.db.otpChallenge.deleteMany({});
-    await prisma.db.otpAbuseCounter.deleteMany({});
+    await resetOtpPgE2eState(prisma);
   });
 
   it('start→verify creates parent (U7) with deliveryState=sent gate', async () => {

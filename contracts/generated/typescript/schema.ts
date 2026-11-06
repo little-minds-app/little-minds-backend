@@ -298,6 +298,107 @@ export interface paths {
         patch: operations["updateChildProfile"];
         trace?: never;
     };
+    "/v1/devices/{installationId}/active-child": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the active child bound to a parent-owned device installation
+         * @description LMP-134. The path `installationId` is an untrusted client installation UUID.
+         *     The server resolves the parent-scoped database `devices.id`, verifies ownership
+         *     against the bearer session parent, and returns the authoritative `child_id` used
+         *     for play-event ingest (`devices.child_id`). Returns 404 when the device row is
+         *     not registered for this parent (sign-in mint registers the row).
+         */
+        get: operations["getDeviceActiveChild"];
+        /**
+         * Bind or clear the active child for a parent-owned device installation
+         * @description LMP-134. Atomically updates `devices.child_id` after verifying parent ownership
+         *     of both the resolved device row and the target child profile. Use `child_id: null`
+         *     to clear the binding. Clients MUST send `expected_binding_revision` from the latest
+         *     `GET …/active-child` (or `0` before any bind). Stale revisions return `409`. Concurrent
+         *     updates serialize on the device row (`FOR UPDATE`) and increment `binding_revision`.
+         */
+        put: operations["setDeviceActiveChild"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy/consent/effective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read latest-effective server consent for one or more scopes
+         * @description LMP-134 / F-033. Evaluates immutable `consent_records` with trusted
+         *     `source: server_consent_store` (and ingest-trusted `sync_scope_grant`) using the
+         *     same latest-effective semantics as activity ingest. Optional `child_id` merges
+         *     parent-level and child-scoped rows like ingest `checkConsent`. Does not treat
+         *     privacy-notice acknowledgment, Parent Gate, login, or client wire `decision` as grant.
+         */
+        get: operations["getEffectiveConsentScopes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy/consent/grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record an explicit parent opt-in for a consent scope
+         * @description LMP-134. Appends an immutable `consent_records` row with `status: granted` and
+         *     `source: server_consent_store`. Play telemetry (`essential_play_events`) must use
+         *     this explicit grant (unchecked client UX) — never auto-granted at login/OTP verify
+         *     or gameplay start. Align `policy_version` with the published activity policy
+         *     (Shape Matching UAT uses `synthetic-policy-v1`).
+         */
+        post: operations["grantConsentScope"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy/consent/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record withdrawal of a consent scope (prospective)
+         * @description LMP-134. Appends `status: withdrawn` with `source: server_consent_store`. Future
+         *     ingest for that scope/policy fails closed; does not rewrite historical events.
+         */
+        post: operations["withdrawConsentScope"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/children/{childId}/missions": {
         parameters: {
             query?: never;
@@ -903,6 +1004,33 @@ export interface components {
             age_months: number;
             preferred_locale: string;
         };
+        DeviceActiveChildBinding: {
+            /**
+             * Format: uuid
+             * @description Parent-scoped database devices.id (server-derived)
+             */
+            device_id: string;
+            /**
+             * Format: uuid
+             * @description Client installation UUID echoed for correlation
+             */
+            installation_id: string;
+            /**
+             * Format: uuid
+             * @description Active child authorized for ingest on this device; null when unassigned
+             */
+            child_id: string | null;
+            /**
+             * Format: int32
+             * @description Server-authoritative monotonic revision; send as expected_binding_revision on PUT
+             */
+            binding_revision: number;
+            /**
+             * Format: date-time
+             * @description UTC timestamp of the last binding mutation
+             */
+            updated_at: string;
+        };
         HealthStatus: {
             /**
              * @description Liveness indicator
@@ -1169,10 +1297,47 @@ export interface components {
          * @enum {string}
          */
         ActivitySchemaVersion: "1.0.0";
-        /** @description RFC 4122 UUID with version nibble 4 or 7 */
+        /**
+         * @description RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for
+         *     parent-scoped `devices.id` digests on activity ingest (LMP-134).
+         */
         UuidV4OrV7: string;
         /** @description UTC ISO-8601 instant ending in Z */
         UtcInstantZ: string;
+        EffectiveConsentScope: {
+            consent_scope: components["schemas"]["ConsentScope"];
+            child_id: components["schemas"]["UuidV4OrV7"] | null;
+            /** @description True when latest-effective trusted records grant the scope */
+            authorized: boolean;
+            policy_version: string | null;
+            /** @enum {string} */
+            status: "granted" | "withdrawn" | "not_granted";
+            effective_at: components["schemas"]["UtcInstantZ"] | null;
+            /** @enum {string|null} */
+            source: "server_consent_store" | null;
+            record_id: components["schemas"]["UuidV4OrV7"] | null;
+        };
+        EffectiveConsentScopesResponse: {
+            scopes: components["schemas"]["EffectiveConsentScope"][];
+        };
+        ConsentScopeMutationRequest: {
+            consent_scope: components["schemas"]["ConsentScope"];
+            /** @description Published policy version for this scope (e.g. synthetic-policy-v1) */
+            policy_version: string;
+            /** @description Omit or null for parent-level scope; set for child-scoped consent row */
+            child_id?: components["schemas"]["UuidV4OrV7"] | null;
+        };
+        ConsentScopeMutationResponse: {
+            record_id: components["schemas"]["UuidV4OrV7"];
+            consent_scope: components["schemas"]["ConsentScope"];
+            child_id: components["schemas"]["UuidV4OrV7"] | null;
+            policy_version: string;
+            /** @enum {string} */
+            status: "granted" | "withdrawn";
+            recorded_at: components["schemas"]["UtcInstantZ"];
+            /** @enum {string} */
+            source: "server_consent_store";
+        };
         /**
          * @description Purpose-specific consent scope (draft placeholders until legal sign-off)
          * @enum {string}
@@ -2072,6 +2237,251 @@ export interface operations {
                 content?: never;
             };
             /** @description Not found or not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getDeviceActiveChild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Client installation UUID hint (not an authorization credential) */
+                installationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current active-child binding for the resolved device row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceActiveChildBinding"];
+                };
+            };
+            /** @description Malformed installation identifier */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Device not registered for authenticated parent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setDeviceActiveChild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uuid
+                     * @description Owned child profile to authorize on this device, or null to clear
+                     */
+                    child_id: string | null;
+                    /**
+                     * Format: int32
+                     * @description Compare-and-set token from the latest binding read; rejects stale binds with 409
+                     */
+                    expected_binding_revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated binding */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceActiveChildBinding"];
+                };
+            };
+            /** @description Invalid body or installation identifier */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Device not registered or child not owned by parent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale expected_binding_revision (concurrent bind won) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEffectiveConsentScopes: {
+        parameters: {
+            query: {
+                /** @description One or more consent scopes to evaluate (repeat `scope` query keys) */
+                scope: components["schemas"]["ConsentScope"][];
+                /** @description When set, include child-scoped rows for this owned profile */
+                child_id?: components["schemas"]["UuidV4OrV7"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective authorization snapshot per requested scope */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveConsentScopesResponse"];
+                };
+            };
+            /** @description Missing or invalid scope query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child filter not found for authenticated parent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    grantConsentScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentScopeMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Grant recorded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentScopeMutationResponse"];
+                };
+            };
+            /** @description Invalid body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child filter not found for authenticated parent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    withdrawConsentScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentScopeMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Withdrawal recorded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentScopeMutationResponse"];
+                };
+            };
+            /** @description Invalid body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Child filter not found for authenticated parent */
             404: {
                 headers: {
                     [name: string]: unknown;

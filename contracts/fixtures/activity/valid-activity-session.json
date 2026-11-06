@@ -10,7 +10,7 @@
   "app_build": "0.1.0+local",
   "locale": "en-US",
   "consent": {
-    "purpose": "essential_service_telemetry",
+    "purpose": "essential_play_events",
     "policy_version": "privacy-notice-draft-0",
     "consent_scope": "essential_play_events",
     "decision": "granted"

@@ -96,6 +96,19 @@ const baseSchema = z.object({
       }
       return value === '1' || value.toLowerCase() === 'true';
     }),
+  /** Staging-only emergency catalog seed override (LMP-134). Forbidden in production. */
+  LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH: z
+    .union([z.string(), z.boolean()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined) {
+        return false;
+      }
+      if (typeof value === 'boolean') {
+        return value;
+      }
+      return value === '1' || value.toLowerCase() === 'true';
+    }),
 });
 
 export type AppEnv = {
@@ -515,6 +528,14 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
   const nodeEnv = parsed.data.NODE_ENV ?? 'development';
   const appEnv = resolveAppEnv(parsed.data.APP_ENV, nodeEnv);
   assertNodeAppEnvPair(appEnv, nodeEnv);
+  if (
+    appEnv === 'production' &&
+    parsed.data.LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH
+  ) {
+    fail(
+      'LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH is forbidden when APP_ENV=production',
+    );
+  }
 
   const port = parsed.data.PORT ?? 3000;
   const publicApiBaseUrl = assertPublicApiBaseUrl(

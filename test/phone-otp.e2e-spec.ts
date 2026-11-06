@@ -17,6 +17,7 @@ import {
   TEST_PHONE_SUBJECT_PEPPER,
   TEST_REFRESH_PEPPER,
 } from './fixtures/auth/keys';
+import { resetOtpPgE2eState } from './helpers/otp-pg-e2e-reset';
 
 /**
  * Full HTTP OTP flow needs Postgres (challenges + durable counters).
@@ -62,9 +63,7 @@ describePhone('POST /v1/auth/phone/* (LMP-34 e2e)', () => {
 
   beforeEach(async () => {
     fakeSms.clearInboxForTests();
-    await prisma.db.otpDeliveryAttempt.deleteMany({});
-    await prisma.db.otpChallenge.deleteMany({});
-    await prisma.db.otpAbuseCounter.deleteMany({});
+    await resetOtpPgE2eState(prisma);
   });
 
   it('start→verify creates parent (U7) and returns token pair', async () => {

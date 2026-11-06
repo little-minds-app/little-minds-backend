@@ -16,7 +16,7 @@ void main() {
   // final instance = DevSessionRequest();
 
   group('test DevSessionRequest', () {
-    // RFC 4122 UUID with version nibble 4 or 7
+    // RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134). 
     // String parentId
     test('to test the property `parentId`', () async {
       // TODO
@@ -27,7 +27,7 @@ void main() {
       // TODO
     });
 
-    // RFC 4122 UUID with version nibble 4 or 7
+    // RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134). 
     // String deviceId
     test('to test the property `deviceId`', () async {
       // TODO

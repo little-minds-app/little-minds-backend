@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "hub_activity_id": "shape_matching",
+  "mechanic_code": "shape_matching",
+  "content_version_id": "018f1340-0000-4000-8000-000000000001",
+  "activity_definition_id": "77777777-7777-4777-8777-777777777704",
+  "variant_version": 1,
+  "locale": "tr-TR",
+  "review_status": "published",
+  "consent_policy_version": "synthetic-policy-v1",
+  "session_consent_purpose": "essential_play_events",
+  "session_consent_scope": "essential_play_events",
+  "publication_source": "prisma_seed_lmp134",
+  "lmp_69_dependency": "Runtime environment release manifests (LMP-69) are not implemented; this fixture + prisma seed are the Day-1 publication pin until LMP-69 ships.",
+  "notes": "Authoritative RFC-4122 content_version_id for Shape Matching telemetry. Maps to activity_variants.id (Day-1 content_version_id). Session ingest authorization uses consent_scope essential_play_events (OpenAPI ActivitySessionConsent); purpose must match for play-event batches. Synthetic seed is fail-closed in APP_ENV staging/production unless LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH=true."
+}

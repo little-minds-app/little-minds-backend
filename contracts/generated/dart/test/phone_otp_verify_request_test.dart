@@ -16,7 +16,7 @@ void main() {
   // final instance = PhoneOtpVerifyRequest();
 
   group('test PhoneOtpVerifyRequest', () {
-    // RFC 4122 UUID with version nibble 4 or 7
+    // RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134). 
     // String challengeId
     test('to test the property `challengeId`', () async {
       // TODO
@@ -32,7 +32,7 @@ void main() {
       // TODO
     });
 
-    // RFC 4122 UUID with version nibble 4 or 7
+    // RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134). 
     // String deviceId
     test('to test the property `deviceId`', () async {
       // TODO

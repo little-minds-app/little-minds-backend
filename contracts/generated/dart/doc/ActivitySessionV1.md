@@ -9,9 +9,9 @@ import 'package:little_minds_api/api.dart';
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **schemaVersion** | [**ActivitySchemaVersion**](ActivitySchemaVersion.md) |  | 
-**playSessionId** | **String** | RFC 4122 UUID with version nibble 4 or 7 | 
-**deviceId** | **String** | RFC 4122 UUID with version nibble 4 or 7 | 
-**contentVersionId** | **String** | RFC 4122 UUID with version nibble 4 or 7 | 
+**playSessionId** | **String** | RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134).  | 
+**deviceId** | **String** | RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134).  | 
+**contentVersionId** | **String** | RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for parent-scoped `devices.id` digests on activity ingest (LMP-134).  | 
 **startedAt** | **String** | UTC ISO-8601 instant ending in Z | 
 **endedAt** | **String** | UTC ISO-8601 instant ending in Z | [optional] 
 **monotonicDurationSeconds** | **int** |  | [optional] 

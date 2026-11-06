@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { ActivityBatchAdmissionService } from '../src/modules/activity-ingestion/activity-batch-admission.service';
+import { noopStructuredLogger } from './helpers/noop-structured-logger';
 import { ActivityIngestionService } from '../src/modules/activity-ingestion/activity-ingestion.service';
 import type { PrismaService } from '../src/modules/prisma/prisma.service';
 
@@ -22,7 +23,7 @@ describeDb('LMP-51 authenticated activity ingestion / real PostgreSQL', () => {
   const definitionId = randomUUID();
   const variantId = randomUUID();
   const consentPolicy = 'privacy-notice-draft-0';
-  const ingestion = new ActivityIngestionService({ get db() { return db; } } as PrismaService, new ActivityBatchAdmissionService());
+  const ingestion = new ActivityIngestionService({ get db() { return db; } } as PrismaService, new ActivityBatchAdmissionService(noopStructuredLogger()), noopStructuredLogger());
 
   const session = (id: string): Record<string, unknown> => ({
     ...fixture('valid-activity-session.json'),

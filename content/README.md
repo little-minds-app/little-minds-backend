@@ -33,3 +33,15 @@ npm test -- src/modules/mentor/
 - Out of scope here: LMP-48 UI, LMP-120 audio, OpenAPI `/v1/mentor/*` routes
 
 See also: [`docs/mentor-card-content-contract.md`](../docs/mentor-card-content-contract.md).
+
+## Activity publications (LMP-134 / Shape Matching)
+
+| Path | Role |
+|---|---|
+| `fixtures/activity-publications/shape-matching.v1.json` | Authoritative `content_version_id` for hub id `shape_matching` (maps to `activity_variants.id`) |
+
+Seeded on `npm run db:seed` via `prisma/seed-shape-matching-content.ts` when `APP_ENV` is `development` (local/CI default). **Fail-closed:** `APP_ENV=staging` skips synthetic `synthetic_local_publish` unless `LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH=true` (staging emergency only). **`APP_ENV=production` never seeds synthetic catalog rows** — boot also rejects `LM_ALLOW_SYNTHETIC_CONTENT_PUBLISH`. See [`docs/lmp-134-publication-readiness-matrix.md`](../docs/lmp-134-publication-readiness-matrix.md). Re-seed does not overwrite archived/rejected variants or non-synthetic published metadata (LMP-69 manifests are the long-term source of truth).
+
+Device active-child binding for ingest: OpenAPI `GET|PUT /v1/devices/{installationId}/active-child` (LMP-134).
+
+Clients pin **backend commit SHA** + this fixture; do not hardcode production UUIDs in app source. Play-event ingest uses OpenAPI `consent_scope` / `purpose` **`essential_play_events`** with `consent_policy_version` from the fixture (`synthetic-policy-v1` in seed).

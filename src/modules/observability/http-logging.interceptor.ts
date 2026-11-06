@@ -1,6 +1,7 @@
 import {
   CallHandler,
   ExecutionContext,
+  HttpException,
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
@@ -51,13 +52,19 @@ export class HttpLoggingInterceptor implements NestInterceptor {
             duration_ms: Date.now() - started,
           });
         },
-        error: () => {
+        error: (err: unknown) => {
           // Exception filter owns error logging; still emit timing on failure path.
+          const status =
+            err instanceof HttpException
+              ? err.getStatus()
+              : res.statusCode >= 400
+                ? res.statusCode
+                : 500;
           this.logger.warn('http_request_failed', {
             event: 'request',
             method,
             path,
-            status_code: res.statusCode || 500,
+            status_code: status,
             duration_ms: Date.now() - started,
           });
         },

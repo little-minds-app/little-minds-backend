@@ -1,11 +1,26 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { StructuredLogger } from '../observability/structured-logger';
 import { ActivityBatchAdmissionService, eventFingerprint } from './activity-batch-admission.service';
 import { evaluateConsentScopeAuthorization } from './activity-event.consent';
-import { PARENT_ONLY_EVENT_TYPES, type ActivityEventV1, type ServerConsentRecord } from './activity-contract.types';
+import {
+  PARENT_ONLY_EVENT_TYPES,
+  type ActivityEventV1,
+  type ActivitySessionV1,
+  type ServerConsentRecord,
+} from './activity-contract.types';
 
 type Ack = { event_id: string; status: 'accepted' | 'duplicate_noop' | 'rejected' | 'retryable'; reason_code?: string };
+
+/** Sanitized session persist gate labels (no wire ids in logs). */
+export type ActivityIngestSessionSkipGate =
+  | 'device.not_authorized'
+  | 'content.not_published'
+  | 'consent.not_authorized'
+  | 'session.immutable_conflict'
+  | 'session.end_update_failed';
+
 const isParentEvent = (event: ActivityEventV1) =>
   (PARENT_ONLY_EVENT_TYPES as readonly string[]).includes(event.event_type);
 
@@ -15,57 +30,226 @@ const isParentEvent = (event: ActivityEventV1) =>
  */
 @Injectable()
 export class ActivityIngestionService {
-  constructor(private readonly prisma: PrismaService, private readonly admission: ActivityBatchAdmissionService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly admission: ActivityBatchAdmissionService,
+    private readonly logger: StructuredLogger,
+  ) {}
 
   async ingest(parentId: string, raw: unknown): Promise<{results: Ack[]}> {
     const { sessions, events } = this.admission.validate(raw);
     const db = this.prisma.db;
     const results: Ack[] = [];
+    const sessionSkipCounts: Record<ActivityIngestSessionSkipGate, number> = {
+      'device.not_authorized': 0,
+      'content.not_published': 0,
+      'consent.not_authorized': 0,
+      'session.immutable_conflict': 0,
+      'session.end_update_failed': 0,
+    };
+    let sessionsAdmitted = 0;
 
     // Validate session ownership before any writes. Device may be assigned to a
     // single child; unassigned devices do not authorize inference of child IDs.
     const knownSessions = new Map<string, { childId: string; contentVersionId: string; deviceId: string }>();
+    /** Play sessions skipped for consent in this batch — events must not retry as session.pending. */
+    const consentDeniedPlaySessionIds = new Set<string>();
     for (const session of sessions) {
-      const device = await db.device.findFirst({ where: { id: session.device_id, parentId, revokedAt: null, childId: { not: null }, child: { deletedAt: null } }, select: { childId: true } });
-      const variant = await db.activityVariant.findUnique({ where: { id: session.content_version_id }, select: { reviewStatus: true, activity: { select: { status: true } } } });
-      if (!device?.childId || variant?.reviewStatus !== 'published' || variant.activity.status !== 'published') continue;
-      const consent = await this.checkConsent(db, parentId, device.childId, session.consent.consent_scope, session.consent.policy_version);
-      if (!consent) continue;
-      try {
-        await db.activitySession.create({
-          data: { id: session.play_session_id, childId: device.childId, deviceId: session.device_id, contentVersionId: session.content_version_id, startedAt: new Date(session.started_at), endedAt: session.ended_at ? new Date(session.ended_at) : null, completionStatus: session.completion_status, monotonicDurationSeconds: session.monotonic_duration_seconds, schemaVersion: session.schema_version, consentScope: session.consent.consent_scope, consentPolicyVersion: session.consent.policy_version, provenanceJson: session.provenance as Prisma.InputJsonValue },
-        });
-      } catch (error) {
-        // The only acceptable race is a pre-existing session with the same
-        // immutable ownership and metadata. A unique-key collision must never
-        // silently reassign an existing session.
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
-          throw error;
-        }
+      const admitted = await this.tryAdmitSession(
+        db,
+        parentId,
+        session,
+        sessionSkipCounts,
+        consentDeniedPlaySessionIds,
+      );
+      if (admitted) {
+        knownSessions.set(session.play_session_id, admitted);
+        sessionsAdmitted += 1;
       }
-      const persisted = await db.activitySession.findUnique({ where: { id: session.play_session_id }, select: { childId: true, deviceId: true, contentVersionId: true, startedAt: true, schemaVersion: true, endedAt: true, consentScope: true, consentPolicyVersion: true } });
-      if (!persisted || persisted.childId !== device.childId || persisted.deviceId !== session.device_id || persisted.contentVersionId !== session.content_version_id || persisted.startedAt.getTime() !== new Date(session.started_at).getTime() || persisted.schemaVersion !== session.schema_version || (persisted.consentScope && persisted.consentScope !== session.consent.consent_scope) || (persisted.consentPolicyVersion && persisted.consentPolicyVersion !== session.consent.policy_version)) continue;
-      // Complete a previously started session without permitting downgrade or
-      // inconsistent replay of immutable session metadata.
-      if (session.ended_at) {
-        const end = new Date(session.ended_at);
-        if (persisted.endedAt && persisted.endedAt.getTime() !== end.getTime()) continue;
-        if (!persisted.endedAt) {
-          await db.activitySession.updateMany({
-            where: { id: session.play_session_id, childId: device.childId, deviceId: session.device_id, endedAt: null },
-            data: { endedAt: end, completionStatus: session.completion_status, monotonicDurationSeconds: session.monotonic_duration_seconds },
-          });
-          const final = await db.activitySession.findUnique({ where: { id: session.play_session_id }, select: { endedAt: true } });
-          if (!final?.endedAt || final.endedAt.getTime() !== end.getTime()) continue;
-        }
-      }
-      knownSessions.set(session.play_session_id, { childId: device.childId, contentVersionId: session.content_version_id, deviceId: session.device_id });
     }
 
     for (const event of events) {
-      results.push(await this.storeEvent(db, parentId, event, knownSessions));
+      results.push(
+        await this.storeEvent(db, parentId, event, knownSessions, consentDeniedPlaySessionIds),
+      );
     }
+
+    this.logIngestSummary({
+      sessions_wire: sessions.length,
+      events_wire: events.length,
+      sessions_admitted: sessionsAdmitted,
+      session_skip_counts: sessionSkipCounts,
+      results,
+    });
+
     return { results };
+  }
+
+  private logIngestSummary(input: {
+    sessions_wire: number;
+    events_wire: number;
+    sessions_admitted: number;
+    session_skip_counts: Record<ActivityIngestSessionSkipGate, number>;
+    results: Ack[];
+  }): void {
+    const ackStatusCounts: Record<string, number> = {};
+    const retryableReasonCounts: Record<string, number> = {};
+    for (const row of input.results) {
+      ackStatusCounts[row.status] = (ackStatusCounts[row.status] ?? 0) + 1;
+      if (row.status === 'retryable' && row.reason_code) {
+        retryableReasonCounts[row.reason_code] =
+          (retryableReasonCounts[row.reason_code] ?? 0) + 1;
+      }
+    }
+    const sessionSkips = Object.values(input.session_skip_counts).reduce((a, b) => a + b, 0);
+    const context = {
+      ingest_sessions_wire: input.sessions_wire,
+      ingest_events_wire: input.events_wire,
+      ingest_sessions_admitted: input.sessions_admitted,
+      ingest_session_skip_counts: input.session_skip_counts,
+      ingest_ack_status_counts: ackStatusCounts,
+      ingest_retryable_reason_counts: retryableReasonCounts,
+    };
+    if (sessionSkips > 0 || (retryableReasonCounts && Object.keys(retryableReasonCounts).length > 0)) {
+      this.logger.log({
+        severity: 'debug',
+        message: 'activity_ingest_batch_summary',
+        context,
+      });
+    }
+  }
+
+  private bumpSkip(
+    counts: Record<ActivityIngestSessionSkipGate, number>,
+    gate: ActivityIngestSessionSkipGate,
+  ): void {
+    counts[gate] += 1;
+  }
+
+  private async tryAdmitSession(
+    db: PrismaClient,
+    parentId: string,
+    session: ActivitySessionV1,
+    sessionSkipCounts: Record<ActivityIngestSessionSkipGate, number>,
+    consentDeniedPlaySessionIds: Set<string>,
+  ): Promise<{ childId: string; contentVersionId: string; deviceId: string } | undefined> {
+    const device = await db.device.findFirst({
+      where: {
+        id: session.device_id,
+        parentId,
+        revokedAt: null,
+        childId: { not: null },
+        child: { deletedAt: null },
+      },
+      select: { childId: true },
+    });
+    const variant = await db.activityVariant.findUnique({
+      where: { id: session.content_version_id },
+      select: { reviewStatus: true, activity: { select: { status: true } } },
+    });
+    if (!device?.childId) {
+      this.bumpSkip(sessionSkipCounts, 'device.not_authorized');
+      return undefined;
+    }
+    if (!variant || variant.reviewStatus !== 'published' || variant.activity.status !== 'published') {
+      this.bumpSkip(sessionSkipCounts, 'content.not_published');
+      return undefined;
+    }
+    const consent = await this.checkConsent(
+      db,
+      parentId,
+      device.childId,
+      session.consent.consent_scope,
+      session.consent.policy_version,
+    );
+    if (!consent) {
+      this.bumpSkip(sessionSkipCounts, 'consent.not_authorized');
+      consentDeniedPlaySessionIds.add(session.play_session_id);
+      return undefined;
+    }
+    try {
+      await db.activitySession.create({
+        data: {
+          id: session.play_session_id,
+          childId: device.childId,
+          deviceId: session.device_id,
+          contentVersionId: session.content_version_id,
+          startedAt: new Date(session.started_at),
+          endedAt: session.ended_at ? new Date(session.ended_at) : null,
+          completionStatus: session.completion_status,
+          monotonicDurationSeconds: session.monotonic_duration_seconds,
+          schemaVersion: session.schema_version,
+          consentScope: session.consent.consent_scope,
+          consentPolicyVersion: session.consent.policy_version,
+          provenanceJson: session.provenance as Prisma.InputJsonValue,
+        },
+      });
+    } catch (error) {
+      // The only acceptable race is a pre-existing session with the same
+      // immutable ownership and metadata. A unique-key collision must never
+      // silently reassign an existing session.
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+        throw error;
+      }
+    }
+    const persisted = await db.activitySession.findUnique({
+      where: { id: session.play_session_id },
+      select: {
+        childId: true,
+        deviceId: true,
+        contentVersionId: true,
+        startedAt: true,
+        schemaVersion: true,
+        endedAt: true,
+        consentScope: true,
+        consentPolicyVersion: true,
+      },
+    });
+    if (
+      !persisted ||
+      persisted.childId !== device.childId ||
+      persisted.deviceId !== session.device_id ||
+      persisted.contentVersionId !== session.content_version_id ||
+      persisted.startedAt.getTime() !== new Date(session.started_at).getTime() ||
+      persisted.schemaVersion !== session.schema_version ||
+      (persisted.consentScope && persisted.consentScope !== session.consent.consent_scope) ||
+      (persisted.consentPolicyVersion && persisted.consentPolicyVersion !== session.consent.policy_version)
+    ) {
+      this.bumpSkip(sessionSkipCounts, 'session.immutable_conflict');
+      return undefined;
+    }
+    // Complete a previously started session without permitting downgrade or
+    // inconsistent replay of immutable session metadata.
+    if (session.ended_at) {
+      const end = new Date(session.ended_at);
+      if (persisted.endedAt && persisted.endedAt.getTime() !== end.getTime()) {
+        this.bumpSkip(sessionSkipCounts, 'session.immutable_conflict');
+        return undefined;
+      }
+      if (!persisted.endedAt) {
+        await db.activitySession.updateMany({
+          where: { id: session.play_session_id, childId: device.childId, deviceId: session.device_id, endedAt: null },
+          data: {
+            endedAt: end,
+            completionStatus: session.completion_status,
+            monotonicDurationSeconds: session.monotonic_duration_seconds,
+          },
+        });
+        const final = await db.activitySession.findUnique({
+          where: { id: session.play_session_id },
+          select: { endedAt: true },
+        });
+        if (!final?.endedAt || final.endedAt.getTime() !== end.getTime()) {
+          this.bumpSkip(sessionSkipCounts, 'session.end_update_failed');
+          return undefined;
+        }
+      }
+    }
+    return {
+      childId: device.childId,
+      contentVersionId: session.content_version_id,
+      deviceId: session.device_id,
+    };
   }
 
   private async checkConsent(db: PrismaClient, parentId: string, childId: string | null, scope: ActivityEventV1['consent_scope'], policyVersion: string): Promise<boolean> {
@@ -86,7 +270,13 @@ export class ActivityIngestionService {
     return effective.authorized && effective.effective?.policy_version === policyVersion;
   }
 
-  private async storeEvent(db: PrismaClient, parentId: string, event: ActivityEventV1, sessions: Map<string, { childId: string; contentVersionId: string; deviceId: string }>): Promise<Ack> {
+  private async storeEvent(
+    db: PrismaClient,
+    parentId: string,
+    event: ActivityEventV1,
+    sessions: Map<string, { childId: string; contentVersionId: string; deviceId: string }>,
+    consentDeniedPlaySessionIds: ReadonlySet<string>,
+  ): Promise<Ack> {
     const reject = (reason_code: string): Ack => ({ event_id: event.event_id, status: 'rejected', reason_code });
     const parentOnly = isParentEvent(event);
     const device = await db.device.findFirst({ where: { id: event.device_id, parentId, revokedAt: null }, select: { childId: true } });
@@ -104,6 +294,14 @@ export class ActivityIngestionService {
           select: { childId: true, deviceId: true, contentVersionId: true },
         });
         if (persisted?.deviceId) session = { childId: persisted.childId, deviceId: persisted.deviceId, contentVersionId: persisted.contentVersionId };
+      }
+      // Session metadata in this batch failed authoritative consent — permanent for
+      // this play_session_id until a new grant and resync (not a missing-row race).
+      if (
+        event.play_session_id &&
+        consentDeniedPlaySessionIds.has(event.play_session_id)
+      ) {
+        return reject('consent.not_authorized');
       }
       // An offline batch may arrive before its session metadata. Do not
       // permanently reject an otherwise valid event just for arrival order.

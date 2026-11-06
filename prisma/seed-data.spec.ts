@@ -31,4 +31,10 @@ describe('synthetic seed fixtures (LMP-22)', () => {
       expect(nick).not.toMatch(/@/);
     }
   });
+
+  it('defines a published Shape Matching content_version_id (LMP-134)', () => {
+    expect(SEED_IDS.shapeMatching.contentVersionId).toMatch(
+      /^018f1340-0000-4000-8000-000000000001$/,
+    );
+  });
 });

@@ -16,9 +16,14 @@ info:
     (`GET /v1/children/{childId}/missions` requires bounded `from`/`to`, `POST …/feedback`).
     LMP-54 adds passive BFF dashboard reads (`GET /v1/web/insights/session-kpis`,
     `GET /v1/web/children/{childId}/missions`) using opaque web session headers.
+    LMP-134 adds parent-scoped device active-child bind/read
+    (`GET|PUT /v1/devices/{installationId}/active-child`) for production play telemetry gates,
+    and authenticated server consent grant/withdraw/read
+    (`GET /v1/privacy/consent/effective`, `POST …/grant`, `POST …/withdraw`) backed by
+    `consent_records` (`source: server_consent_store`).
     Authoritative Ajv JSON Schemas live under `contracts/schemas/activity/` (`schema_version` 1.0.0,
     independent of this info.version).
-  version: 0.14.2
+  version: 0.14.5
 
   contact:
     name: Little Minds
@@ -38,6 +43,10 @@ tags:
     description: Canonical server-side KPI reads (F-013)
   - name: Missions
     description: Parent-scoped real-world mission status (LMP-130 foundation)
+  - name: Devices
+    description: Parent-scoped installation device registration and active-child binding (LMP-134)
+  - name: Privacy
+    description: Authenticated parent consent store and effective-scope reads (LMP-134 / F-033)
 paths:
   /v1/events/batch:
     post:
@@ -604,6 +613,200 @@ paths:
           description: Unauthorized
         '404':
           description: Missing, soft-deleted, or not-owned child profile (uniform)
+  /v1/devices/{installationId}/active-child:
+    get:
+      operationId: getDeviceActiveChild
+      tags: [Devices]
+      summary: Read the active child bound to a parent-owned device installation
+      description: |
+        LMP-134. The path `installationId` is an untrusted client installation UUID.
+        The server resolves the parent-scoped database `devices.id`, verifies ownership
+        against the bearer session parent, and returns the authoritative `child_id` used
+        for play-event ingest (`devices.child_id`). Returns 404 when the device row is
+        not registered for this parent (sign-in mint registers the row).
+      security:
+        - parentAccessToken: []
+      parameters:
+        - in: path
+          name: installationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Client installation UUID hint (not an authorization credential)
+      responses:
+        '200':
+          description: Current active-child binding for the resolved device row
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceActiveChildBinding'
+        '400':
+          description: Malformed installation identifier
+        '401':
+          description: Unauthorized
+        '404':
+          description: Device not registered for authenticated parent
+    put:
+      operationId: setDeviceActiveChild
+      tags: [Devices]
+      summary: Bind or clear the active child for a parent-owned device installation
+      description: |
+        LMP-134. Atomically updates `devices.child_id` after verifying parent ownership
+        of both the resolved device row and the target child profile. Use `child_id: null`
+        to clear the binding. Clients MUST send `expected_binding_revision` from the latest
+        `GET …/active-child` (or `0` before any bind). Stale revisions return `409`. Concurrent
+        updates serialize on the device row (`FOR UPDATE`) and increment `binding_revision`.
+      security:
+        - parentAccessToken: []
+      parameters:
+        - in: path
+          name: installationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [child_id, expected_binding_revision]
+              properties:
+                child_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: Owned child profile to authorize on this device, or null to clear
+                expected_binding_revision:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                  description: Compare-and-set token from the latest binding read; rejects stale binds with 409
+      responses:
+        '200':
+          description: Updated binding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceActiveChildBinding'
+        '400':
+          description: Invalid body or installation identifier
+        '401':
+          description: Unauthorized
+        '404':
+          description: Device not registered or child not owned by parent
+        '409':
+          description: Stale expected_binding_revision (concurrent bind won)
+  /v1/privacy/consent/effective:
+    get:
+      operationId: getEffectiveConsentScopes
+      tags: [Privacy]
+      summary: Read latest-effective server consent for one or more scopes
+      description: |
+        LMP-134 / F-033. Evaluates immutable `consent_records` with trusted
+        `source: server_consent_store` (and ingest-trusted `sync_scope_grant`) using the
+        same latest-effective semantics as activity ingest. Optional `child_id` merges
+        parent-level and child-scoped rows like ingest `checkConsent`. Does not treat
+        privacy-notice acknowledgment, Parent Gate, login, or client wire `decision` as grant.
+      security:
+        - parentAccessToken: []
+      parameters:
+        - in: query
+          name: scope
+          required: true
+          schema:
+            type: array
+            minItems: 1
+            items:
+              $ref: '#/components/schemas/ConsentScope'
+          style: form
+          explode: true
+          description: One or more consent scopes to evaluate (repeat `scope` query keys)
+        - in: query
+          name: child_id
+          required: false
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/UuidV4OrV7'
+            nullable: true
+          description: When set, include child-scoped rows for this owned profile
+      responses:
+        '200':
+          description: Effective authorization snapshot per requested scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveConsentScopesResponse'
+        '400':
+          description: Missing or invalid scope query
+        '401':
+          description: Unauthorized
+        '404':
+          description: Child filter not found for authenticated parent
+  /v1/privacy/consent/grant:
+    post:
+      operationId: grantConsentScope
+      tags: [Privacy]
+      summary: Record an explicit parent opt-in for a consent scope
+      description: |
+        LMP-134. Appends an immutable `consent_records` row with `status: granted` and
+        `source: server_consent_store`. Play telemetry (`essential_play_events`) must use
+        this explicit grant (unchecked client UX) — never auto-granted at login/OTP verify
+        or gameplay start. Align `policy_version` with the published activity policy
+        (Shape Matching UAT uses `synthetic-policy-v1`).
+      security:
+        - parentAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentScopeMutationRequest'
+      responses:
+        '201':
+          description: Grant recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentScopeMutationResponse'
+        '400':
+          description: Invalid body
+        '401':
+          description: Unauthorized
+        '404':
+          description: Child filter not found for authenticated parent
+  /v1/privacy/consent/withdraw:
+    post:
+      operationId: withdrawConsentScope
+      tags: [Privacy]
+      summary: Record withdrawal of a consent scope (prospective)
+      description: |
+        LMP-134. Appends `status: withdrawn` with `source: server_consent_store`. Future
+        ingest for that scope/policy fails closed; does not rewrite historical events.
+      security:
+        - parentAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentScopeMutationRequest'
+      responses:
+        '201':
+          description: Withdrawal recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentScopeMutationResponse'
+        '400':
+          description: Invalid body
+        '401':
+          description: Unauthorized
+        '404':
+          description: Child filter not found for authenticated parent
   /v1/children/{childId}/missions:
     get:
       operationId: listChildMissionStatus
@@ -1738,6 +1941,33 @@ components:
           format: int32
         preferred_locale:
           type: string
+    DeviceActiveChildBinding:
+      type: object
+      additionalProperties: false
+      required: [device_id, installation_id, child_id, binding_revision, updated_at]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+          description: Parent-scoped database devices.id (server-derived)
+        installation_id:
+          type: string
+          format: uuid
+          description: Client installation UUID echoed for correlation
+        child_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Active child authorized for ingest on this device; null when unassigned
+        binding_revision:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Server-authoritative monotonic revision; send as expected_binding_revision on PUT
+        updated_at:
+          type: string
+          format: date-time
+          description: UTC timestamp of the last binding mutation
     HealthStatus:
       type: object
       additionalProperties: false
@@ -2294,12 +2524,109 @@ components:
         Product event/session schema semver. Independent from OpenAPI info.version.
     UuidV4OrV7:
       type: string
-      pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[47][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
-      description: RFC 4122 UUID with version nibble 4 or 7
+      pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[457][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+      description: |
+        RFC 4122 UUID with version nibble 4, 5, or 7. UUIDv5 is used for
+        parent-scoped `devices.id` digests on activity ingest (LMP-134).
     UtcInstantZ:
       type: string
       pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$'
       description: UTC ISO-8601 instant ending in Z
+    EffectiveConsentScope:
+      type: object
+      additionalProperties: false
+      required:
+        - consent_scope
+        - child_id
+        - authorized
+        - policy_version
+        - status
+        - effective_at
+        - source
+        - record_id
+      properties:
+        consent_scope:
+          $ref: '#/components/schemas/ConsentScope'
+        child_id:
+          allOf:
+            - $ref: '#/components/schemas/UuidV4OrV7'
+          nullable: true
+        authorized:
+          type: boolean
+          description: True when latest-effective trusted records grant the scope
+        policy_version:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [granted, withdrawn, not_granted]
+        effective_at:
+          allOf:
+            - $ref: '#/components/schemas/UtcInstantZ'
+          nullable: true
+        source:
+          type: string
+          enum: [server_consent_store]
+          nullable: true
+        record_id:
+          allOf:
+            - $ref: '#/components/schemas/UuidV4OrV7'
+          nullable: true
+    EffectiveConsentScopesResponse:
+      type: object
+      additionalProperties: false
+      required: [scopes]
+      properties:
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EffectiveConsentScope'
+    ConsentScopeMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [consent_scope, policy_version]
+      properties:
+        consent_scope:
+          $ref: '#/components/schemas/ConsentScope'
+        policy_version:
+          type: string
+          minLength: 1
+          description: Published policy version for this scope (e.g. synthetic-policy-v1)
+        child_id:
+          allOf:
+            - $ref: '#/components/schemas/UuidV4OrV7'
+          nullable: true
+          description: Omit or null for parent-level scope; set for child-scoped consent row
+    ConsentScopeMutationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - record_id
+        - consent_scope
+        - child_id
+        - policy_version
+        - status
+        - recorded_at
+        - source
+      properties:
+        record_id:
+          $ref: '#/components/schemas/UuidV4OrV7'
+        consent_scope:
+          $ref: '#/components/schemas/ConsentScope'
+        child_id:
+          allOf:
+            - $ref: '#/components/schemas/UuidV4OrV7'
+          nullable: true
+        policy_version:
+          type: string
+        status:
+          type: string
+          enum: [granted, withdrawn]
+        recorded_at:
+          $ref: '#/components/schemas/UtcInstantZ'
+        source:
+          type: string
+          enum: [server_consent_store]
     ConsentScope:
       type: string
       enum:
